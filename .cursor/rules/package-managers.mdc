@@ -1,0 +1,11 @@
+---
+description: uv·pnpm 공식 명령, pip/npm 혼동 금지, lock 충돌 절차
+alwaysApply: true
+---
+
+# 패키지 매니저
+
+- Python: `uv add` / `uv sync` / `uv run`. 프로젝트에 `pip install` 금지.
+- Node: `pnpm install` / `pnpm add`. npm/yarn 혼용 금지.
+- lock 충돌: 손편집 금지 → `pnpm install` 재생성. 예방은 `AGENTS.md`·`개발과정/기술스택.md` 참고.
+- 실제 설치는 라이브러리 항목 승인 후.
