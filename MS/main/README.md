@@ -8,3 +8,4 @@
 | 기능 id | frontend 상대경로 | api 상대경로 | 비고 |
 |---------|-------------------|--------------|------|
 | (예) | ../frontend/pages/example | ../api/example | 추가 시 기입 |
+| db | - | - | 화면·API 없는 데이터 인프라. 위치 `../db`, 사용법 [../db/README.md](../db/README.md) |
