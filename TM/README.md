@@ -11,15 +11,25 @@
 - `frontend/pages/<기능>/` — 페이지 (`app` 명칭 사용 금지)
 - `api/<기능>/` — API (`backend` 명칭 사용 금지)
 - `data/` — SQLite 목업
+- `xgb_model/` — XGBoost 모델 아티팩트 (`.joblib` / `.json`)
+- `pyproject.toml` · `uv.lock` — Python(uv) 의존성
 - `업무일지/` · `기능표.md` · `전달사항/` · `로그_기록.md`
 
 상세 규칙은 루트 [AGENTS.md](../AGENTS.md) 를 따릅니다.
+
+### Python 환경 (uv)
+
+```bash
+# TM 폴더에서
+uv sync
+uv run python ...
+```
 
 ## 기능 목록
 
 | 기능 | 경로 | 상태 |
 |------|------|------|
-| (추가 시 기입) | | |
+| XGBoost 모델 이식 | `xgb_model/` + `pyproject.toml` | uv 의존성·아티팩트 (페이지/API 미연동) |
 
 ## 다른 폴더
 
