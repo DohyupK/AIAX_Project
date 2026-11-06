@@ -8,3 +8,5 @@
 | 2026-11-03 | 개발 환경 설치 (WSL2 오류 해결, Docker Desktop), PostgreSQL·Kafka·Spark 구성 및 동작 확인 | [DB·데이터 파이프라인 인프라](../기능표.md#db데이터-파이프라인-인프라) |
 | 2026-11-04 | Flink(PyFlink) 팀 이미지 구성·확인, Python 앱 프로젝트(uv) 생성 | [DB·데이터 파이프라인 인프라](../기능표.md#db데이터-파이프라인-인프라) |
 | 2026-11-05 | 버전 고정, `MS/db`로 이동, 팀 규칙 검토·문서화, PR #1(→ dev) | [DB·데이터 파이프라인 인프라](../기능표.md#db데이터-파이프라인-인프라) |
+| 2026-11-06 | 데이터셋 확정(KAMP 주조), EDA 질문지·결과 검토, mes 원본 테이블 설계(원본 컬럼 이름 그대로), 명명 규칙 제정 | [주조 데이터셋 DB 적재](../기능표.md#주조-데이터셋-db-적재-meslakemart) |
+| 2026-11-07 | mes·lake·mart `investment_casting` 테이블 구성(`casting_id` 연결), meta·raw_record 삭제, 데이터 연도 2026 변경, 데이터 덤프 포함, PR(→ dev) | [주조 데이터셋 DB 적재](../기능표.md#주조-데이터셋-db-적재-meslakemart) |
