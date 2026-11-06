@@ -1,5 +1,5 @@
 # 열처리 공정 최적화 AX - 전체 서비스 (PostgreSQL · Kafka · 이후 Spark · Flink 추가)
-# 한 DB 안에서 스키마로 영역 분리: mes(원본) / lake(정제) / mart(분석·학습) / meta(적재·파이프라인 이력)
+# 한 DB 안에서 스키마로 영역 분리: mes(원본) / lake(정제) / mart(분석·학습)
 name: aiax-db
 
 services:
