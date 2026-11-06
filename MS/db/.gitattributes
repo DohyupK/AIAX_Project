@@ -1,0 +1,4 @@
+# Windows에서 클론해도 컨테이너 안 스크립트가 깨지지 않도록 LF 고정
+*.sh  text eol=lf
+*.sql text eol=lf
+*.yml text eol=lf
