@@ -1,68 +1,47 @@
--- 원본 영역 (mes)
--- 데이터셋이 확정되지 않았으므로 두 단계로 받는다.
---   1) raw_record     : Excel 한 행을 그대로 jsonb 로 저장 → 컬럼이 바뀌어도 스키마 변경 불필요
---   2) sensor_reading : 센서값을 (태그, 시각, 값) 세로형으로 저장 → 센서 개수가 바뀌어도 테이블 그대로
--- 기준정보(equipment, sensor_tag, lot)는 열처리 공정 일반 구조로 최소 컬럼만 둔다.
+-- 원본 영역 (mes) — 주조(다이캐스팅) 공정 데이터
+-- 원칙: 원본 값을 고치지 않고 그대로 보관한다 (빈 값·이상값·중복도 그대로). 정제는 lake 단계에서 한다.
+-- 이름: 명명규칙.md 2절(원본 이름 우선). 테이블 이름은 원본 파일 이름(Investment_Casting.csv)을 소문자로.
+-- (2026-11-07) 원본 CSV의 timestamp 연도를 2021 → 2026으로 변경 (CSV 파일 자체 수정, 그 외 값은 원본 그대로).
+-- (2026-11-07) raw_record(jsonb 백업) 삭제, cast_shot → investment_casting 으로 이름 변경, casting_id 추가.
 
--- 설비 (열처리로 등)
-CREATE TABLE mes.equipment (
-    equipment_id    text PRIMARY KEY,                 -- 예: FURNACE-01
-    equipment_name  text        NOT NULL,
-    equipment_type  text,                             -- 예: 침탄로, 템퍼링로
-    line_code       text,
-    is_active       boolean     NOT NULL DEFAULT true,
-    created_at      timestamptz NOT NULL DEFAULT now()
+-- 주조 원본 (제품 1개 생산 = 1행)
+-- casting_id: 원본 값으로 자동 생성되는 행 식별자 = 생산일자(yymmdd)_생산시각(hhmmss)_생산번호
+--   예) 2026-08-04, 7:04:11, production_count 1 → 260804_070411_1
+--   원본 timestamp(날짜) 라벨이 실제 날짜와 달라 날짜+시각만으로는 302쌍이 겹침 → 생산번호까지 포함.
+--   DB가 계산하는 컬럼(GENERATED)이라 적재 시 넣지 않으며, 원본 23개 컬럼은 그대로 보관한다.
+CREATE TABLE mes.investment_casting (
+    casting_id            text GENERATED ALWAYS AS (
+        lpad((extract(year  FROM "timestamp")::int % 100)::text, 2, '0') ||
+        lpad( extract(month FROM "timestamp")::int::text, 2, '0') ||
+        lpad( extract(day   FROM "timestamp")::int::text, 2, '0') || '_' ||
+        lpad( extract(hour   FROM "date")::int::text, 2, '0') ||
+        lpad( extract(minute FROM "date")::int::text, 2, '0') ||
+        lpad( floor(extract(second FROM "date"))::int::text, 2, '0') || '_' ||
+        production_count::text
+    ) STORED PRIMARY KEY,
+    line_unit             text,
+    production            text,
+    timestamp             date,
+    date                  time,
+    production_count      integer,
+    mold_temperature      double precision,
+    facility_cycletime    double precision,
+    production_cycletime  double precision,
+    mechanical_strength   double precision,
+    molten_capacity       double precision,
+    injection_pressure    double precision,
+    sleeve_temperature    double precision,
+    top_temp1             double precision,
+    top_temp2             double precision,
+    top_temp3             double precision,
+    top_temp4             double precision,
+    bottom_temp1          double precision,
+    bottom_temp2          double precision,
+    bottom_temp3          double precision,
+    bottom_temp4          double precision,
+    biscuit_thickness     double precision,
+    cooling_water_temp    double precision,
+    passorfail            smallint
 );
 
--- 센서 태그 (설비별 측정 항목: 온도, 가스 유량, 탄소 농도 등)
-CREATE TABLE mes.sensor_tag (
-    tag_id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    equipment_id  text NOT NULL REFERENCES mes.equipment (equipment_id),
-    tag_code      text NOT NULL,                      -- 원본 컬럼명 그대로 (예: zone1_temp)
-    unit          text,                               -- 예: degC, %, L/min
-    description   text,
-    created_at    timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (equipment_id, tag_code)
-);
-
--- LOT (작업 단위)
-CREATE TABLE mes.lot (
-    lot_id        text PRIMARY KEY,
-    equipment_id  text REFERENCES mes.equipment (equipment_id),
-    recipe_code   text,                               -- 공정 조건(레시피) 식별자
-    started_at    timestamptz,
-    ended_at      timestamptz,
-    attributes    jsonb NOT NULL DEFAULT '{}'::jsonb, -- 미확정 항목(강종, 중량 등)은 우선 여기에
-    created_at    timestamptz NOT NULL DEFAULT now(),
-    CHECK (ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at)
-);
-CREATE INDEX lot_equipment_started_idx ON mes.lot (equipment_id, started_at);
-
--- 원본 행 보관 (Excel 한 행 = 한 레코드, 가공 없이 보관)
-CREATE TABLE mes.raw_record (
-    record_id      bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    batch_id       bigint NOT NULL REFERENCES meta.ingestion_batch (batch_id),
-    source_row_no  integer,                           -- 원본 파일의 행 번호
-    payload        jsonb  NOT NULL,                   -- {"컬럼명": 값, ...}
-    ingested_at    timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX raw_record_batch_idx ON mes.raw_record (batch_id);
-
--- 센서 측정 원본 (시계열, 월 파티션)
--- 원본이므로 중복·이상값도 그대로 받는다. 중복 제거·검증은 lake 단계에서.
-CREATE TABLE mes.sensor_reading (
-    measured_at  timestamptz      NOT NULL,
-    tag_id       bigint           NOT NULL REFERENCES mes.sensor_tag (tag_id),
-    lot_id       text             REFERENCES mes.lot (lot_id),
-    value        double precision,                    -- 결측은 NULL 그대로
-    batch_id     bigint           NOT NULL REFERENCES meta.ingestion_batch (batch_id),
-    ingested_at  timestamptz      NOT NULL DEFAULT now()
-) PARTITION BY RANGE (measured_at);
-
-CREATE TABLE mes.sensor_reading_default PARTITION OF mes.sensor_reading DEFAULT;
-CREATE INDEX sensor_reading_tag_time_idx ON mes.sensor_reading (tag_id, measured_at);
-CREATE INDEX sensor_reading_lot_idx      ON mes.sensor_reading (lot_id);
-CREATE INDEX sensor_reading_batch_idx    ON mes.sensor_reading (batch_id);
-
-COMMENT ON TABLE mes.raw_record     IS '원본 행 그대로 보관 (jsonb)';
-COMMENT ON TABLE mes.sensor_reading IS '센서 측정 원본 (세로형, 월 파티션)';
+CREATE INDEX investment_casting_date_idx ON mes.investment_casting ("timestamp", "date");   -- 원본 일자·시각 기준 조회

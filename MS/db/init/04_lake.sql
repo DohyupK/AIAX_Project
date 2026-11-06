@@ -1,35 +1,31 @@
--- Data Lake 영역 (lake)
--- Spark가 mes 원본을 정제해 저장. (태그, 시각) 기준 중복 제거 + 품질 플래그 부여
+-- Data Lake 영역 (lake) — 정제 데이터
+-- Spark가 mes 원본을 정제해 저장한다. 원본 컬럼 이름은 mes와 같게 유지한다 (명명규칙.md 2절).
+-- (2026-11-07) lake.lake_investment_casting: casting_id(mes 참조 외래키) + 원본 20개 컬럼.
+--   빠진 컬럼: line_unit·production(값이 하나뿐), production_count(casting_id에 포함)
+--   mes 값을 그대로 복사 (이상값·센서 오류값은 EDA 검토 결과 그대로 두기로 함, 2026-11-07).
+--   염두: 중복 정리, 일자+시각 병합(생산 일시), 월 파티션
 
-CREATE TABLE lake.sensor_reading (
-    measured_at      timestamptz      NOT NULL,
-    tag_id           bigint           NOT NULL,       -- mes.sensor_tag.tag_id
-    lot_id           text,
-    value            double precision,
-    quality_flag     smallint         NOT NULL DEFAULT 0
-                     CHECK (quality_flag IN (0, 1, 2, 3)),
-                     -- 0=정상 1=보간 2=이상값 3=결측
-    pipeline_run_id  bigint           NOT NULL REFERENCES meta.pipeline_run (run_id),
-    processed_at     timestamptz      NOT NULL DEFAULT now(),
-    PRIMARY KEY (tag_id, measured_at)                 -- 같은 센서·같은 시각은 1건만
-) PARTITION BY RANGE (measured_at);
-
-CREATE TABLE lake.sensor_reading_default PARTITION OF lake.sensor_reading DEFAULT;
-CREATE INDEX lake_sensor_reading_lot_idx ON lake.sensor_reading (lot_id);
-
--- 정제된 LOT 정보 (원본 LOT에서 시간 보정·누락 처리 등을 거친 결과)
-CREATE TABLE lake.lot (
-    lot_id           text PRIMARY KEY,
-    equipment_id     text,
-    recipe_code      text,
-    started_at       timestamptz,
-    ended_at         timestamptz,
-    duration_sec     integer GENERATED ALWAYS AS
-                     (EXTRACT(EPOCH FROM (ended_at - started_at))::integer) STORED,
-    attributes       jsonb  NOT NULL DEFAULT '{}'::jsonb,
-    pipeline_run_id  bigint NOT NULL REFERENCES meta.pipeline_run (run_id),
-    processed_at     timestamptz NOT NULL DEFAULT now()
+CREATE TABLE lake.lake_investment_casting (
+    casting_id            text PRIMARY KEY
+                          REFERENCES mes.investment_casting (casting_id),  -- 외래키: mes 원본 행
+    timestamp             date,
+    date                  time,
+    mold_temperature      double precision,
+    facility_cycletime    double precision,
+    production_cycletime  double precision,
+    mechanical_strength   double precision,
+    molten_capacity       double precision,
+    injection_pressure    double precision,
+    sleeve_temperature    double precision,
+    top_temp1             double precision,
+    top_temp2             double precision,
+    top_temp3             double precision,
+    top_temp4             double precision,
+    bottom_temp1          double precision,
+    bottom_temp2          double precision,
+    bottom_temp3          double precision,
+    bottom_temp4          double precision,
+    biscuit_thickness     double precision,
+    cooling_water_temp    double precision,
+    passorfail            smallint
 );
-
-COMMENT ON TABLE lake.sensor_reading IS '정제된 센서 데이터 (중복 제거, 품질 플래그)';
-COMMENT ON TABLE lake.lot            IS '정제된 LOT 정보';
