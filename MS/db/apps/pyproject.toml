@@ -1,7 +1,7 @@
 [project]
 name = "apps"
 version = "0.1.0"
-description = "열처리 공정 최적화 AX - Data Producing·AI 학습·Inference·공정제어 앱 (MS/db 인프라 사용)"
+description = "주조(다이캐스팅) 공정 최적화 AX - Data Producing·AI 학습·Inference·공정제어 앱 (MS/db 인프라 사용)"
 readme = "README.md"
 authors = [
     { name = "red-straw", email = "144910907+red-straw@users.noreply.github.com" }
