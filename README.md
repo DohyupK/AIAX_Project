@@ -33,7 +33,7 @@ pnpm dev
 | `pnpm build` | 프로덕션 빌드 |
 | `pnpm start` | 빌드 결과 실행 |
 
-환경 변수: [`.env.example`](.env.example)을 복사해 `.env`로 사용 (비밀은 Git에 올리지 않음).
+환경 변수: 팀 공용 `.env`를 사용 (비밀은 Git에 올리지 않음. `.env.example` 없음).
 
 설치·승인된 기술 목록: [개발과정/기술스택.md](개발과정/기술스택.md)
 
@@ -70,5 +70,4 @@ DB 목업 기록: [DB연동_내역](DB연동_내역/README.md)
 
 ## 환경 파일
 
-- `.env` — 실제 비밀 (커밋 금지)  
-- [`.env.example`](.env.example) — 사용법·키 이름만
+- `.env` — 실제 비밀 (커밋 금지). 팀은 Git 밖에서 공유.

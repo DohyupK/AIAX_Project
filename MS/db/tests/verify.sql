@@ -43,8 +43,8 @@ SELECT verify_tmp.expect_eq(
   (SELECT count(*) FROM pg_namespace WHERE nspname = 'meta'), 0, 'meta 스키마 없음');
 SELECT verify_tmp.expect_eq(
   (SELECT count(*) FROM pg_roles WHERE rolname IN
-    ('role_producer','role_spark','role_ml','role_readonly',
-     'app_producer','app_spark','app_ml','app_readonly')), 8, '권한 그룹·계정 8개');
+    ('role_mes','role_spark','role_mart','role_lake',
+     'app_mes','app_spark','app_mart','app_lake')), 8, '권한 그룹·계정 8개');
 SELECT verify_tmp.expect_eq(
   (SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('mes','lake','mart')), 3,
   '전체 테이블 3개 (mes·lake·mart 각 1개)');
@@ -97,8 +97,8 @@ SELECT verify_tmp.expect_eq(
   (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = 'mes.investment_casting'::regclass AND a.attnum > 0
       AND NOT a.attisdropped AND col_description(a.attrelid, a.attnum) LIKE '%(원본:%'), 23, '원본 컬럼 설명에 원본 이름 기록 (23개)');
 
-\echo '=== 3. Data Producing APP 적재 (app_producer) ==='
-SET LOCAL ROLE app_producer;
+\echo '=== 3. mes 적재 (app_mes) ==='
+SET LOCAL ROLE app_mes;
 -- 원본 값 그대로 적재 (2099년 = 검증용 행): 정상 2건 + 같은 일시·다른 생산번호 1건 + 빈 값 행 1건
 INSERT INTO mes.investment_casting (line_unit, production, "timestamp", "date", production_count,
   mold_temperature, facility_cycletime, production_cycletime, mechanical_strength, molten_capacity,
@@ -113,9 +113,9 @@ FROM (VALUES
   ('2099-09-10', '10:00:00', 3,   0,   NULL, 1)
 ) AS v(d, t, no, melt, vol, pf);
 \echo 'PASS  원본 적재 (검증용 4건)'
-SELECT verify_tmp.expect_denied('DELETE FROM mes.investment_casting', 'producer 원본 삭제');
-SELECT verify_tmp.expect_denied('CREATE TABLE mart.x (id int)', 'producer mart 테이블 생성');
-SELECT verify_tmp.expect_denied('SELECT 1 FROM mart.mart_investment_casting LIMIT 1', 'producer mart 접근');
+SELECT verify_tmp.expect_denied('DELETE FROM mes.investment_casting', 'mes 계정 원본 삭제');
+SELECT verify_tmp.expect_denied('CREATE TABLE mart.x (id int)', 'mes 계정 mart 테이블 생성');
+SELECT verify_tmp.expect_denied('SELECT 1 FROM mart.mart_investment_casting LIMIT 1', 'mes 계정 mart 접근');
 RESET ROLE;
 
 \echo '=== 4. 원본 보존·casting_id (관리자 확인) ==='
@@ -175,28 +175,28 @@ EXCEPTION WHEN not_null_violation THEN
   RAISE NOTICE 'PASS  [무결성] 정답(passorfail) 빈 행은 mart에 못 들어감';
 END $$;
 RESET ROLE;
-SET LOCAL ROLE app_producer;
-SELECT verify_tmp.expect_denied('SELECT 1 FROM lake.lake_investment_casting LIMIT 1', 'producer lake 접근');
+SET LOCAL ROLE app_mes;
+SELECT verify_tmp.expect_denied('SELECT 1 FROM lake.lake_investment_casting LIMIT 1', 'mes 계정 lake 접근');
 RESET ROLE;
 
-\echo '=== 6. AI 학습 (app_ml) ==='
-SET LOCAL ROLE app_ml;
-SELECT verify_tmp.expect_denied('SELECT 1 FROM mes.investment_casting LIMIT 1', 'ml 원본 접근');
-SELECT verify_tmp.expect_denied('SELECT 1 FROM lake.lake_investment_casting LIMIT 1', 'ml lake 접근');
-SELECT verify_tmp.expect_eq((SELECT count(*) FROM mart.mart_investment_casting WHERE casting_id LIKE '99%'), 3, 'ml mart 읽기');
-SELECT verify_tmp.expect_denied('DELETE FROM mart.mart_investment_casting', 'ml mart 수정');
+\echo '=== 6. AI 학습 (app_mart) ==='
+SET LOCAL ROLE app_mart;
+SELECT verify_tmp.expect_denied('SELECT 1 FROM mes.investment_casting LIMIT 1', 'mart 계정 원본 접근');
+SELECT verify_tmp.expect_denied('SELECT 1 FROM lake.lake_investment_casting LIMIT 1', 'mart 계정 lake 스키마 접근');
+SELECT verify_tmp.expect_eq((SELECT count(*) FROM mart.mart_investment_casting WHERE casting_id LIKE '99%'), 3, 'mart 계정 mart 읽기');
+SELECT verify_tmp.expect_denied('DELETE FROM mart.mart_investment_casting', 'mart 계정 mart 수정');
 RESET ROLE;
 
-\echo '=== 7. 조회 전용 (app_readonly) ==='
-SET LOCAL ROLE app_readonly;
-SELECT verify_tmp.expect_eq((SELECT count(*) FROM mes.investment_casting WHERE "timestamp" >= '2099-01-01'), 4, 'readonly 원본 읽기');
-SELECT verify_tmp.expect_eq((SELECT count(*) FROM lake.lake_investment_casting WHERE casting_id LIKE '99%'), 4, 'readonly lake 읽기');
-SELECT verify_tmp.expect_eq((SELECT count(*) FROM mart.mart_investment_casting WHERE casting_id LIKE '99%'), 3, 'readonly mart 읽기');
-SELECT verify_tmp.expect_denied('INSERT INTO mes.investment_casting (production_count) VALUES (1)', 'readonly 쓰기');
+\echo '=== 7. 조회 (app_lake) ==='
+SET LOCAL ROLE app_lake;
+SELECT verify_tmp.expect_eq((SELECT count(*) FROM mes.investment_casting WHERE "timestamp" >= '2099-01-01'), 4, 'lake 계정 원본 읽기');
+SELECT verify_tmp.expect_eq((SELECT count(*) FROM lake.lake_investment_casting WHERE casting_id LIKE '99%'), 4, 'lake 계정 lake 스키마 읽기');
+SELECT verify_tmp.expect_eq((SELECT count(*) FROM mart.mart_investment_casting WHERE casting_id LIKE '99%'), 3, 'lake 계정 mart 읽기');
+SELECT verify_tmp.expect_denied('INSERT INTO mes.investment_casting (production_count) VALUES (1)', 'lake 계정 쓰기');
 RESET ROLE;
 
 \echo '=== 8. 기타 ==='
-SET LOCAL ROLE app_producer;
+SET LOCAL ROLE app_mes;
 SELECT verify_tmp.expect_denied('CREATE TABLE public.tmp_x (id int)', 'public 스키마 임의 테이블 생성');
 RESET ROLE;
 

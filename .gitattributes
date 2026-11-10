@@ -1,0 +1,29 @@
+# 팀 공통 줄바꿈: 저장소는 LF, Windows 스크립트만 CRLF
+* text=auto eol=lf
+
+# Windows 실행 스크립트
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 컨테이너·DB·셸 (LF 고정 — MS/db 규칙과 동일)
+*.sh  text eol=lf
+*.sql text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# 바이너리
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.gz  binary
+*.zip binary
+*.7z  binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

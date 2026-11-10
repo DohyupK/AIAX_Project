@@ -13,7 +13,7 @@ END $$;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 DO $$ BEGIN
   EXECUTE format('REVOKE ALL ON DATABASE %I FROM PUBLIC', current_database());
-  EXECUTE format('GRANT CONNECT ON DATABASE %I TO role_producer, role_spark, role_ml, role_readonly', current_database());
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO role_mes, role_spark, role_mart, role_lake', current_database());
 END $$;
 
 CREATE SCHEMA mes;

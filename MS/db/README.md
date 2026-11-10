@@ -5,7 +5,19 @@
 PostgreSQL · Kafka · Spark · Flink를 Docker Compose 하나로 띄우는 **데이터 파이프라인 인프라**입니다.
 이 폴더만 있으면 어느 PC에서나 같은 환경이 만들어집니다. 실제 데이터와 앱 기능은 아직 없습니다.
 
-> **AI 에이전트(Claude·Cursor 등)에게:** 이 README에 구조·사용법·결정 이유·현재 상태·규칙 검토 결과를, [`명명규칙.md`](명명규칙.md)에 테이블·컬럼 이름 규칙을 담았습니다. 팀 공통 규칙은 루트 [`AGENTS.md`](../../AGENTS.md)를 따릅니다.
+> **AI 에이전트(Claude·Cursor 등)에게:** 이 README에 구조·사용법·결정 이유·현재 상태·규칙 검토 결과를, [`명명규칙.md`](명명규칙.md)에 테이블·컬럼 이름 규칙을 담았습니다. 팀 공통 규칙은 루트 [`AGENTS.md`](../../AGENTS.md)를 따릅니다.  
+> **DB 스키마·테이블·컬럼·계정·제약을 바꾸면** 루트 [`DB구조.md`](../../DB구조.md)를 **같은 작업에서 반드시 갱신**한다. init만 고치고 `DB구조.md`를 안 고치면 작업을 완료로 보지 않는다.
+
+## DB 구조 문서 갱신 의무 (MS)
+
+| 항목 | 내용 |
+|------|------|
+| 문서 | 루트 [`DB구조.md`](../../DB구조.md) — 팀 공통 현행 스키마·컬럼·계정 |
+| 언제 | `init/` SQL·권한·테이블/컬럼 변경 **할 때마다** |
+| 누가 | **MS**가 주 담당 (이 폴더의 DB 정의 소유) |
+| 같이 볼 것 | 본 README 계정 표, [`명명규칙.md`](명명규칙.md), [`DB연동_내역/`](../../DB연동_내역/) |
+
+체크: init 변경 → `DB구조.md` 표·변경 이력 → (필요 시) 본 README 계정/접속 표.
 
 ---
 
@@ -67,10 +79,25 @@ Excel 센서 데이터
 
 ```powershell
 cd <저장소>\MS\db
-copy .env.example .env                 # 비밀번호는 팀 공용값으로 수정
+# .env 는 팀 공용값을 사용 (Git 제외, .env.example 없음)
 docker compose up -d --build           # 첫 실행은 이미지 다운로드·Flink 빌드로 10분 이상
 docker compose ps                      # 7개 모두 Up / postgres는 healthy
 ```
+
+### 기동 메뉴 (무엇을 켤지 선택 · compose 수정 없음)
+
+같은 `docker-compose.yml`을 두고, 실행 시점에 서비스만 고릅니다.
+
+| 환경 | 실행 |
+|------|------|
+| Windows (로컬) | `start.bat` 더블클릭 또는 `.\start.bat` |
+| Linux (NCP 등) | `chmod +x start.sh` 후 `./start.sh` |
+
+메뉴: **1** Postgres만 · **2** 처리만(Kafka·Spark·Flink) · **3** 전부 · **0** 취소  
+
+- NCP 서버: 보통 **1**만 선택 (`POSTGRES_BIND_IP=0.0.0.0`, ACG로 IP 제한).
+- 로컬에서 원격 PG만 쓰고 처리만: **2**.
+- Flink 이미지가 없으면 2·3은 최초에 `docker compose build flink-jobmanager`가 필요할 수 있음.
 
 ### 동작 확인
 
@@ -122,7 +149,7 @@ MS/db/
   README.md              이 문서 (사용법·설계·결정 기록)
   명명규칙.md            테이블·컬럼 이름 규칙 (팀 공통)
   docker-compose.yml     서비스 7개 정의 (project name: aiax-db)
-  .env.example           설정 견본 → .env로 복사 (.env는 git 제외)
+  .env                   팀 공용 설정 (git 제외, .env.example 미사용)
   .gitignore             .env, data/raw/, apps/.venv/, *.log 제외
   .gitattributes         *.sh·*.sql·*.yml 줄바꿈 LF 고정 (Windows CRLF로 init 실패 방지)
   init/                  DB 최초 생성 시 1회 실행 (이름순)
@@ -179,11 +206,11 @@ MS/db/
 
 | 계정 | 용도 | mes | lake | mart |
 |---|---|---|---|---|
-| `aiax_admin` (.env) | 관리·스키마 변경 | 전체 | 전체 | 전체 |
-| `app_producer` | Data Producing APP | 읽기·쓰기(삭제 불가) | - | - |
+| `shift` (.env `POSTGRES_USER`) | 관리·스키마 변경 | 전체 | 전체 | 전체 |
+| `app_mes` | mes 원본 적재 | 읽기·쓰기(삭제 불가) | - | - |
 | `app_spark` | Spark | 읽기 | 읽기·쓰기 | 읽기·쓰기 |
-| `app_ml` | AI 학습 | - | - | 읽기 |
-| `app_readonly` | 조회 | 읽기 | 읽기 | 읽기 |
+| `app_mart` | AI 학습 | - | - | 읽기 |
+| `app_lake` | 조회 (DH 등) | 읽기 | 읽기 | 읽기 |
 
 ### 이 DB를 쓰는 기능을 만들 때
 
@@ -203,7 +230,7 @@ MS/db/
 
 | 사용처 | 접속 형식 |
 |---|---|
-| Python (psycopg) | `postgresql://app_producer:<비밀번호>@localhost:5432/aiax` |
+| Python (psycopg) | `postgresql://app_mes:<비밀번호>@localhost:5432/aiax` |
 | Spark JDBC | `jdbc:postgresql://postgres:5432/aiax` (user `app_spark`, `--packages org.postgresql:postgresql:42.7.11 --conf spark.jars.ivy=/tmp/.ivy2`) |
 | Kafka (내 PC 앱) | `localhost:9094` |
 | Kafka (컨테이너) | `kafka:9092` |

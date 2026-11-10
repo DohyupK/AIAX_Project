@@ -1,5 +1,5 @@
 -- Data Mart 영역 (mart) — AI 학습·분석용 데이터
--- Spark가 lake 데이터를 가공해 저장한다. AI 학습 계정(app_ml)은 이 영역만 읽는다.
+-- Spark가 lake 데이터를 가공해 저장한다. AI 학습 계정(app_mart)은 이 영역만 읽는다.
 -- (2026-11-07) mart.mart_investment_casting: casting_id(lake 참조 외래키) + 학습용 18개 컬럼.
 --   빠진 컬럼: timestamp·date(날짜 라벨 문제), (production_count·line_unit·production은 lake 단계에서 이미 제외)
 --   채우는 조건: molten_capacity 결측 행(약 22%, 16,316행)과 passorfail(정답) 빈 행(1행)은 학습에 쓰지 않으므로 넣지 않음 → 57,295행
