@@ -22,7 +22,7 @@
 
 | 항목 | 내용 |
 |------|------|
-| URL 위치 | `DH/api/mes_dashboard/.env` → `DATABASE_URL` |
+| URL 위치 | 프로젝트 루트 `.env` → `DATABASE_URL` |
 | 호스트 | `49.50.143.236` |
 | 포트 | `5432` |
 | DB | `aiax` |

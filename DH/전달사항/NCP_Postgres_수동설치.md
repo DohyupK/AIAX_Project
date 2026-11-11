@@ -17,7 +17,7 @@
 | `app_mes` | mes 적재 |
 | `app_spark` | Spark |
 | `app_mart` | mart 학습 읽기 |
-| `app_lake` | 조회 (DH `DATABASE_URL`) |
+| `app_lake` | 조회 (루트 `.env`의 `DATABASE_URL`) |
 
 **올리지 말 것:** Kafka / Spark / Flink (계획: 로컬 처리).
 
@@ -136,7 +136,7 @@ sudo docker exec -it aiax-postgres \
 psql "postgresql://app_lake@49.50.143.236:5432/aiax" -c "SELECT 1;"
 ```
 
-DH: [`DH/api/mes_dashboard/.env`](../api/mes_dashboard/.env) 의 `DATABASE_URL`이 `app_lake@49.50.143.236` 인지 확인 후 `/health`·대시보드.
+DH: 프로젝트 루트 [`.env`](../../.env) 의 `DATABASE_URL`이 `app_lake@49.50.143.236` 인지 확인 후 `/health`·대시보드.
 
 ---
 
@@ -153,7 +153,7 @@ DH: [`DH/api/mes_dashboard/.env`](../api/mes_dashboard/.env) 의 `DATABASE_URL`�
 |------|--------|
 | SSH 불가 | ACG 22, pem |
 | 5432 타임아웃 | ACG 5432, `-p 5432:5432` |
-| 비밀번호 오류 | 서버 루트 `.env` ↔ 로컬 루트 `.env` ↔ DH `DATABASE_URL` |
+| 비밀번호 오류 | 서버 루트 `.env` ↔ 로컬 루트 `.env` (`DATABASE_URL`·`APP_LAKE_PASSWORD`) |
 | 계정 없음 | init 반영 여부, 볼륨 재사용 |
 
 ---

@@ -243,7 +243,7 @@ MS/db/
 
 1. **학습과 추론은 같은 `apps` 프로젝트**에서 `uv.lock`으로 scikit-learn·joblib 버전을 맞춥니다 (버전이 다르면 저장된 모델 로드 실패 가능).
 2. **모델 추론은 Flink가 아니라 Inference APP**에서 합니다 (Flink 컨테이너 Python 3.12 ≠ 앱 Python 3.13).
-3. 접속 주소·비밀번호는 코드에 쓰지 않고 루트 `.env`(또는 DH `DATABASE_URL`)에서 읽습니다 (PC: `localhost`, 컨테이너: 서비스 이름).
+3. 접속 주소·비밀번호는 코드에 쓰지 않고 루트 `.env`(`DATABASE_URL`·계정 비밀번호)에서 읽습니다 (PC: `localhost`, 컨테이너: 서비스 이름). 하위 폴더 `.env` 금지.
 4. PyFlink(`apache-flink`)는 Windows에 설치하지 않습니다 (Windows용 배포 없음). Flink 작업은 `flink/jobs/`에 두고 컨테이너에서 실행합니다.
 5. 라이브러리 추가는 `uv add`만 사용하고, 팀 규칙에 따라 승인 요청 후 추가합니다.
 
