@@ -4,6 +4,14 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# 루트 .env: 컨테이너 env_file + compose 변수 치환(POSTGRES_BIND_IP 등)
+ROOT_ENV="../../.env"
+if [[ ! -f "$ROOT_ENV" ]]; then
+  echo "[오류] 프로젝트 루트 .env 가 없습니다: $ROOT_ENV" >&2
+  exit 1
+fi
+DC=(docker compose --env-file "$ROOT_ENV")
+
 echo
 echo "========================================"
 echo " aiax-db Docker 기동 메뉴 (Linux)"
@@ -21,18 +29,18 @@ read -r -p "번호 입력 후 Enter: " CHOICE
 case "$CHOICE" in
   1)
     echo
-    echo "[실행] docker compose up -d postgres"
-    docker compose up -d postgres
+    echo "[실행] docker compose --env-file ../../.env up -d postgres"
+    "${DC[@]}" up -d postgres
     ;;
   2)
     echo
-    echo "[실행] docker compose up -d kafka kafka-ui spark-master spark-worker flink-jobmanager flink-taskmanager"
-    docker compose up -d kafka kafka-ui spark-master spark-worker flink-jobmanager flink-taskmanager
+    echo "[실행] docker compose --env-file ../../.env up -d kafka kafka-ui spark-master spark-worker flink-jobmanager flink-taskmanager"
+    "${DC[@]}" up -d kafka kafka-ui spark-master spark-worker flink-jobmanager flink-taskmanager
     ;;
   3)
     echo
-    echo "[실행] docker compose up -d"
-    docker compose up -d
+    echo "[실행] docker compose --env-file ../../.env up -d"
+    "${DC[@]}" up -d
     ;;
   0)
     echo "취소했습니다."
@@ -45,5 +53,5 @@ case "$CHOICE" in
 esac
 
 echo
-echo "[완료] 상태 확인: docker compose ps"
-docker compose ps
+echo "[완료] 상태 확인: docker compose --env-file ../../.env ps"
+"${DC[@]}" ps

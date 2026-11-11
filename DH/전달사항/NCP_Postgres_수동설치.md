@@ -9,7 +9,7 @@
 | 에이전트 | SSH 대행 없음 — **본인이 SSH로 실행** |
 
 비밀번호·`.pem`은 이 문서에 적지 않는다.  
-**프로젝트 루트 `.env` / `MS/db/.env`와 서버 `.env`를 동일하게** 맞춘다.
+**Postgres Docker 비밀은 프로젝트 루트 `.env`만** 쓴다 (`MS/db/.env` 없음). 서버의 루트 `.env` 값(비밀번호)을 로컬 루트와 맞추고, NCP에서는 `POSTGRES_BIND_IP=0.0.0.0`으로 둔다.
 
 | 계정 | 용도 |
 |------|------|
@@ -153,7 +153,7 @@ DH: [`DH/api/mes_dashboard/.env`](../api/mes_dashboard/.env) 의 `DATABASE_URL`�
 |------|--------|
 | SSH 불가 | ACG 22, pem |
 | 5432 타임아웃 | ACG 5432, `-p 5432:5432` |
-| 비밀번호 오류 | 서버 `.env` ↔ 루트 / MS `.env` ↔ DH URL |
+| 비밀번호 오류 | 서버 루트 `.env` ↔ 로컬 루트 `.env` ↔ DH `DATABASE_URL` |
 | 계정 없음 | init 반영 여부, 볼륨 재사용 |
 
 ---

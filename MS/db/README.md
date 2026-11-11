@@ -72,17 +72,19 @@ Excel 센서 데이터
 ### 준비 (PC당 1회)
 
 1. **Docker Desktop** 설치 (WSL2 백엔드). `docker run hello-world`가 되면 준비 완료.
-2. 프로젝트 포트 `5432 7077 8080 8081 8090 9094`가 비어 있어야 합니다 (`netstat -ano | findstr "5432 8080"`). PC에 PostgreSQL이 따로 있으면 `.env`의 `POSTGRES_PORT`를 5433 등으로 바꿉니다.
+2. 프로젝트 포트 `5432 7077 8080 8081 8090 9094`가 비어 있어야 합니다 (`netstat -ano | findstr "5432 8080"`). PC에 PostgreSQL이 따로 있으면 루트 `.env`의 `POSTGRES_PORT`를 5433 등으로 바꿉니다.
 3. Python 앱을 다룰 사람만: **uv** 설치 (`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`).
 
 ### 실행
 
 ```powershell
 cd <저장소>\MS\db
-# .env 는 팀 공용값을 사용 (Git 제외, .env.example 없음)
-docker compose up -d --build           # 첫 실행은 이미지 다운로드·Flink 빌드로 10분 이상
-docker compose ps                      # 7개 모두 Up / postgres는 healthy
+# Postgres 비밀은 프로젝트 루트 .env 만 사용 (Git 제외, .env.example 없음, MS/db/.env 없음)
+docker compose --env-file ../../.env up -d --build   # 첫 실행은 이미지 다운로드·Flink 빌드로 10분 이상
+docker compose --env-file ../../.env ps              # 7개 모두 Up / postgres는 healthy
 ```
+
+수동 `docker compose` 호출 시에도 `--env-file ../../.env`를 붙인다 (`POSTGRES_BIND_IP` 치환). `start.bat` / `start.sh`는 자동으로 붙인다.
 
 ### 기동 메뉴 (무엇을 켤지 선택 · compose 수정 없음)
 
@@ -95,15 +97,15 @@ docker compose ps                      # 7개 모두 Up / postgres는 healthy
 
 메뉴: **1** Postgres만 · **2** 처리만(Kafka·Spark·Flink) · **3** 전부 · **0** 취소  
 
-- NCP 서버: 보통 **1**만 선택 (`POSTGRES_BIND_IP=0.0.0.0`, ACG로 IP 제한).
+- NCP 서버: 루트 `.env`에 `POSTGRES_BIND_IP=0.0.0.0` 후 보통 **1**만 선택 (ACG로 IP 제한). scp 대상도 루트 `.env`.
 - 로컬에서 원격 PG만 쓰고 처리만: **2**.
-- Flink 이미지가 없으면 2·3은 최초에 `docker compose build flink-jobmanager`가 필요할 수 있음.
+- Flink 이미지가 없으면 2·3은 최초에 `docker compose --env-file ../../.env build flink-jobmanager`가 필요할 수 있음.
 
 ### 동작 확인
 
 | 대상 | 명령·화면 | 정상 결과 |
 |---|---|---|
-| DB (`docker compose ps`에서 `healthy` 확인 후) | `docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tests/verify.sql'` | 마지막 줄 `모든 검증 통과` |
+| DB (`docker compose --env-file ../../.env ps`에서 `healthy` 확인 후) | `docker compose --env-file ../../.env exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tests/verify.sql'` | 마지막 줄 `모든 검증 통과` |
 | Kafka | http://localhost:8080 | 클러스터 `aiax` Online, Version `3.9-IV0` |
 | Spark | `docker exec aiax-spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 /opt/spark/examples/src/main/python/pi.py 10` | `Pi is roughly 3.14…` |
 | Flink | `docker exec aiax-flink-jobmanager ./bin/flink run -py /opt/flink/examples/python/datastream/word_count.py` | `Job … has finished.` |
@@ -116,7 +118,7 @@ docker compose ps                      # 7개 모두 Up / postgres는 healthy
 `healthy` 후 확인:
 
 ```powershell
-"SELECT (SELECT count(*) FROM mes.investment_casting) mes, (SELECT count(*) FROM lake.lake_investment_casting) lake, (SELECT count(*) FROM mart.mart_investment_casting) mart;" | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+"SELECT (SELECT count(*) FROM mes.investment_casting) mes, (SELECT count(*) FROM lake.lake_investment_casting) lake, (SELECT count(*) FROM mart.mart_investment_casting) mart;" | docker compose --env-file ../../.env exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 정상 결과: `73612 | 73612 | 57295`. (PowerShell은 명령 안의 큰따옴표를 지우므로 SQL은 이렇게 파이프로 넘깁니다.) 데이터가 크면 처음 `healthy`까지 수십 초 더 걸립니다.
@@ -124,23 +126,25 @@ docker compose ps                      # 7개 모두 Up / postgres는 healthy
 **덤프 다시 뜨기** (DB 구조나 데이터가 바뀌었을 때, MS):
 
 ```powershell
-docker compose exec postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --data-only --schema=mes --schema=lake --schema=mart | gzip > /tmp/08_data.sql.gz'
-docker compose cp postgres:/tmp/08_data.sql.gz init/08_data.sql.gz
+docker compose --env-file ../../.env exec postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --data-only --schema=mes --schema=lake --schema=mart | gzip > /tmp/08_data.sql.gz'
+docker compose --env-file ../../.env cp postgres:/tmp/08_data.sql.gz init/08_data.sql.gz
 ```
 
 `tests/load_csv_trial.sql`·`fill_lake_trial.sql`·`fill_mart_trial.sql`은 CSV에서 처음부터 다시 만들 때만 씁니다 (이때는 `08_data.sql.gz`를 빼고 `down -v` → `up -d` 후 실행).
 
 ## 5. 평소 사용 명령 (`MS\db` 폴더에서)
 
+아래 표의 `docker compose`에는 모두 `--env-file ../../.env`를 붙인다 (또는 `start.bat` / `start.sh` 사용).
+
 | 할 일 | 명령 | 비고 |
 |---|---|---|
-| 켜기 | `docker compose up -d` (일부만: 서비스 이름 나열) | `restart: unless-stopped` → Docker Desktop이 켜지면 자동 재시작 |
-| 상태 | `docker compose ps` | |
-| 로그 | `docker compose logs --tail 50 <서비스>` | |
-| 끄기 | `docker compose stop` | 데이터 유지 |
-| 컨테이너 재생성 | `docker compose down` → `up -d` | DB 유지, Kafka 토픽은 삭제 |
-| **DB 초기화** | `docker compose down -v` → `up -d` | **DB 데이터 전부 삭제.** `init/`을 고쳤을 때만 |
-| Flink 이미지 재빌드 | `docker compose build flink-jobmanager` | `flink/Dockerfile` 수정 시 |
+| 켜기 | `docker compose --env-file ../../.env up -d` (일부만: 서비스 이름 나열) | `restart: unless-stopped` → Docker Desktop이 켜지면 자동 재시작 |
+| 상태 | `docker compose --env-file ../../.env ps` | |
+| 로그 | `docker compose --env-file ../../.env logs --tail 50 <서비스>` | |
+| 끄기 | `docker compose --env-file ../../.env stop` | 데이터 유지 |
+| 컨테이너 재생성 | `docker compose --env-file ../../.env down` → `up -d` | DB 유지, Kafka 토픽은 삭제 |
+| **DB 초기화** | `docker compose --env-file ../../.env down -v` → `up -d` | **DB 데이터 전부 삭제.** `init/`을 고쳤을 때만 |
+| Flink 이미지 재빌드 | `docker compose --env-file ../../.env build flink-jobmanager` | `flink/Dockerfile` 수정 시 |
 
 ## 6. 폴더 구성
 
@@ -148,12 +152,12 @@ docker compose cp postgres:/tmp/08_data.sql.gz init/08_data.sql.gz
 MS/db/
   README.md              이 문서 (사용법·설계·결정 기록)
   명명규칙.md            테이블·컬럼 이름 규칙 (팀 공통)
-  docker-compose.yml     서비스 7개 정의 (project name: aiax-db)
-  .env                   팀 공용 설정 (git 제외, .env.example 미사용)
-  .gitignore             .env, data/raw/, apps/.venv/, *.log 제외
+  docker-compose.yml     서비스 7개 정의 (project name: aiax-db; env_file=../../.env)
+  (설정)                 프로젝트 루트 `.env` (git 제외, .env.example 미사용). MS/db/.env 없음
+  .gitignore             .env(실수 방지), data/raw/, apps/.venv/, *.log 제외
   .gitattributes         *.sh·*.sql·*.yml 줄바꿈 LF 고정 (Windows CRLF로 init 실패 방지)
   init/                  DB 최초 생성 시 1회 실행 (이름순)
-    00_roles.sh          권한 그룹(role_*)·서비스 계정(app_*), 비밀번호는 .env에서
+    00_roles.sh          권한 그룹(role_*)·서비스 계정(app_*), 비밀번호는 루트 .env에서
     01_schemas.sql       mes/lake/mart 스키마, 시간대 Asia/Seoul, public 쓰기 차단
     03_mes.sql           원본: investment_casting (원본 23개 컬럼 + casting_id)
     04_lake.sql          정제: lake_investment_casting (casting_id 외래키 + 원본 20개 컬럼)
@@ -206,7 +210,7 @@ MS/db/
 
 | 계정 | 용도 | mes | lake | mart |
 |---|---|---|---|---|
-| `shift` (.env `POSTGRES_USER`) | 관리·스키마 변경 | 전체 | 전체 | 전체 |
+| `shift` (루트 .env `POSTGRES_USER`) | 관리·스키마 변경 | 전체 | 전체 | 전체 |
 | `app_mes` | mes 원본 적재 | 읽기·쓰기(삭제 불가) | - | - |
 | `app_spark` | Spark | 읽기 | 읽기·쓰기 | 읽기·쓰기 |
 | `app_mart` | AI 학습 | - | - | 읽기 |
@@ -225,8 +229,8 @@ MS/db/
 
 ## 8. 접속 방식
 
-- **A. 각자 로컬 (기본):** `.env`의 `POSTGRES_BIND_IP=127.0.0.1` → 내 PC에서만 접속.
-- **B. 한 PC를 서버로 (같은 네트워크):** `POSTGRES_BIND_IP=0.0.0.0` 후 재시작, Windows 방화벽 5432 허용, 팀원은 서버 PC의 IP로 접속. 공용 Wi-Fi에서는 사용하지 않습니다.
+- **A. 각자 로컬 (기본):** 루트 `.env`의 `POSTGRES_BIND_IP=127.0.0.1` → 내 PC에서만 접속.
+- **B. 한 PC·NCP를 서버로:** 루트 `.env`의 `POSTGRES_BIND_IP=0.0.0.0` 후 재시작, 방화벽/ACG로 5432 제한. 공용 Wi-Fi에서는 사용하지 않습니다.
 
 | 사용처 | 접속 형식 |
 |---|---|
@@ -239,7 +243,7 @@ MS/db/
 
 1. **학습과 추론은 같은 `apps` 프로젝트**에서 `uv.lock`으로 scikit-learn·joblib 버전을 맞춥니다 (버전이 다르면 저장된 모델 로드 실패 가능).
 2. **모델 추론은 Flink가 아니라 Inference APP**에서 합니다 (Flink 컨테이너 Python 3.12 ≠ 앱 Python 3.13).
-3. 접속 주소·비밀번호는 코드에 쓰지 않고 `.env`에서 읽습니다 (PC: `localhost`, 컨테이너: 서비스 이름).
+3. 접속 주소·비밀번호는 코드에 쓰지 않고 루트 `.env`(또는 DH `DATABASE_URL`)에서 읽습니다 (PC: `localhost`, 컨테이너: 서비스 이름).
 4. PyFlink(`apache-flink`)는 Windows에 설치하지 않습니다 (Windows용 배포 없음). Flink 작업은 `flink/jobs/`에 두고 컨테이너에서 실행합니다.
 5. 라이브러리 추가는 `uv add`만 사용하고, 팀 규칙에 따라 승인 요청 후 추가합니다.
 

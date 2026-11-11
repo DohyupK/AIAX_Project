@@ -7,7 +7,8 @@ services:
     image: postgres:18.6
     container_name: aiax-postgres
     restart: unless-stopped
-    env_file: .env
+    # Postgres 비밀·bind는 프로젝트 루트 .env 단일 관리 (MS/db/.env 미사용)
+    env_file: ../../.env
     environment:
       TZ: Asia/Seoul
       PGTZ: Asia/Seoul

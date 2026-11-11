@@ -3,6 +3,15 @@ chcp 65001 >nul
 setlocal EnableExtensions
 cd /d "%~dp0"
 
+rem 루트 .env: 컨테이너 env_file + compose 변수 치환(POSTGRES_BIND_IP 등)
+set "ROOT_ENV=..\..\.env"
+if not exist "%ROOT_ENV%" (
+  echo [오류] 프로젝트 루트 .env 가 없습니다: %ROOT_ENV%
+  pause
+  exit /b 1
+)
+set "DC=docker compose --env-file %ROOT_ENV%"
+
 echo.
 echo ========================================
 echo  aiax-db Docker 기동 메뉴 (Windows)
@@ -28,20 +37,20 @@ exit /b 1
 
 :PG
 echo.
-echo [실행] docker compose up -d postgres
-docker compose up -d postgres
+echo [실행] docker compose --env-file ..\..\.env up -d postgres
+%DC% up -d postgres
 goto END
 
 :PIPE
 echo.
-echo [실행] docker compose up -d kafka kafka-ui spark-master spark-worker flink-jobmanager flink-taskmanager
-docker compose up -d kafka kafka-ui spark-master spark-worker flink-jobmanager flink-taskmanager
+echo [실행] docker compose --env-file ..\..\.env up -d kafka kafka-ui spark-master spark-worker flink-jobmanager flink-taskmanager
+%DC% up -d kafka kafka-ui spark-master spark-worker flink-jobmanager flink-taskmanager
 goto END
 
 :ALL
 echo.
-echo [실행] docker compose up -d
-docker compose up -d
+echo [실행] docker compose --env-file ..\..\.env up -d
+%DC% up -d
 goto END
 
 :CANCEL
@@ -51,13 +60,13 @@ exit /b 0
 :END
 if errorlevel 1 (
   echo.
-  echo [실패] docker compose 오류. Docker Desktop/daemon 과 .env 를 확인하세요.
+  echo [실패] docker compose 오류. Docker Desktop/daemon 과 루트 .env 를 확인하세요.
   pause
   exit /b 1
 )
 echo.
-echo [완료] 상태 확인: docker compose ps
-docker compose ps
+echo [완료] 상태 확인: docker compose --env-file ..\..\.env ps
+%DC% ps
 echo.
 pause
 exit /b 0
