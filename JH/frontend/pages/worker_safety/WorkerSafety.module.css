@@ -1,0 +1,331 @@
+.page {
+  --panel: #ffffff;
+  --ink: #1d2433;
+  --muted: #6b7484;
+  --line: #e1e5eb;
+  --accent: #3b82f6;
+  --ok: #1f8a4c;
+  --ok-bg: #e2f4e8;
+  --bad: #c53030;
+  --bad-bg: #fde4e4;
+  --grey: #6b7484;
+  --grey-bg: #eef0f3;
+  min-height: 100%;
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.badge,
+.gearChip {
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 상태 색 (칩·범례 공용) */
+.ok { background: var(--ok-bg); color: var(--ok); }
+.bad { background: var(--bad-bg); color: var(--bad); }
+.grey { background: var(--grey-bg); color: var(--grey); }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+
+/* 상세: 촬영 이미지 | 판정 정보 */
+.detail {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  gap: 6px 14px;
+}
+
+/* 넓은 화면: 검색대 제목줄만 1행에 두고, 촬영 이미지와 오른쪽 정보(배너)를 2행에서 같은 높이로 시작 */
+.scanCol { display: contents; }
+.scanCol > :first-child { grid-column: 1; grid-row: 1; }
+.scanCol > :nth-child(2) { grid-column: 1; grid-row: 2; }
+.scanCol > :nth-child(3) { grid-column: 1; grid-row: 3; }
+.info { grid-column: 2; grid-row: 2 / span 2; }
+
+.scanHead {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.scan {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+}
+
+.legend {
+  display: flex;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  vertical-align: -1px;
+}
+
+.legend .ok { background: #2fb36b; }
+.legend .bad { background: #e5484d; }
+.legend .grey { background: #8b93a1; }
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.banner {
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bannerBad { background: var(--bad-bg); color: var(--bad); }
+.bannerOk { background: var(--ok-bg); color: var(--ok); }
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "tag company"
+    "gear company";
+  gap: 10px;
+}
+
+.areaTag { grid-area: tag; }
+.areaGear { grid-area: gear; }
+.areaCompany {
+  grid-area: company;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 목록은 칸 높이(왼쪽 두 칸 합)를 늘리지 않고 남은 공간만 채움 → 넘치면 내부 스크롤 */
+.peopleWrap {
+  position: relative;
+  flex: 1;
+  min-height: 90px;
+  margin-top: 8px;
+}
+
+.people {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.personId { font-weight: 600; }
+
+.personMissing {
+  color: var(--bad);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.box {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.boxTitle {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+}
+
+.dl dt { color: var(--muted); }
+.dl dd { margin: 0; text-align: right; }
+
+/* 회사 출입 현황 칸 */
+.boxHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.boxHead .boxTitle { margin: 0; }
+
+.boxActions {
+  display: flex;
+  gap: 6px;
+}
+
+.select {
+  font: inherit;
+  font-size: 12px;
+  max-width: 130px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.smallBtn { padding: 3px 10px; font-size: 12px; }
+
+.companyName {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.stat {
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--grey-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat span { color: var(--muted); font-size: 11.5px; }
+.stat b { font-size: 18px; }
+.statOk { background: var(--ok-bg); }
+.statOk b { color: var(--ok); }
+.statBad { background: var(--bad-bg); }
+.statBad b { color: var(--bad); }
+
+.gearChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 리스트 */
+.listHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.filters {
+  display: flex;
+  gap: 6px;
+}
+
+/* 결과 필터는 왼쪽, 안내 문구 + 게이트 필터는 오른쪽 */
+.hint {
+  margin-left: auto;
+}
+
+.filterBtn {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.filterBtn:hover { border-color: var(--accent); }
+.filterOn { border-color: var(--accent); background: #eaf1fe; color: #1d4ed8; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.table tbody tr { cursor: pointer; }
+.table tbody tr:hover { background: #f6f8fb; }
+.rowOn,
+.rowOn:hover { background: #eaf1fe !important; }
+
+.right { text-align: right !important; }
+.muted { color: var(--muted); }
+.badText { color: var(--bad); }
+.empty { text-align: center; color: var(--muted); }
+
+.filterBtn:focus-visible,
+.table tbody tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (max-width: 900px) {
+  .detail { grid-template-columns: 1fr; grid-template-rows: none; gap: 14px; }
+  .scanCol { display: flex; flex-direction: column; gap: 6px; max-width: 260px; }
+  .scanCol > * { grid-column: auto; grid-row: auto; }
+  .info { grid-column: auto; grid-row: auto; }
+  .infoGrid {
+    grid-template-columns: 1fr;
+    grid-template-areas: "tag" "company" "gear";
+  }
+  .peopleWrap { min-height: 180px; }
+  .table { font-size: 12px; }
+}
