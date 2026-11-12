@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AppShell } from "@/components/AppShell";
+// 화면 셸: JH 플랫폼 인덱스 (DH 승인 2026-11-06, 기존 AppShell은 components/에 보존)
+import { PlatformLayout } from "@/JH/main";
 
 export const metadata: Metadata = {
   title: "TeamProject",
@@ -15,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        <AppShell>{children}</AppShell>
+        <PlatformLayout>{children}</PlatformLayout>
       </body>
     </html>
   );
