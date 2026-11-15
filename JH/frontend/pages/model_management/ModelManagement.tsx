@@ -21,7 +21,8 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "version", label: "버전" },
 ];
 
-const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+// 성과지표 0~1 값을 소수점 둘째 자리로 (% 표기 안 함)
+const num2 = (n: number) => n.toFixed(2);
 
 /** Model Management — 공정별 모델 목록·성과지표 조회 + 신규 모델 등록 */
 export default function ModelManagement() {
@@ -33,7 +34,8 @@ export default function ModelManagement() {
   const [formOpen, setFormOpen] = useState(false);
 
   const visible = sortModels(
-    models.filter((m) => tab === "all" || m.process === tab),
+    // 전체 탭 = 현재 대시보드에 배포(적용)된 모델만 / 공정 탭 = 해당 공정 전 버전
+    models.filter((m) => (tab === "all" ? m.deployed : m.process === tab)),
     sort.key,
     sort.asc,
     PROCESS,
@@ -54,8 +56,8 @@ export default function ModelManagement() {
     const id = Math.max(0, ...models.map((x) => x.id)) + 1;
     setModels((list) => [...list, { ...m, id }]);
     setSelectedId(id);
-    // 등록한 공정 탭이 아니면 보이도록 해당 탭(또는 전체 유지)으로 이동
-    if (tab !== "all" && tab !== m.process) setTab(m.process);
+    // 새 모델은 미배포라 전체 탭에 안 보임 → 해당 공정 탭으로 이동
+    if (tab === "all" ? !m.deployed : tab !== m.process) setTab(m.process);
     setFormOpen(false);
   }
 
@@ -108,10 +110,10 @@ export default function ModelManagement() {
                 <dt>성과지표</dt>
                 <dd>
                   <div className={styles.metrics}>
-                    <span><small>Accuracy</small><b>{pct(selected.metrics.accuracy)}</b></span>
-                    <span><small>Recall</small><b>{pct(selected.metrics.recall)}</b></span>
-                    <span><small>Precision</small><b>{pct(selected.metrics.precision)}</b></span>
-                    <span><small>F1-Score</small><b>{pct(selected.metrics.f1)}</b></span>
+                    <span><small>Accuracy</small><b>{num2(selected.metrics.accuracy)}</b></span>
+                    <span><small>Recall</small><b>{num2(selected.metrics.recall)}</b></span>
+                    <span><small>Precision</small><b>{num2(selected.metrics.precision)}</b></span>
+                    <span><small>F1-Score</small><b>{num2(selected.metrics.f1)}</b></span>
                   </div>
                 </dd>
               </dl>
@@ -163,7 +165,7 @@ export default function ModelManagement() {
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={6} className={styles.empty}>해당 공정의 모델이 없습니다.</td>
+                <td colSpan={6} className={styles.empty}>{tab === "all" ? "배포된 모델이 없습니다." : "해당 공정의 모델이 없습니다."}</td>
               </tr>
             )}
           </tbody>

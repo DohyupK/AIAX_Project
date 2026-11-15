@@ -98,16 +98,18 @@
   gap: 8px;
 }
 
+/* 지표 칸: 이름과 값을 한 줄로 (Accuracy 0.93), 칸 가운데 정렬 */
 .metrics span {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  justify-content: center;
+  align-items: baseline;
+  gap: 12px;
   padding: 10px 14px;
   border-radius: 6px;
   background: #eef2fb;
 }
 
-.metrics small { color: var(--muted); font-size: 12px; }
+.metrics small { color: var(--muted); font-size: 13px; }
 .metrics b { font-size: 20px; color: #1d4ed8; }
 
 .badge {
@@ -246,7 +248,14 @@
   gap: 10px 12px;
 }
 
+.formGrid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 0.8fr); }
 .full { grid-column: 1 / -1; }
+
+/* 모델명: 공정 앞부분(고정) + 모델 종류 입력 */
+.prefixInput { display: flex; align-items: stretch; min-width: 0; }
+.prefix { display: flex; align-items: center; padding: 0 6px 0 8px; border: 1px solid var(--line); border-right: 0; border-radius: 6px 0 0 6px; background: var(--soft, #f4f6f9); color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.prefixInput > input { flex: 1; min-width: 0; }
+.prefixInput .prefix + input { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 
 .field {
   display: flex;
@@ -321,6 +330,6 @@
 @media (max-width: 900px) {
   .overviewGrid { grid-template-columns: 1fr; gap: 12px; }
   .metricSet { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .formGrid { grid-template-columns: 1fr; }
+  .formGrid, .formGrid3 { grid-template-columns: 1fr; }
   .table { font-size: 12px; }
 }
