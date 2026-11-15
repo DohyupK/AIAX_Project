@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { USE_MOCK, fetchActiveModel } from '../../common/casting/api';
 import { MONITOR_KEYS, buildAlerts } from '../../common/casting/analysis';
@@ -7,8 +8,13 @@ import type { FeatureKey, ModelInfo } from '../../common/casting/types';
 import KpiCards from './KpiCards';
 import AlertLog from './AlertLog';
 import SensorMonitor from './SensorMonitor';
-import SpcChart from './SpcChart';
 import s from './ProcessOptimization.module.css';
+
+// SPC 차트는 초기 번들에서 분리 — 마운트 후 로드
+const SpcChart = dynamic(() => import('./SpcChart'), {
+  ssr: false,
+  loading: () => <div className={s.panel}>관리도 불러오는 중…</div>,
+});
 
 const LINE = 'line_no1';
 const PRODUCT = 'CylinderHead';
@@ -33,8 +39,12 @@ export default function ProcessOptimizationDashboard() {
 
   useEffect(() => { if (finished) setPlaying(false); }, [finished]);
 
-  // 알람 판정 임계값은 배포 모델 기본값 사용
-  const alerts = useMemo(() => (model ? buildAlerts(shots, model.threshold, model, MONITOR_KEYS) : []), [shots, model]);
+  const lastId = shots.length ? shots[shots.length - 1].shotId : 0;
+  // 알람 판정 — shots 참조 + lastId로 동일 틱 중복 계산 방지에 가깝게
+  const alerts = useMemo(
+    () => (model ? buildAlerts(shots, model.threshold, model, MONITOR_KEYS) : []),
+    [shots, model, lastId],
+  );
 
   const latest = shots[shots.length - 1];
   const err = error ?? metaError;

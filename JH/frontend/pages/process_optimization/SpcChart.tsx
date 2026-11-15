@@ -1,4 +1,5 @@
-import { useState } from 'react';
+'use client';
+import { memo, useMemo, useState } from 'react';
 import {
   EWMA_L, EWMA_LAMBDA, LABELS, NELSON_TEXT, SPC_BASELINE,
   ewmaLimits, ewmaSeries, fmt, isThermal, nelsonFlags, spcLimits, unitOf,
@@ -13,19 +14,33 @@ const TIP_W = 200;
 
 /**
  * 관리도(SPC) — 한계는 그날 처음 SPC_BASELINE샷으로 고정
- * 온도 변수: EWMA 관리도 (σ = 기준 구간 전체 표준편차), 한계 밖만 판정 (EWMA는 값끼리 상관이 있어 연속 규칙 미적용)
- * 그 외(압력·사이클): 개별값 관리도(I-MR) + Nelson 규칙 1·2·3
+ * 온도 변수: EWMA 관리도 / 그 외: I-MR + Nelson 1·2·3
+ * shots.length·마지막 shotId·키 기준으로 무거운 계산만 메모
  */
-export default function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey }) {
+function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey }) {
   const [hover, setHover] = useState<number | null>(null);
-  const all = shots
-    .map(x => ({ id: x.shotId, time: x.time, v: x.features[k] }))
-    .filter((p): p is { id: number; time: string; v: number } => p.v != null); // 결측 샷 제외
-  const thermal = isThermal(k);
-  const baseline = all.slice(0, SPC_BASELINE).map(p => p.v);
-  const lim = thermal ? ewmaLimits(baseline) : spcLimits(baseline);
+  const lastId = shots.length ? shots[shots.length - 1].shotId : 0;
 
-  if (!lim) {
+  const chart = useMemo(() => {
+    const all = shots
+      .map(x => ({ id: x.shotId, time: x.time, v: x.features[k] }))
+      .filter((p): p is { id: number; time: string; v: number } => p.v != null);
+    const thermal = isThermal(k);
+    const baseline = all.slice(0, SPC_BASELINE).map(p => p.v);
+    const lim = thermal ? ewmaLimits(baseline) : spcLimits(baseline);
+    if (!lim) return null;
+
+    const raw = all.map(p => p.v);
+    const plotted = thermal ? ewmaSeries(raw, lim.cl) : raw;
+    const rules: string[][] = thermal
+      ? plotted.map(z => (z > lim.ucl || z < lim.lcl ? ['EWMA 관리 한계 밖'] : []))
+      : nelsonFlags(raw, lim).map(f => f.map(r => NELSON_TEXT[r]));
+    const start = Math.max(0, all.length - WINDOW);
+    const pts = all.slice(start).map((p, i) => ({ ...p, y: plotted[start + i], rules: rules[start + i] }));
+    return { all, thermal, lim, pts };
+  }, [shots, k, lastId]);
+
+  if (!chart) {
     return (
       <section className={s.panel}>
         <div className={s.panelHead}><h3>관리도(SPC) · {LABELS[k]}</h3></div>
@@ -34,15 +49,7 @@ export default function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey })
     );
   }
 
-  // 판정은 전체 샷으로 해야 화면 경계에 걸친 연속 구간·EWMA 누적값이 맞음
-  const raw = all.map(p => p.v);
-  const plotted = thermal ? ewmaSeries(raw, lim.cl) : raw;
-  const rules: string[][] = thermal
-    ? plotted.map(z => (z > lim.ucl || z < lim.lcl ? ['EWMA 관리 한계 밖'] : []))
-    : nelsonFlags(raw, lim).map(f => f.map(r => NELSON_TEXT[r]));
-  const start = Math.max(0, all.length - WINDOW);
-  const pts = all.slice(start).map((p, i) => ({ ...p, y: plotted[start + i], rules: rules[start + i] }));
-
+  const { all, thermal, lim, pts } = chart;
   const vals = pts.map(p => p.y);
   const lo = Math.min(lim.lcl, ...vals), hi = Math.max(lim.ucl, ...vals);
   const pad = (hi - lo) * 0.08 || 1;
@@ -67,7 +74,6 @@ export default function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey })
       </div>
       <svg className={s.chart} viewBox={`0 0 ${W} ${H}`} role="img"
         aria-label={`${LABELS[k]} ${thermal ? 'EWMA ' : ''}관리도, UCL ${fmt(lim.ucl)}, CL ${fmt(lim.cl)}, LCL ${fmt(lim.lcl)}`}>
-        {/* UCL·LCL 실선, CL 점선 + 값 */}
         {lines.map(l => (
           <g key={l.name}>
             <line x1={L} x2={W - R} y1={y(l.v)} y2={y(l.v)} stroke={l.color} strokeWidth={1.5} strokeDasharray={l.dash} />
@@ -87,7 +93,6 @@ export default function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey })
             onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
         ))}
 
-        {/* 마우스 올린 점의 실제 값 + 위반 규칙 */}
         {hp && (() => {
           const base = thermal ? 48 : 34;
           const h = base + hp.rules.length * 14;
@@ -109,3 +114,5 @@ export default function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey })
     </section>
   );
 }
+
+export default memo(SpcChart);

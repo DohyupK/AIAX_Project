@@ -1,14 +1,20 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { USE_MOCK, fetchActiveModel } from '../../common/casting/api';
 import { LABELS, fmt, severity, unitOf } from '../../common/casting/analysis';
 import { useShotStream } from '../../common/casting/useShotStream';
 import type { ModelInfo, Shot } from '../../common/casting/types';
 import SensorMonitor from '../process_optimization/SensorMonitor';
-import ProbChart from './ProbChart';
 import { firstFail, rate, secondFail, summarize, topDeviations, type InspectionSummary } from './inspection';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import s from './QualityInspection.module.css';
+
+// ProbChart는 초기 청크에서 분리
+const ProbChart = dynamic(() => import('./ProbChart'), {
+  ssr: false,
+  loading: () => <span className={po.sub}>차트 불러오는 중…</span>,
+});
 
 const LINE = 'line_no1';
 const DATE = USE_MOCK ? '2021-10-07' : new Date().toISOString().slice(0, 10);
@@ -24,8 +30,8 @@ export default function QualityInspectionDashboard() {
   const [mlOpen, setMlOpen] = useState(false);
   const [playing, setPlaying] = useState(true);
 
-  // 공정 최적화와 같은 실시간 샷 스트림 (목업: 한 샷씩 재생 / 실제: 폴링)
-  const { shots, error: streamError, retry, finished, restart } = useShotStream(LINE, DATE, playing);
+  // 다이얼로그 열리면 스트림 일시정지 — 수백 행 테이블이 틱마다 다시 그려지지 않게
+  const { shots, error: streamError, retry, finished, restart } = useShotStream(LINE, DATE, playing && !mlOpen);
 
   useEffect(() => {
     fetchActiveModel().then(setModel).catch((e: Error) => setMetaError(e.message));
@@ -43,7 +49,8 @@ export default function QualityInspectionDashboard() {
     setPlaying(p => !p);
   };
 
-  const sum = useMemo(() => (model ? summarize(shots, model.threshold) : null), [shots, model]);
+  const lastId = shots.length ? shots[shots.length - 1].shotId : 0;
+  const sum = useMemo(() => (model ? summarize(shots, model.threshold) : null), [shots, model, lastId]);
   // DL 칸: 가장 최근 2차 불량 샷, 아직 없으면 가장 최근 2차 검사(1차 패스) 샷
   const latestSecond = useMemo(() => {
     if (!model) return null;
@@ -54,7 +61,7 @@ export default function QualityInspectionDashboard() {
       if (r === false && !lastTarget) lastTarget = shots[i];
     }
     return lastTarget;
-  }, [shots, model]);
+  }, [shots, model, lastId]);
   const latest = shots[shots.length - 1];
 
   return (
