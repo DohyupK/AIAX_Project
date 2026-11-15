@@ -1,0 +1,54 @@
+/* 불량 유형 라벨링 — 색상 토큰은 공정 최적화 .page 변수 사용 */
+
+/* 상태 필터 */
+.filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.filterBtn { font: inherit; font-size: 12.5px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+.filterBtn:hover { border-color: var(--accent); }
+.filterBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filterOn { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+/* 샷 이미지 카드 그리드 */
+.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.card { font: inherit; color: inherit; text-align: left; width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--bad); border-radius: 8px; cursor: pointer; }
+.card:hover { border-color: var(--accent); }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card_labeled { border-top-color: var(--ok); }
+.card_discarded { border-top-color: var(--muted); opacity: 0.75; }
+.thumb { width: 100%; height: auto; display: block; border-radius: 4px; }
+.cardMeta { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+
+/* 상태 배지 */
+.badge { align-self: flex-start; font-size: 11.5px; font-weight: 600; border-radius: 4px; padding: 2px 8px; }
+.badge_unlabeled { background: var(--bad-bg); color: var(--bad); }
+.badge_labeled { background: var(--ok-bg); color: var(--ok); font-family: var(--mono); }
+.badge_discarded { background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
+
+/* 라벨링 팝업 */
+.dialog { width: min(980px, 100%); max-height: 92vh; }
+.body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-top: 10px; }
+.left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.image { width: 100%; height: auto; display: block; border-radius: 6px; }
+.types { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.types legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.typeBtn { font: inherit; color: inherit; text-align: left; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.typeBtn:hover { border-color: var(--accent); }
+.typeBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.typeOn { border-color: var(--accent); background: #e9f0fb; box-shadow: inset 0 0 0 1px var(--accent); }
+.typeUndecidable.typeOn { border-color: var(--warn); background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--warn); }
+.check { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border: 1.5px solid var(--line); border-radius: 4px; font-weight: 700; color: #fff; margin-top: 1px; }
+.typeOn .check { background: var(--accent); border-color: var(--accent); }
+.typeUndecidable.typeOn .check { background: var(--warn); border-color: var(--warn); }
+.typeText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.typeText b { font-family: var(--mono); font-size: 14.5px; letter-spacing: 0.3px; }
+.typeText small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.warnNote { margin: 0; font-size: 12.5px; color: var(--warn); }
+.errorNote { margin: 0; font-size: 12.5px; color: var(--bad); }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.doneBtn { font: inherit; font-weight: 600; font-size: 13px; color: #fff; background: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 6px 20px; cursor: pointer; }
+.doneBtn:hover:not(:disabled) { background: #1d4fa3; }
+.doneBtn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.doneBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+@media (max-width: 860px) {
+  .body { grid-template-columns: minmax(0, 1fr); }
+}
