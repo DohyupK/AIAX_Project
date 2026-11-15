@@ -9,6 +9,7 @@
 GRANT USAGE ON SCHEMA mes  TO role_mes, role_spark, role_lake;
 GRANT USAGE ON SCHEMA lake TO role_spark, role_lake;
 GRANT USAGE ON SCHEMA mart TO role_spark, role_mart, role_lake;
+-- org 는 09_org_permission.sql 에서도 GRANT. 여기도 재기동 대비로 명시 (스키마 없을 수 있어 09가 본문)
 
 -- mes 적재
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA mes TO role_mes;

@@ -1,4 +1,12 @@
 # data
 
-SQLite 목업 파일을 둡니다. `*.db` 는 Git에 올리지 않습니다.
-사용 시 루트 `DB연동_내역`에 기록합니다.
+조직·권한 SoT는 서버 Postgres `aiax.org` (로컬 SQLite 없음).
+
+| 파일 | 용도 |
+|------|------|
+| `sql/01_org_permission_schema.pg.sql` | DDL (`MS/db/init/09_…`) |
+| `sql/02_org_permission_seed.pg.sql` | 시드 (`MS/db/init/10_…`) |
+| `sql/org_permission.dbml` | ERD → https://dbdiagram.io/d |
+
+규칙 로직: [`../api/common/org_permission_logic.py`](../api/common/org_permission_logic.py)  
+문서: [`../../DB연동_내역/조직권한_인수인계.md`](../../DB연동_내역/조직권한_인수인계.md)

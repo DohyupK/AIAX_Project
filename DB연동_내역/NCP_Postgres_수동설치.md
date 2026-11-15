@@ -28,7 +28,8 @@
 1. NCP ACG: TCP **22**, **5432** → **본인 공인 IP만** (`0.0.0.0/0` 금지).  
    IP가 바뀌었으면 ACG를 갱신한다.
 2. 인증키 `.pem` 보관 위치 확인 (Git 금지).
-3. 로컬 [`MS/db/init/`](../../MS/db/init/) 확인 (읽기·복사).
+3. 로컬 [`MS/db/init/`](../MS/db/init/) 확인 (읽기·복사).  
+   조직·권한(`org`): [`조직권한_인수인계.md`](조직권한_인수인계.md).
 
 ---
 
@@ -136,7 +137,7 @@ sudo docker exec -it aiax-postgres \
 psql "postgresql://app_lake@49.50.143.236:5432/aiax" -c "SELECT 1;"
 ```
 
-DH: 프로젝트 루트 [`.env`](../../.env) 의 `DATABASE_URL`이 `app_lake@49.50.143.236` 인지 확인 후 `/health`·대시보드.
+DH: 프로젝트 루트 [`.env`](../.env) 의 `DATABASE_URL`이 `app_lake@49.50.143.236` 인지 확인 후 `/health`·대시보드.
 
 ---
 
@@ -164,3 +165,4 @@ DH: 프로젝트 루트 [`.env`](../../.env) 의 `DATABASE_URL`이 `app_lake@49.
 |------|------|
 | 2026-11-10 | NCP 수동 설치 절차 신설 |
 | 2026-11-10 | 관리자 `shift`, 계정 `app_mes`/`app_spark`/`app_mart`/`app_lake` 반영 |
+| 2026-11-16 | `DB연동_내역`으로 이동. schema `org` 반영 문서와 교차 링크 |

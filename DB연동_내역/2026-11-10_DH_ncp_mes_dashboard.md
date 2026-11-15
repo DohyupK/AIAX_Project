@@ -33,7 +33,7 @@
 ## 메모
 
 - 스키마·init 원본: `MS/db/init/` (계정: `app_mes` / `app_spark` / `app_mart` / `app_lake`).
-- 서버 설치 절차: [`DH/전달사항/NCP_Postgres_수동설치.md`](../DH/전달사항/NCP_Postgres_수동설치.md).
+- 서버 설치 절차: [`NCP_Postgres_수동설치.md`](NCP_Postgres_수동설치.md).
 - NCP에는 Postgres만. Kafka/Spark/Flink는 서버에 두지 않음.
 - ACG: 22·5432는 허용 IP만.
 - Postgres 컨테이너 기동 전에는 DH 원격 접속 실패가 정상.

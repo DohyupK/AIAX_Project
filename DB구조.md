@@ -4,8 +4,8 @@
 |------|------|
 | DB 이름 | `aiax` |
 | 근거 코드 | [`MS/db/init/`](MS/db/init/) |
-| 명명 규칙 | [`MS/db/명명규칙.md`](MS/db/명명규칙.md) |
-| 최종 반영일 | 2026-11-10 |
+| 명명·연동 문서 | [`DB연동_내역/`](DB연동_내역/) · [`MS/db/명명규칙.md`](MS/db/명명규칙.md)(포인터) |
+| 최종 반영일 | 2026-11-16 |
 
 ---
 
@@ -15,7 +15,7 @@
 
 | 담당 | 할 일 |
 |------|--------|
-| **MS** | `MS/db/init/`·스키마 변경의 **주 담당**. 변경 시 본 문서 + [`MS/db/README.md`](MS/db/README.md) 계정/구조 언급을 맞춤 |
+| **MS** | `MS/db/init/` 코드. 변경 시 본 문서 + [`DB연동_내역/`](DB연동_내역/) 맞춤 (MS README는 기동 stub) |
 | 다른 폴더 | 스키마를 바꾸지 않음. 참조만. DB 사용은 [`DB연동_내역/`](DB연동_내역/)에 기록 |
 | 에이전트 | init/SQL을 수정했으면 **이 문서 미갱신을 완료로 치지 않음** |
 
@@ -35,20 +35,21 @@
 | `mes` | 원본 보관 (가공하지 않음) |
 | `lake` | 정제 데이터 (Spark) |
 | `mart` | 학습·분석용 (Spark → AI) |
+| `org` | 조직·권한·하청·게이트·근태 (DH). init `09`·`10` |
 
-관계: `mes` →(FK)·`lake` →(FK)·`mart` (`casting_id`).
+관계: `mes` →(FK)·`lake` →(FK)·`mart` (`casting_id`). `org`는 독립.
 
 ---
 
 ## 계정 (로그인)
 
-| 계정 | 용도 | mes | lake | mart |
-|------|------|-----|------|------|
-| `shift` | 관리 (`POSTGRES_USER`) | 전체 | 전체 | 전체 |
-| `app_mes` | 원본 적재 | 읽기·쓰기(삭제 불가) | - | - |
-| `app_spark` | 배치 | 읽기 | 읽기·쓰기 | 읽기·쓰기 |
-| `app_mart` | 학습 읽기 | - | - | 읽기 |
-| `app_lake` | 조회 (DH 등) | 읽기 | 읽기 | 읽기 |
+| 계정 | 용도 | mes | lake | mart | org |
+|------|------|-----|------|------|-----|
+| `shift` | 관리 (`POSTGRES_USER`) | 전체 | 전체 | 전체 | 전체 |
+| `app_mes` | 원본 적재 | 읽기·쓰기(삭제 불가) | - | - | - |
+| `app_spark` | 배치 | 읽기 | 읽기·쓰기 | 읽기·쓰기 | - |
+| `app_mart` | 학습 읽기 | - | - | 읽기 | - |
+| `app_lake` | 조회 (DH 등) | 읽기 | 읽기 | 읽기 | 읽기 |
 
 권한 그룹: `role_mes`, `role_spark`, `role_mart`, `role_lake`.
 
@@ -60,7 +61,16 @@
 | **계정 `app_lake`** | DH 등 **조회 전용 로그인** (구 readonly) | “lake 스키마만 다룬다” |
 
 `app_lake`는 스키마 `lake` 전용 계정이 **아니다**.  
-권한은 **`mes` / `lake` / `mart` 전부 SELECT** 이다. (쓰기·적재는 `app_mes`·`app_spark` 등)
+권한은 **`mes` / `lake` / `mart` / `org` SELECT** 이다. (쓰기·DDL은 `shift` 등)
+
+### `org` (조직·권한, DH)
+
+근거: [`MS/db/init/09_org_permission.sql`](MS/db/init/09_org_permission.sql), 시드 [`10_org_permission_seed.sql`](MS/db/init/10_org_permission_seed.sql).  
+상세: [`DB연동_내역/조직권한_테이블구조.md`](DB연동_내역/조직권한_테이블구조.md).  
+인수인계: [`DB연동_내역/조직권한_인수인계.md`](DB연동_내역/조직권한_인수인계.md).  
+규칙 런타임(Python): [`DH/api/common/org_permission_logic.py`](DH/api/common/org_permission_logic.py) — Postgres 함수 아님.
+
+주요 테이블: `"position"`, `department`, `team`, `employee`, `employee_info`, `employee_status`, `employee_card`, `attendance`, `access_code`, `page`, `*_page`×6, `dept_roster`, `team_roster`, `vender_company`, `vender_worker`, `gate_card`, `employee_gate_log`, `vender_gate_log`, `employee_record`.
 
 ---
 
@@ -148,6 +158,8 @@ lake에서 제외: `timestamp`, `date`.
 | `06_grants.sql` | 권한 |
 | `07_comments.sql` | COMMENT |
 | `08_data.sql.gz` | 샘플 데이터 |
+| `09_org_permission.sql` | schema `org` DDL + GRANT |
+| `10_org_permission_seed.sql` | `org` 시드 (SQLite 덤프) |
 
 ---
 
@@ -155,5 +167,6 @@ lake에서 제외: `timestamp`, `date`.
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-11-16 | schema `org` (DH). init 09/10. `app_lake` SELECT. DB 서술 → `DB연동_내역`. SQLite·MS DB 장문 정리 |
 | 2026-11-10 | 현행 init 기준으로 루트 문서 신설. 계정 `shift` / `app_mes`·`app_spark`·`app_mart`·`app_lake`. 지속 갱신 의무 명시 |
 | 2026-11-10 | `app_lake` vs 스키마 `lake` 혼동 주의 절 추가 |
