@@ -1,0 +1,55 @@
+/* 다이캐스팅 설비 장면 — 밝은 테마. 설비 색상은 sceneRenderer.ts 안에 원본 그대로 */
+.scene {
+  position: relative; overflow: hidden; padding: 0;
+  background: radial-gradient(ellipse at 55% 45%, #ffffff 0%, #eef2f6 75%);
+}
+.svg { display: block; width: 100%; height: auto; }
+
+.banner { position: absolute; left: 16px; top: 14px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; }
+.bannerK { font-size: 11px; color: var(--muted); font-family: var(--mono); letter-spacing: 1px; }
+.bannerV { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: var(--ink); }
+.bannerE { font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+
+.legend { position: absolute; right: 14px; bottom: 8px; display: flex; gap: 14px; color: var(--muted); font-size: 11px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+/* 센서 라벨 (SVG) */
+.box { fill: rgba(255, 255, 255, 0.94); stroke: #c9d1db; stroke-width: 1; }
+.svg .nm { fill: #5b6779; font-size: 16px; }
+.svg .val { fill: #0f1b2d; font-family: var(--mono); font-size: 27px; font-weight: 600; }
+.svg .un { fill: #5b6779; font-family: var(--mono); font-size: 15px; }
+.svg .sb { fill: #5b6779; font-size: 14px; font-weight: 600; }
+.lead { stroke: #9aa6b4; stroke-width: 1; fill: none; }
+.anc { fill: #7a8696; }
+.ring { fill: none; stroke: #7a8696; stroke-width: 1; opacity: 0; }
+.stat { fill: #16875b; }
+.lbl { pointer-events: auto; }
+/* 품질 검사 이동 버튼 (장면 안) */
+.qcBtn { cursor: pointer; }
+.qcBox { fill: var(--accent); stroke: #1b4f9e; stroke-width: 1; }
+.svg .qcText { fill: #ffffff; font-size: 16px; font-weight: 700; font-family: inherit; }
+.qcBtn:hover .qcBox { fill: #1d4fa3; }
+.qcBtn:focus { outline: none; }
+.qcBtn:focus-visible .qcBox { stroke: var(--ink); stroke-width: 3; }
+.hit { cursor: pointer; }
+.hit:hover .box { stroke: var(--accent); stroke-width: 1.5; }
+.hit:focus { outline: none; }
+.hit:focus-visible .box { stroke: var(--accent); stroke-width: 2; }
+
+.live .stat { fill: var(--accent); }
+.warn .box { stroke: var(--warn); } .warn .stat, .warn .anc { fill: var(--warn); } .warn .lead { stroke: #d9b066; }
+.alarm .box { stroke: var(--bad); animation: pulse 1s infinite; } .alarm .stat, .alarm .anc { fill: var(--bad); } .alarm .lead { stroke: #e08a8a; }
+.warn .ring, .alarm .ring { animation: ring 1.4s infinite; }
+.warn .ring { stroke: var(--warn); } .alarm .ring { stroke: var(--bad); }
+@keyframes pulse { 50% { stroke-opacity: 0.25; } }
+@keyframes ring { 0% { r: 3; opacity: 0.9; } 100% { r: 16; opacity: 0; } }
+
+.flow { stroke-dasharray: 6 8; animation: flow 1s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -14; } }
+.flicker { animation: flick 2.2s ease-in-out infinite; }
+@keyframes flick { 0%, 100% { opacity: 0.95; } 40% { opacity: 0.75; } 60% { opacity: 1; } }
+.svg .tag3d { fill: #6f7984; font-size: 13px; font-family: inherit; letter-spacing: 0.3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .alarm .box, .warn .ring, .alarm .ring, .flow, .flicker { animation: none; }
+}

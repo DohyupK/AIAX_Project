@@ -18,20 +18,25 @@ export function useShotStream(line: string, date: string, playing: boolean) {
   const [count, setCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // 라인·날짜를 바꾼 직후 이전 조회 응답이 늦게 와서 새 화면을 덮어쓰지 않도록 현재 조회 대상 기억
+  const keyRef = useRef('');
   const [visible, setVisible] = useState(true);
   const allLenRef = useRef(0);
   allLenRef.current = all.length;
 
   const load = useCallback(() => {
+    const key = `${line}|${date}`;
+    keyRef.current = key;
     setLoading(true);
     setError(null);
     return fetchShots(line, date)
       .then(s => {
+        if (keyRef.current !== key) return; // 이미 다른 라인·날짜로 바뀜
         setAll(s);
         setCount(c => (USE_MOCK ? Math.max(c, Math.min(MOCK_START, s.length)) : s.length));
       })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e: Error) => { if (keyRef.current === key) setError(e.message); })
+      .finally(() => { if (keyRef.current === key) setLoading(false); });
   }, [line, date]);
 
   useEffect(() => { load(); }, [load]);
@@ -50,9 +55,10 @@ export function useShotStream(line: string, date: string, playing: boolean) {
       if (USE_MOCK) {
         setCount(c => Math.min(c + MOCK_BATCH, allLenRef.current));
       } else {
+        const key = `${line}|${date}`;
         fetchShots(line, date)
-          .then(s => { setAll(s); setCount(s.length); })
-          .catch((e: Error) => setError(e.message));
+          .then(s => { if (keyRef.current === key) { setAll(s); setCount(s.length); } })
+          .catch((e: Error) => { if (keyRef.current === key) setError(e.message); });
       }
     }, USE_MOCK ? MOCK_REPLAY_MS : POLL_MS);
     return () => clearInterval(t);
