@@ -1,4 +1,6 @@
-// 실제 SQLite와 동일 구조. position → job_position (예약어)
+// Postgres aiax.org 와 동일 구조 (dbdiagram용).
+// DB 테이블 position → 여기 job_position (예약어). 스키마 접두 org. 은 dbdiagram에 없음.
+// 명세: DB연동_내역/조직권한_테이블구조.md
 
 Table job_position {
   Note: 'DB: position'
