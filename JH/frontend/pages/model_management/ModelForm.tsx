@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./ModelManagement.module.css";
 import { PROCESS, type Metrics, type Model, type Process } from "./data";
-import { validateDraft, type Draft, type Errors } from "./logic";
+import { createdAtNow, validateDraft, type Draft, type Errors } from "./logic";
 
 // 서버 연동 전: 파일은 이름만 기록 (실제 업로드 없음)
 const ALLOWED_EXT = [".pkl", ".pt", ".onnx", ".joblib"];
@@ -13,14 +13,14 @@ const METRIC_FIELDS: { key: keyof Metrics; label: string }[] = [
   { key: "f1", label: "F1-Score" },
 ];
 
-const EMPTY: Draft = { name: "", version: "", createdAt: "", process: "", description: "", accuracy: "", recall: "", precision: "", f1: "" };
+const EMPTY: Draft = { name: "", version: "", process: "", description: "", accuracy: "", recall: "", precision: "", f1: "" };
 
 /** 모델 등록 팝업 — 등록 시 onSubmit(새 모델, id 제외) */
 export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; onSubmit: (m: Omit<Model, "id">) => void }) {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [fileName, setFileName] = useState("");
   const [errors, setErrors] = useState<Errors>({});
-  const firstRef = useRef<HTMLInputElement>(null);
+  const firstRef = useRef<HTMLSelectElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 열릴 때 한 번만 첫 칸에 포커스
@@ -55,9 +55,10 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
     const found = validateDraft(draft, PROCESS);
     if (Object.keys(found).length) return setErrors(found);
     onSubmit({
-      name: draft.name.trim(),
+      // 최종 모델명 = 공정 앞부분 + 입력한 모델 종류 (예: casting-defect-xgb)
+      name: `${PROCESS[draft.process as Process].prefix}-${draft.name.trim()}`,
       version: draft.version.trim(),
-      createdAt: draft.createdAt,
+      createdAt: createdAtNow(), // 등록 버튼 누른 시점 자동 기록
       process: draft.process as Process,
       description: draft.description.trim(),
       metrics: { accuracy: Number(draft.accuracy), recall: Number(draft.recall), precision: Number(draft.precision), f1: Number(draft.f1) },
@@ -67,6 +68,7 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
     });
   }
 
+  const prefix = Object.hasOwn(PROCESS, draft.process) ? PROCESS[draft.process as Process].prefix : "";
   const err = (key: keyof Errors) => errors[key] && <span className={styles.fieldError}>{errors[key]}</span>;
 
   return (
@@ -85,31 +87,37 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
           <button type="button" className={styles.closeBtn} aria-label="닫기" onClick={onClose}>×</button>
         </div>
 
-        <div className={styles.formGrid}>
-          <label className={styles.field}>
-            <span>모델명 *</span>
-            <input ref={firstRef} value={draft.name} onChange={(e) => set("name", e.target.value)} maxLength={60} />
-            {err("name")}
-          </label>
-          <label className={styles.field}>
-            <span>버전 *</span>
-            <input value={draft.version} onChange={(e) => set("version", e.target.value)} placeholder="v1.0" maxLength={20} />
-            {err("version")}
-          </label>
-          <label className={styles.field}>
-            <span>생성일 *</span>
-            <input type="date" value={draft.createdAt} onChange={(e) => set("createdAt", e.target.value)} />
-            {err("createdAt")}
-          </label>
+        <div className={`${styles.formGrid} ${styles.formGrid3}`}>
           <label className={styles.field}>
             <span>관리공정 *</span>
-            <select value={draft.process} onChange={(e) => set("process", e.target.value)}>
+            <select ref={firstRef} value={draft.process} onChange={(e) => set("process", e.target.value)}>
               <option value="">선택</option>
               {(Object.keys(PROCESS) as Process[]).map((p) => (
                 <option key={p} value={p}>{PROCESS[p].label} ({PROCESS[p].code})</option>
               ))}
             </select>
             {err("process")}
+          </label>
+          <label className={styles.field}>
+            <span>모델명 *</span>
+            {/* 앞부분은 공정에서 자동 — 사용자는 모델 종류(xgb, lgbm 등)만 입력 */}
+            <span className={styles.prefixInput}>
+              {prefix && <span className={styles.prefix}>{prefix}-</span>}
+              <input
+                value={draft.name}
+                onChange={(e) => set("name", e.target.value)}
+                disabled={!prefix}
+                placeholder={prefix ? "xgb, lgbm …" : "관리공정을 먼저 선택"}
+                aria-label={prefix ? `모델명 (${prefix}- 뒤 모델 종류)` : undefined}
+                maxLength={30}
+              />
+            </span>
+            {err("name")}
+          </label>
+          <label className={styles.field}>
+            <span>버전 *</span>
+            <input value={draft.version} onChange={(e) => set("version", e.target.value)} placeholder="v1.0" maxLength={20} />
+            {err("version")}
           </label>
           <label className={`${styles.field} ${styles.full}`}>
             <span>설명</span>

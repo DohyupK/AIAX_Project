@@ -18,15 +18,22 @@ export function sortModels(list: Model[], key: SortKey, asc: boolean, processes:
 
 export const METRIC_KEYS: (keyof Metrics)[] = ["accuracy", "recall", "precision", "f1"];
 
-export type Draft = Record<"name" | "version" | "createdAt" | "process" | "description" | keyof Metrics, string>;
+export type Draft = Record<"name" | "version" | "process" | "description" | keyof Metrics, string>;
 export type Errors = Partial<Record<keyof Draft | "file", string>>;
+
+/**
+ * 생성일 = 등록 시점의 로컬 날짜 YYYY-MM-DD (sv-SE 로캘이 ISO 형식)
+ * ponytail: DB 미연동이라 화면에서 생성. 레지스트리 DB 연동 시 서버 created_at(DEFAULT CURRENT_TIMESTAMP) 응답값으로 교체
+ */
+export const createdAtNow = (d = new Date()) => d.toLocaleDateString("sv-SE");
 
 /** 등록 입력값 검사 — 오류가 없으면 빈 객체 */
 export function validateDraft(d: Draft, processes: ProcessTable): Errors {
   const e: Errors = {};
-  if (!d.name.trim()) e.name = "모델명을 입력하세요";
+  // name = 공정 앞부분 뒤에 붙는 모델 종류 (예: xgb, lgbm)
+  if (!d.name.trim()) e.name = "모델 종류를 입력하세요 (예: xgb)";
+  else if (!/^[a-z0-9][a-z0-9_-]*$/.test(d.name.trim())) e.name = "영문 소문자·숫자·-·_ 만 가능";
   if (!d.version.trim()) e.version = "버전을 입력하세요";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.createdAt)) e.createdAt = "생성일을 선택하세요";
   if (!Object.hasOwn(processes, d.process)) e.process = "관리공정을 선택하세요";
   for (const key of METRIC_KEYS) {
     const n = Number(d[key]);

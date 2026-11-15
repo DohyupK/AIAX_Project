@@ -6,17 +6,17 @@ import styles from "./PlatformIndex.module.css";
 type IndexItem = { label: string; href: string };
 type IndexSection = { title: string; href?: string; items: IndexItem[] };
 
-/** 알루미늄 공정 플랫폼 좌측 인덱스 — 공정 최적화·작업자 안전만 실제 경로, 나머지 링크는 자리(#) */
+/** 알루미늄 공정 플랫폼 좌측 인덱스 — 각 항목 실제 경로 연결 */
 const SECTIONS: IndexSection[] = [
   {
     title: "주조 공정 대시보드",
     items: [
       { label: "공정 최적화", href: "/casting/process-optimization" },
-      { label: "품질 검사", href: "#casting-quality-inspection" },
+      { label: "품질 검사", href: "/casting/quality-inspection" },
     ],
   },
   { title: "작업자 안전 관리 대시보드", href: "/safety/worker-safety", items: [] },
-  { title: "경영 관리자 일일경영리포트", items: [] },
+  { title: "경영 관리자 리포트", href: "/management-report", items: [] },
   { title: "Model Management", href: "/model-management", items: [] },
 ];
 

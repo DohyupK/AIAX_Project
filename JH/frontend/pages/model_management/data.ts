@@ -2,11 +2,11 @@
 
 export type Process = "optimization" | "quality" | "safety";
 
-/** 관리 공정: 화면 표시명 + 공정 코드 */
-export const PROCESS: Record<Process, { label: string; code: string }> = {
-  optimization: { label: "공정 최적화", code: "CAST-OPT" },
-  quality: { label: "품질 검사", code: "CAST-QC" },
-  safety: { label: "안전 관리", code: "SAFE-GATE" },
+/** 관리 공정: 화면 표시명 + 공정 코드 + 모델명 앞부분(등록 시 자동 채움, 뒤에 모델 종류를 붙임) */
+export const PROCESS: Record<Process, { label: string; code: string; prefix: string }> = {
+  optimization: { label: "공정 최적화", code: "CAST-OPT", prefix: "casting-defect" },
+  quality: { label: "품질 검사", code: "CAST-QC", prefix: "surface-inspect" },
+  safety: { label: "안전 관리", code: "SAFE-GATE", prefix: "ppe-detector" },
 };
 
 export interface Metrics {

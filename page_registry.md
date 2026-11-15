@@ -21,6 +21,8 @@
 |----|------------------|--------|-----------------------------------|------|--------|
 | platform_index | 주조·프레스 공정 안전 플랫폼 | JH | JH/main | 루트 layout 전체 화면 셸로 사용 (DH 승인) | 2026-11-06 |
 | model_management | Model Management | JH | JH/main/model_management | 루트 `app/model-management/page.tsx`에서 호출 (DH 승인) | 2026-11-10 |
+| quality_inspection | 품질 검사 | JH | JH/main/quality_inspection | 루트 `app/casting/quality-inspection/page.tsx`에서 호출. ML/DL 미연결, 목업 데이터로 동작 | 2026-11-14 |
+| management_report | 경영 관리자 리포트 | JH | JH/main/management_report | 루트 `app/management-report/page.tsx`에서 호출. 일일·주간·월간 목업 리포트 | 2026-11-14 |
 
 ## 추가할 때 채울 열
 
