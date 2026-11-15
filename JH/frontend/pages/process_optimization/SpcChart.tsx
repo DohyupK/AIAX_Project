@@ -1,4 +1,5 @@
-import { useState } from 'react';
+'use client';
+import { memo, useMemo, useState } from 'react';
 import {
   EWMA_L, EWMA_LAMBDA, LABELS, NELSON_TEXT, SPC_BASELINE,
   ewmaLimits, ewmaSeries, fmt, nelsonFlags, spcLimits, unitOf,
@@ -23,14 +24,32 @@ type PlotPt = Pt & { y: number; rules: Rule[] };
  * 오른쪽(작은 추세): EWMA 관리도 — EWMA 한계 밖(평균 이동) = 주황, 실측값이 I-MR 한계 밖 = 빨강
  *   (EWMA는 값끼리 상관이 있어 연속 규칙 미적용)
  * 참고: 온도는 샷 간 자기상관이 커서 I-MR 한계가 좁게 잡혀 신호가 많을 수 있음 (계산 오류 아님)
+ * 성능: 판정 계산은 shots·변수가 바뀔 때만 (useMemo), 컴포넌트는 memo (DH 로딩 최적화 반영)
  */
-export default function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey }) {
-  const all = shots
-    .map(x => ({ id: x.shotId, time: x.time, v: x.features[k] }))
-    .filter((p): p is Pt => p.v != null); // 결측 샷 제외
-  const baseline = all.slice(0, SPC_BASELINE).map(p => p.v);
-  const imr = spcLimits(baseline);
-  const ew = ewmaLimits(baseline);
+function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey }) {
+  const calc = useMemo(() => {
+    const all = shots
+      .map(x => ({ id: x.shotId, time: x.time, v: x.features[k] }))
+      .filter((p): p is Pt => p.v != null); // 결측 샷 제외
+    const baseline = all.slice(0, SPC_BASELINE).map(p => p.v);
+    const imr = spcLimits(baseline);
+    const ew = ewmaLimits(baseline);
+    if (!imr || !ew) return { all, imr: null, ew: null, imrPts: [], ewmaPts: [] };
+
+    // 판정은 전체 샷으로 해야 화면 경계에 걸친 연속 구간·EWMA 누적값이 맞음
+    const raw = all.map(p => p.v);
+    const start = Math.max(0, all.length - WINDOW);
+    const toPlot = (ys: number[], rules: Rule[][]): PlotPt[] =>
+      all.slice(start).map((p, i) => ({ ...p, y: ys[start + i], rules: rules[start + i] }));
+    const imrPts = toPlot(raw, nelsonFlags(raw, imr).map(f => f.map(r => ({ text: NELSON_TEXT[r], bad: r === 1 }))));
+    const ewma = ewmaSeries(raw, ew.cl);
+    const ewmaPts = toPlot(ewma, ewma.map((z, i) => [
+      ...(raw[i] > imr.ucl || raw[i] < imr.lcl ? [{ text: '실측값 I-MR 한계 밖', bad: true }] : []),
+      ...(z > ew.ucl || z < ew.lcl ? [{ text: 'EWMA 추세 이동 (평균 변화)', bad: false }] : []),
+    ]));
+    return { all, imr, ew, imrPts, ewmaPts };
+  }, [shots, k]);
+  const { all, imr, ew, imrPts, ewmaPts } = calc;
 
   const head = (
     <div className={s.panelHead}>
@@ -41,19 +60,6 @@ export default function SpcChart({ shots, k }: { shots: Shot[]; k: FeatureKey })
   if (!imr || !ew) {
     return <section className={s.panel}>{head}<p className={s.sub}>표시할 데이터가 없습니다.</p></section>;
   }
-
-  // 판정은 전체 샷으로 해야 화면 경계에 걸친 연속 구간·EWMA 누적값이 맞음
-  const raw = all.map(p => p.v);
-  const start = Math.max(0, all.length - WINDOW);
-  const toPlot = (ys: number[], rules: Rule[][]): PlotPt[] =>
-    all.slice(start).map((p, i) => ({ ...p, y: ys[start + i], rules: rules[start + i] }));
-
-  const imrPts = toPlot(raw, nelsonFlags(raw, imr).map(f => f.map(r => ({ text: NELSON_TEXT[r], bad: r === 1 }))));
-  const ewma = ewmaSeries(raw, ew.cl);
-  const ewmaPts = toPlot(ewma, ewma.map((z, i) => [
-    ...(raw[i] > imr.ucl || raw[i] < imr.lcl ? [{ text: '실측값 I-MR 한계 밖', bad: true }] : []),
-    ...(z > ew.ucl || z < ew.lcl ? [{ text: 'EWMA 추세 이동 (평균 변화)', bad: false }] : []),
-  ]));
 
   return (
     <section className={s.panel}>
@@ -119,7 +125,6 @@ function ControlChart({ k, pts, lim, title, note, ewma = false }: {
             onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
         ))}
 
-        {/* 마우스 올린 점의 실제 값 + 위반 규칙 */}
         {hp && (() => {
           const base = ewma ? 48 : 34;
           const h = base + hp.rules.length * 14;
@@ -141,3 +146,5 @@ function ControlChart({ k, pts, lim, title, note, ewma = false }: {
     </figure>
   );
 }
+
+export default memo(SpcChart);

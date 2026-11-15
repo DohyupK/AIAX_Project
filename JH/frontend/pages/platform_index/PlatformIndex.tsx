@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import styles from "./PlatformIndex.module.css";
 
 type IndexItem = { label: string; href: string };
 type IndexSection = { title: string; href?: string; items: IndexItem[] };
 
-/** 알루미늄 공정 플랫폼 좌측 인덱스 — 각 항목 실제 경로 연결 */
+/** 알루미늄 공정 플랫폼 좌측 인덱스 — soft nav(next/link)로 전환 비용 절감 */
 const SECTIONS: IndexSection[] = [
   {
     title: "주조 공정 대시보드",
@@ -34,9 +35,9 @@ export function PlatformIndex() {
         {!collapsed && (
           <p className={styles.title}>
             {/* 어느 페이지에서든 메인 대시보드로 복귀 */}
-            <a className={styles.link} href="/">
+            <Link className={styles.link} href="/">
               알루미늄 공정 플랫폼
-            </a>
+            </Link>
           </p>
         )}
         <button
@@ -58,37 +59,39 @@ export function PlatformIndex() {
           </svg>
         </button>
       </div>
-      {!collapsed && <nav>
-        {SECTIONS.map((section) => (
-          <div key={section.title} className={styles.section}>
-            <p className={styles.sectionTitle}>
-              {section.href ? (
-                <a className={styles.link} href={section.href}>
-                  {section.title}
-                </a>
-              ) : (
-                section.title
+      {!collapsed && (
+        <nav>
+          {SECTIONS.map((section) => (
+            <div key={section.title} className={styles.section}>
+              <p className={styles.sectionTitle}>
+                {section.href ? (
+                  <Link className={styles.link} href={section.href}>
+                    {section.title}
+                  </Link>
+                ) : (
+                  section.title
+                )}
+              </p>
+              {section.items.length > 0 && (
+                <ul className={styles.list}>
+                  {section.items.map((item) => (
+                    <li key={item.label} className={styles.item}>
+                      <Link className={styles.link} href={item.href}>
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </p>
-            {section.items.length > 0 && (
-              <ul className={styles.list}>
-                {section.items.map((item) => (
-                  <li key={item.label} className={styles.item}>
-                    <a className={styles.link} href={item.href}>
-                      {item.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-      </nav>}
+            </div>
+          ))}
+        </nav>
+      )}
       {/* 사내 문서함 — 사이드바 하단 고정 (설정 아이콘 위) */}
       {!collapsed && (
-        <a className={`${styles.link} ${styles.docs}`} href="/documents">
+        <Link className={`${styles.link} ${styles.docs}`} href="/documents">
           사내 문서함
-        </a>
+        </Link>
       )}
       {/* 설정 아이콘 — 표시만 (클릭 동작은 이후 기능) */}
       {!collapsed && (
@@ -100,15 +103,5 @@ export function PlatformIndex() {
         </span>
       )}
     </aside>
-  );
-}
-
-/** 인덱스 + 회색 본문 레이아웃 */
-export function PlatformLayout({ children }: { children?: React.ReactNode }) {
-  return (
-    <div className={styles.layout}>
-      <PlatformIndex />
-      <main className={styles.content}>{children}</main>
-    </div>
   );
 }
