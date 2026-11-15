@@ -1,31 +1,40 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
-import { USE_MOCK, fetchActiveModel } from '../../common/casting/api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { LINES, USE_MOCK, fetchActiveModel, type Line } from '../../common/casting/api';
 import { MONITOR_KEYS, buildAlerts } from '../../common/casting/analysis';
 import { useShotStream } from '../../common/casting/useShotStream';
 import type { FeatureKey, ModelInfo } from '../../common/casting/types';
 import KpiCards from './KpiCards';
 import AlertLog from './AlertLog';
-import SensorMonitor from './SensorMonitor';
+import SensorMonitor, { SENSOR_MONITOR_ID } from './SensorMonitor';
+import DiecastScene from './DiecastScene';
 import SpcChart from './SpcChart';
 import s from './ProcessOptimization.module.css';
 
-const LINE = 'line_no1';
 const PRODUCT = 'CylinderHead';
 // 목업 데이터 날짜. 실제 연결 시 오늘 날짜로: new Date().toISOString().slice(0, 10)
 const DATE = USE_MOCK ? '2021-10-07' : new Date().toISOString().slice(0, 10);
 
 /**
  * 공정 최적화 대시보드 — 공정 관리장용
- * 다이캐스팅 주조 공정 샷별 공정 변수 모니터링, 알람 로그, 변수별 관리도(SPC)
+ * 설비 장면(라벨 클릭 → 변수 모니터·관리도), 샷별 공정 변수 모니터링, 알람 로그, 변수별 관리도(SPC)
  */
 export default function ProcessOptimizationDashboard() {
   const [model, setModel] = useState<ModelInfo | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
-  const [spcKey, setSpcKey] = useState<FeatureKey>(MONITOR_KEYS[0]);
+  const [spcKey, setSpcKey] = useState<FeatureKey>('sleeve_temperature');
   const [playing, setPlaying] = useState(true);
+  const [line, setLine] = useState<Line>('line_no1');
+  const [activeGroup, setActiveGroup] = useState(0); // 설비 장면의 진행 중 공정 단계 묶음
 
-  const { shots, loading, error, retry, finished, restart } = useShotStream(LINE, DATE, playing);
+  // 설비 장면 라벨 클릭 → 해당 변수 선택 + 공정 변수 모니터로 스크롤 (바로 아래 관리도도 같은 변수)
+  const pickFromScene = useCallback((k: FeatureKey) => {
+    setSpcKey(k);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById(SENSOR_MONITOR_ID)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  }, []);
+
+  const { shots, loading, error, retry, finished, restart } = useShotStream(line, DATE, playing);
 
   useEffect(() => {
     fetchActiveModel().then(setModel).catch((e: Error) => setMetaError(e.message));
@@ -52,7 +61,13 @@ export default function ProcessOptimizationDashboard() {
           <h2 className={s.title}>공정 최적화 대시보드</h2>
         </div>
         <div className={s.chips}>
-          <span className={s.chip}>라인 <b>{LINE}</b></span>
+          <label className={s.chip}>
+            라인
+            <select className={s.chipSelect} value={line} aria-label="라인 선택"
+              onChange={e => setLine(e.target.value as Line)}>
+              {LINES.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
           <span className={s.chip}>품목 <b>{PRODUCT}</b></span>
           {model && (
             <span className={s.chip} title="Model Management에서 배포된 모델">
@@ -70,7 +85,7 @@ export default function ProcessOptimizationDashboard() {
 
       {USE_MOCK && (
         <div className={s.banner}>
-          목업 데이터: 2021-10-07 실제 공정 데이터 575샷을 재생 중입니다. NEXT_PUBLIC_USE_MOCK=false 설정 시 백엔드 API로 전환됩니다.
+          목업 데이터(line_no1만 제공, line_no2·3은 연결 예정): 2021-10-07 실제 공정 데이터 중 설비 예열 구간(1~100번 샷)을 뺀 475샷(08:14~)을 재생 중입니다. NEXT_PUBLIC_USE_MOCK=false 설정 시 백엔드 API로 전환됩니다.
         </div>
       )}
 
@@ -82,18 +97,24 @@ export default function ProcessOptimizationDashboard() {
       )}
 
       {loading && !shots.length && !err && <div className={s.panel}>데이터를 불러오는 중입니다…</div>}
+      {/* 해당 라인의 샷이 아직 없음 (목업: line_no1 만 데이터 있음 / 실제: 오늘 생산 전이거나 미연결) */}
+      {!loading && !shots.length && !err && (
+        <div className={`${s.panel} ${s.emptyLine}`} role="status">
+          <b>{line}</b> 데이터가 아직 연결되지 않았습니다.
+          <span className={s.sub}>라인 설비 데이터가 연결되면 설비 장면·공정 변수·관리도가 표시됩니다.</span>
+        </div>
+      )}
 
       {model && latest && (
         <>
           <section className={`${s.grid} ${s.top}`}>
-            {/* ponytail: 기능 미정 자리 — 내용이 정해지면 이 칸에 컴포넌트 추가 */}
-            <div className={`${s.panel} ${s.placeholder}`} aria-hidden="true" />
+            <DiecastScene shots={shots} model={model} playing={playing} onPick={pickFromScene} onPhase={setActiveGroup} />
             <div className={s.side}>
               <KpiCards shots={shots} model={model} />
               <AlertLog alerts={alerts} />
             </div>
           </section>
-          <SensorMonitor shots={shots} model={model} selected={spcKey} onSelect={setSpcKey} />
+          <SensorMonitor shots={shots} model={model} selected={spcKey} onSelect={setSpcKey} activeGroup={activeGroup} />
           <SpcChart shots={shots} k={spcKey} />
         </>
       )}

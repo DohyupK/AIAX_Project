@@ -8,7 +8,7 @@
   flex-shrink: 0;
   background: var(--hyundai-navy-deep, #001a3a);
   color: #fff;
-  padding: 1rem 1.1rem 3.5rem;
+  padding: 1rem 1.1rem 7rem; /* 하단 고정 항목(사내 문서함·설정) 자리 */
   position: relative;
   transition: width 0.2s ease, padding 0.2s ease;
 }
@@ -78,6 +78,14 @@
   outline: 2px solid rgba(255, 255, 255, 0.7);
   outline-offset: 2px;
   color: #fff;
+}
+
+/* 사내 문서함 — 하단 고정 (설정 아이콘·개발 표시(N) 위). 모양은 다른 섹션 제목과 동일 */
+.docs {
+  position: absolute;
+  left: 1.1rem;
+  bottom: 4.6rem;
+  font-size: 0.9rem;
 }
 
 .settings {

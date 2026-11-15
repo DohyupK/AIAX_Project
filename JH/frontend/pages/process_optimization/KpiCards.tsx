@@ -34,7 +34,7 @@ export default function KpiCards({ shots, model }: { shots: Shot[]; model: Model
       <div className={`${s.panel} ${s.kpi} ${s[outCount ? 'kpi_warn' : 'kpi_ok']}`}>
         <span className={s.kpiLabel}>범위 이탈 샷</span>
         <span className={`${s.kpiValue} ${s.num}`}>{outCount}<small>샷</small></span>
-        <span className={s.sub}>공정 변수 8개 중 하나라도 정상 범위 밖</span>
+        <span className={s.sub}>공정 변수 {MONITOR_KEYS.length}개 중 하나라도 정상 범위 밖</span>
       </div>
     </section>
   );

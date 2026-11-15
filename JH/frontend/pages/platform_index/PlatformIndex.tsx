@@ -13,6 +13,7 @@ const SECTIONS: IndexSection[] = [
     items: [
       { label: "공정 최적화", href: "/casting/process-optimization" },
       { label: "품질 검사", href: "/casting/quality-inspection" },
+      { label: "불량 유형 라벨링", href: "/casting/defect-labeling" },
     ],
   },
   { title: "작업자 안전 관리 대시보드", href: "/safety/worker-safety", items: [] },
@@ -83,6 +84,12 @@ export function PlatformIndex() {
           </div>
         ))}
       </nav>}
+      {/* 사내 문서함 — 사이드바 하단 고정 (설정 아이콘 위) */}
+      {!collapsed && (
+        <a className={`${styles.link} ${styles.docs}`} href="/documents">
+          사내 문서함
+        </a>
+      )}
       {/* 설정 아이콘 — 표시만 (클릭 동작은 이후 기능) */}
       {!collapsed && (
         <span className={styles.settings} role="img" aria-label="설정">
