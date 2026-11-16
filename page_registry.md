@@ -19,7 +19,12 @@
 
 | id | 표시명(사이드바) | 소유자 | 상대경로(개인 main/페이지 엔트리) | 비고 | 등록일 |
 |----|------------------|--------|-----------------------------------|------|--------|
-| (비움) | | | | 사용자가 등록을 지시·승인한 뒤에만 행 추가. 예시 기능명으로 미리 채우지 말 것 | |
+| platform_index | 주조·프레스 공정 안전 플랫폼 | JH | JH/main | 루트 layout 전체 화면 셸로 사용 (DH 승인) | 2026-11-06 |
+| model_management | Model Management | JH | JH/main/model_management | 루트 `app/model-management/page.tsx`에서 호출 (DH 승인) | 2026-11-10 |
+| quality_inspection | 품질 검사 | JH | JH/main/quality_inspection | 루트 `app/casting/quality-inspection/page.tsx`에서 호출. ML/DL 미연결, 목업 데이터로 동작 | 2026-11-14 |
+| defect_labeling | 불량 유형 라벨링 | JH | JH/main/defect_labeling | 루트 `app/casting/defect-labeling/page.tsx`에서 호출. 주조 공정 대시보드 하위(품질 검사 다음). 2차(DL) 불량 샷 라벨링, 저장은 브라우저 목업(DB 연결 전) | 2026-11-15 |
+| company_documents | 사내 문서함 | JH | JH/main/company_documents | 루트 `app/documents/page.tsx`에서 호출. 사이드바 하단 고정. 카테고리 필터·업로드, 저장은 브라우저 IndexedDB 목업(DB·파일 서버 연결 전), 보안 등급은 표시용 | 2026-11-15 |
+| management_report | 경영 관리자 리포트 | JH | JH/main/management_report | 루트 `app/management-report/page.tsx`에서 호출. 일일·주간·월간 목업 리포트 | 2026-11-14 |
 
 ## 추가할 때 채울 열
 

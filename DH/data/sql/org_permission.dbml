@@ -1,0 +1,289 @@
+// Postgres aiax.org 와 동일 구조 (dbdiagram용).
+// DB 테이블 position → 여기 job_position (예약어). 스키마 접두 org. 은 dbdiagram에 없음.
+// 명세: DB연동_내역/조직권한_테이블구조.md
+
+Table job_position {
+  Note: 'DB: position'
+  position_idx int [not null, unique]
+  position_name varchar [pk]
+  position_code int [not null, unique]
+  created_at varchar [not null]
+}
+
+Table department {
+  department_idx int [not null, unique]
+  dept_code varchar [pk]
+  dept_name varchar [not null]
+  department_representative varchar
+  created_at varchar [not null]
+}
+
+Table team {
+  team_idx int [not null, unique]
+  team_code varchar [pk]
+  team_representative varchar
+  created_at varchar [not null]
+}
+
+Table employee {
+  employee_idx int [not null, unique]
+  employee_no varchar [pk]
+  dept_code varchar [not null]
+  position_name varchar [not null]
+  team_code varchar
+  created_at varchar [not null]
+}
+
+Table employee_info {
+  employee_info_idx int [not null, unique]
+  employee_no varchar [pk]
+  employee_name varchar [not null]
+  age int [not null]
+  gender varchar [not null]
+  phone varchar [not null]
+  address varchar [not null]
+  email varchar [not null]
+  created_at varchar [not null]
+}
+
+Table employee_status {
+  employee_status_idx int [not null, unique]
+  employee_no varchar [pk]
+  monthly_overtime_hour float
+  last_logout_at varchar
+  annual_leave_used int
+  years_of_service int
+  created_at varchar [not null]
+}
+
+Table employee_card {
+  employee_card_idx int [not null, unique]
+  card_id varchar [pk]
+  employee_no varchar [not null, unique]
+  attendance_status varchar [not null]
+  created_at varchar [not null]
+}
+
+Table attendance {
+  attendance_idx int [not null, unique]
+  employee_no varchar [not null]
+  work_date varchar [not null]
+  created_at varchar [not null]
+
+  indexes {
+    (employee_no, work_date) [pk]
+  }
+}
+
+Table access_code {
+  access_code_idx int [not null, unique]
+  employee_no varchar [pk]
+  access_code int [not null]
+  created_at varchar [not null]
+}
+
+Table page {
+  page_idx int [not null, unique]
+  page_code varchar [pk]
+  page_name varchar [not null]
+  created_at varchar [not null]
+}
+
+Table model_management_page {
+  model_management_page_idx int [not null, unique]
+  page_code varchar [not null]
+  dept_code varchar [not null]
+  position_name varchar [not null]
+  page_feature varchar [not null]
+  access_level varchar
+  created_at varchar [not null]
+
+  indexes {
+    (dept_code, position_name, page_feature) [pk]
+  }
+}
+
+Table main_page {
+  main_page_idx int [not null, unique]
+  page_code varchar [not null]
+  dept_code varchar [not null]
+  position_name varchar [not null]
+  page_feature varchar [not null]
+  access_level varchar
+  created_at varchar [not null]
+
+  indexes {
+    (dept_code, position_name, page_feature) [pk]
+  }
+}
+
+Table process_optimization_page {
+  process_optimization_page_idx int [not null, unique]
+  page_code varchar [not null]
+  dept_code varchar [not null]
+  position_name varchar [not null]
+  page_feature varchar [not null]
+  access_level varchar
+  created_at varchar [not null]
+
+  indexes {
+    (dept_code, position_name, page_feature) [pk]
+  }
+}
+
+Table quality_inspection_page {
+  quality_inspection_page_idx int [not null, unique]
+  page_code varchar [not null]
+  dept_code varchar [not null]
+  position_name varchar [not null]
+  page_feature varchar [not null]
+  access_level varchar
+  created_at varchar [not null]
+
+  indexes {
+    (dept_code, position_name, page_feature) [pk]
+  }
+}
+
+Table worker_safety_page {
+  worker_safety_page_idx int [not null, unique]
+  page_code varchar [not null]
+  dept_code varchar [not null]
+  position_name varchar [not null]
+  page_feature varchar [not null]
+  access_level varchar
+  created_at varchar [not null]
+
+  indexes {
+    (dept_code, position_name, page_feature) [pk]
+  }
+}
+
+Table management_report_page {
+  management_report_page_idx int [not null, unique]
+  page_code varchar [not null]
+  dept_code varchar [not null]
+  position_name varchar [not null]
+  page_feature varchar [not null]
+  access_level varchar
+  created_at varchar [not null]
+
+  indexes {
+    (dept_code, position_name, page_feature) [pk]
+  }
+}
+
+Table dept_roster {
+  dept_roster_idx int [not null, unique]
+  dept_code varchar [not null]
+  employee_no varchar [not null, unique]
+  created_at varchar [not null]
+}
+
+Table team_roster {
+  team_roster_idx int [not null, unique]
+  team_code varchar [not null]
+  employee_no varchar [not null, unique]
+  created_at varchar [not null]
+}
+
+Table vender_company {
+  vender_company_idx int [not null, unique]
+  vender_code varchar [pk]
+  vender_name varchar [not null]
+  contract_status varchar [not null]
+  created_at varchar [not null]
+}
+
+Table vender_worker {
+  vender_worker_idx int [not null, unique]
+  vender_code varchar [not null]
+  card_id varchar [pk]
+  card_issued_at varchar [not null]
+  card_returned_at varchar
+  gate varchar [not null]
+  created_at varchar [not null]
+}
+
+Table gate_card {
+  gate_card_idx int [not null, unique]
+  employee_card_id varchar [unique]
+  vender_card_id varchar [unique]
+  gate_a varchar
+  gate_b varchar
+  created_at varchar [not null]
+}
+
+Table employee_gate_log {
+  employee_gate_log_idx int [not null, unique]
+  employee_card_id varchar [not null]
+  work_date varchar [not null]
+  clock_in_at varchar
+  clock_out_at varchar
+  commute_type varchar [not null]
+  created_at varchar [not null]
+}
+
+Table vender_gate_log {
+  vender_gate_log_idx int [not null, unique]
+  vender_card_id varchar [not null]
+  work_date varchar [not null]
+  clock_in_at varchar
+  clock_out_at varchar
+  commute_type varchar [not null]
+  created_at varchar [not null]
+}
+
+Table employee_record {
+  employee_record_idx int [not null, unique]
+  employee_card_id varchar [not null]
+  work_date varchar [not null]
+  actual_hour float
+  overtime_hour float
+  late varchar
+  early_leave varchar
+  absent varchar
+  work_deficit varchar
+  created_at varchar [not null]
+}
+
+Ref: employee.dept_code > department.dept_code
+Ref: employee.position_name > job_position.position_name
+Ref: employee.team_code > team.team_code
+
+Ref: employee_info.employee_no - employee.employee_no
+Ref: employee_status.employee_no - employee.employee_no
+Ref: employee_card.employee_no - employee.employee_no
+Ref: attendance.employee_no > employee.employee_no
+Ref: access_code.employee_no - employee.employee_no
+
+Ref: vender_worker.vender_code > vender_company.vender_code
+Ref: gate_card.employee_card_id > employee_card.card_id
+Ref: gate_card.vender_card_id > vender_worker.card_id
+Ref: employee_gate_log.employee_card_id > employee_card.card_id
+Ref: vender_gate_log.vender_card_id > gate_card.vender_card_id
+Ref: employee_record.employee_card_id > employee_card.card_id
+
+Ref: model_management_page.page_code > page.page_code
+Ref: model_management_page.dept_code > department.dept_code
+Ref: model_management_page.position_name > job_position.position_name
+Ref: main_page.page_code > page.page_code
+Ref: main_page.dept_code > department.dept_code
+Ref: main_page.position_name > job_position.position_name
+Ref: process_optimization_page.page_code > page.page_code
+Ref: process_optimization_page.dept_code > department.dept_code
+Ref: process_optimization_page.position_name > job_position.position_name
+Ref: quality_inspection_page.page_code > page.page_code
+Ref: quality_inspection_page.dept_code > department.dept_code
+Ref: quality_inspection_page.position_name > job_position.position_name
+Ref: worker_safety_page.page_code > page.page_code
+Ref: worker_safety_page.dept_code > department.dept_code
+Ref: worker_safety_page.position_name > job_position.position_name
+Ref: management_report_page.page_code > page.page_code
+Ref: management_report_page.dept_code > department.dept_code
+Ref: management_report_page.position_name > job_position.position_name
+
+Ref: dept_roster.dept_code > department.dept_code
+Ref: dept_roster.employee_no - employee.employee_no
+Ref: team_roster.team_code > team.team_code
+Ref: team_roster.employee_no - employee.employee_no

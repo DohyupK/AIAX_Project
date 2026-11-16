@@ -11,7 +11,7 @@
 - `main/` — 이 폴더 기능 오케스트레이션 (루트는 여기만 호출)
 - `frontend/pages/<기능>/` — 페이지 (`app` 명칭 사용 금지)
 - `api/<기능>/` — API (`backend` 명칭 사용 금지)
-- `data/` — SQLite 목업
+- `data/` — org Postgres SQL·dbml (SQLite 없음). 문서 → [`DB연동_내역/`](../DB연동_내역/)
 - `업무일지/` · `기능표.md` · `전달사항/` · `로그_기록.md`
 
 상세 규칙은 루트 [AGENTS.md](../AGENTS.md) 를 따릅니다.

@@ -1,0 +1,11 @@
+---
+description: .env는 프로젝트 루트에만. 하위 폴더에 생성·복사 금지
+alwaysApply: true
+---
+
+# 환경 변수 (.env)
+
+- **위치:** 프로젝트 루트 `.env` 하나만 사용한다.
+- **금지:** `JH/`·`HJ/`·`TM/`·`MS/`·`DH/` 및 그 하위(`api/`, `db/` 등)에 `.env` / `.env.local`을 만들거나 복사하지 않는다.
+- Docker·앱·API는 모두 루트 `.env`를 읽는다 (`MS/db`는 `../../.env`).
+- `.env.example`은 팀 규칙상 사용하지 않는다.

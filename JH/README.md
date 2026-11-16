@@ -19,7 +19,10 @@
 
 | 기능 | 경로 | 상태 |
 |------|------|------|
-| (추가 시 기입) | | |
+| 공정 안전 플랫폼 인덱스 | `frontend/pages/platform_index/` | 루트 layout 연결 |
+| 공정 최적화 대시보드 | `frontend/pages/process_optimization/`, `frontend/common/casting/` | 목업 데이터, `/casting/process-optimization` 연결 |
+| 메인 대시보드 | `frontend/pages/main_dashboard/` | 공지·일정 하드코딩, 메모 localStorage, `/` 연결 |
+| 작업자 안전 관리 대시보드 | `frontend/pages/worker_safety/` | 목업 기록 하드코딩, `/safety/worker-safety` 연결 |
 
 ## 다른 폴더
 
