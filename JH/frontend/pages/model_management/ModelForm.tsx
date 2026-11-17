@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./ModelManagement.module.css";
 import { PROCESS, type Metrics, type Model, type Process } from "./data";
-import { createdAtNow, validateDraft, type Draft, type Errors } from "./logic";
+import { buildModelName, createdAtNow, validateDraft, type Draft, type Errors } from "./logic";
 
 // 서버 연동 전: 파일은 이름만 기록 (실제 업로드 없음)
 const ALLOWED_EXT = [".pkl", ".pt", ".onnx", ".joblib"];
@@ -54,11 +54,14 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
     e.preventDefault();
     const found = validateDraft(draft, PROCESS);
     if (Object.keys(found).length) return setErrors(found);
+    const createdAt = createdAtNow(); // 등록 버튼 누른 시점 자동 기록
+    const prefix = PROCESS[draft.process as Process].prefix;
+    const name = buildModelName(prefix, draft.name, createdAt);
     onSubmit({
-      // 최종 모델명 = 공정 앞부분 + 입력한 모델 종류 (예: casting-defect-xgb)
-      name: `${PROCESS[draft.process as Process].prefix}-${draft.name.trim()}`,
+      // 최종 모델명 = DieCasting_{Algo}_{YYYYMMDD}_01 (순번은 레지스트리 연동 시 서버에서 부여)
+      name,
       version: draft.version.trim(),
-      createdAt: createdAtNow(), // 등록 버튼 누른 시점 자동 기록
+      createdAt,
       process: draft.process as Process,
       description: draft.description.trim(),
       metrics: { accuracy: Number(draft.accuracy), recall: Number(draft.recall), precision: Number(draft.precision), f1: Number(draft.f1) },
@@ -100,15 +103,15 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
           </label>
           <label className={styles.field}>
             <span>모델명 *</span>
-            {/* 앞부분은 공정에서 자동 — 사용자는 모델 종류(xgb, lgbm 등)만 입력 */}
+            {/* DieCasting_ + 알고리즘 — 날짜·순번은 등록 시 자동 */}
             <span className={styles.prefixInput}>
-              {prefix && <span className={styles.prefix}>{prefix}-</span>}
+              {prefix && <span className={styles.prefix}>{prefix}_</span>}
               <input
                 value={draft.name}
                 onChange={(e) => set("name", e.target.value)}
                 disabled={!prefix}
-                placeholder={prefix ? "xgb, lgbm …" : "관리공정을 먼저 선택"}
-                aria-label={prefix ? `모델명 (${prefix}- 뒤 모델 종류)` : undefined}
+                placeholder={prefix ? "XGB, LGBM …" : "관리공정을 먼저 선택"}
+                aria-label={prefix ? `모델명 (${prefix}_ 뒤 알고리즘)` : undefined}
                 maxLength={30}
               />
             </span>

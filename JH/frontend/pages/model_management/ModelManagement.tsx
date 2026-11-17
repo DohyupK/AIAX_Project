@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getActiveModelId, setActiveModelId } from "../../common/casting/activeModel";
 import styles from "./ModelManagement.module.css";
 import ModelForm from "./ModelForm";
 import { MODELS, PROCESS, type Model, type Process } from "./data";
-import { sortModels, type SortKey } from "./logic";
+import { applyDeploy, sortModels, syncDeployedFlags, type SortKey } from "./logic";
 
 type Tab = "all" | Process;
 
@@ -24,14 +25,24 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 // 성과지표 0~1 값을 소수점 둘째 자리로 (% 표기 안 함)
 const num2 = (n: number) => n.toFixed(2);
 
-/** Model Management — 공정별 모델 목록·성과지표 조회 + 신규 모델 등록 */
+const defaultDeployedId = MODELS.find((m) => m.deployed)?.id ?? MODELS[0]?.id ?? 1;
+
+/** Model Management — 공정별 모델 목록·성과지표 조회 + 신규 모델 등록·배포 */
 export default function ModelManagement() {
-  // ponytail: 등록한 모델은 화면 메모리에만 있음(새로고침 시 사라짐). 레지스트리 API 연동 시 교체
-  const [models, setModels] = useState<Model[]>(MODELS);
+  // ponytail: 등록 모델은 화면 메모리. 배포 id 는 localStorage (대시보드 fetchActiveModel 과 공유)
+  const [models, setModels] = useState<Model[]>(() => syncDeployedFlags(MODELS, defaultDeployedId));
   const [tab, setTab] = useState<Tab>("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "id", asc: true });
   const [formOpen, setFormOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  // 클라이언트에서 localStorage 배포 id 반영
+  useEffect(() => {
+    const id = getActiveModelId(defaultDeployedId);
+    setModels(syncDeployedFlags(MODELS, id));
+    setHydrated(true);
+  }, []);
 
   const visible = sortModels(
     // 전체 탭 = 현재 대시보드에 배포(적용)된 모델만 / 공정 탭 = 해당 공정 전 버전
@@ -59,6 +70,16 @@ export default function ModelManagement() {
     // 새 모델은 미배포라 전체 탭에 안 보임 → 해당 공정 탭으로 이동
     if (tab === "all" ? !m.deployed : tab !== m.process) setTab(m.process);
     setFormOpen(false);
+  }
+
+  function deploySelected() {
+    if (!selected || selected.deployed) return;
+    const next = applyDeploy(models, selected.id);
+    // 전역 활성 1개로 플래그 맞춤 (대시보드 fetchActiveModel 과 동일)
+    const synced = syncDeployedFlags(next, selected.id);
+    setActiveModelId(selected.id);
+    setModels(synced);
+    if (tab === "all") setSelectedId(selected.id);
   }
 
   return (
@@ -98,6 +119,15 @@ export default function ModelManagement() {
                   <span className={`${styles.badge} ${selected.deployed ? styles.badgeOn : ""}`}>
                     {selected.deployed ? "Y · 배포" : "N · 미배포"}
                   </span>
+                  {hydrated && !selected.deployed && (
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnPrimary} ${styles.deployBtn}`}
+                      onClick={(e) => (e.stopPropagation(), deploySelected())}
+                    >
+                      이 모델 배포
+                    </button>
+                  )}
                 </dd>
                 {selected.fileName && (
                   <>

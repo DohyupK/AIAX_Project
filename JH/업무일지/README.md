@@ -4,6 +4,8 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-17 | Model Management: 배포 버튼 → localStorage → 대시보드 활성 모델명 연동 (추론 미연동) | [model_management](../기능표.md#model-management-model_management) |
+| 2026-11-17 | Model Management: TM DieCasting 56건 목업·명명 규칙 반영 (DH 허가) | [model_management](../기능표.md#model-management-model_management) |
 | 2026-11-11 | Model Management Overview 배치 변경: 생성일·배포 여부를 왼쪽으로, 성과지표를 오른쪽으로, 적용 횟수 표시 삭제 | [model_management](../기능표.md#model-management-model_management) |
 | 2026-11-11 | 관리도(SPC): 온도 변수 EWMA(σ=전체 표준편차), 압력·사이클 I-MR + Nelson 규칙 1·2·3, 처음 100샷 기준 고정, CL 점선 | [process_optimization](../기능표.md#공정-최적화-대시보드-process_optimization) |
 | 2026-11-11 | 온도 제어 → 공정 최적화 개편: 지표 4종, 알람 로그 팝업, 공정 변수 모니터 4×2, 관리도(SPC) UCL/LCL·툴팁 | [process_optimization](../기능표.md#공정-최적화-대시보드-process_optimization) |
