@@ -36,6 +36,7 @@
 | `lake` | 정제 데이터 (Spark) |
 | `mart` | 학습·분석용 (Spark → AI) |
 | `org` | 조직·권한·하청·게이트·근태. init `09`·`10` (2026-11-17 새 구조, MS) |
+| `ai` | 사람·AI가 만드는 판정·라벨·모델 정보. init `11` (2026-11-18, MS) |
 
 관계: `mes` →(FK)·`lake` →(FK)·`mart` (`casting_id`). `org`는 독립.
 
@@ -76,7 +77,7 @@
 | 사원 | `employee`, `employee_info`, `employee_status`, `access_code`, `dept_roster`, `team_roster` |
 | 카드·게이트 | `employee_card`, `vendor_worker`, `gate_card`, `employee_gate_log`, `vendor_gate_log` |
 | 근태 | `attendance`, `employee_record` |
-| 페이지 권한 9 | `main_page`, `process_optimization_page`, `quality_inspection_page`, `defect_labeling_page`, `worker_safety_page`, `hr_management_page`, `management_report_page`, `model_management_page`, `company_documents_page` |
+| 페이지 권한 9 | `main_page`, `process_optimization_page`, `quality_inspection_page`, `defect_labeling_page`, `ppe_violation_page`, `hr_management_page`, `management_report_page`, `model_management_page`, `company_documents_page` |
 | 앱 기록 | `change_log` (모든 org 변경, lake 복제용), `hr_access_log` (개인정보 조회 기록) |
 
 | 코드 | 값 |
@@ -95,6 +96,7 @@
 | `employee_gate_log` IN | `attendance`, `employee_card.attendance_status` = present |
 | `employee_gate_log` OUT | `employee_record`(근무시간·지각·조퇴·초과), `attendance_status` = absent, `employee_status.last_logout_at` |
 | `employee_record.absent` = true | `employee_status.annual_leave_used` +1 |
+| `employee.employment_status` = resigned (퇴사일 필수, 부서장·팀장 불가) | 사원증 `gate_card` a·b 차단 (재직으로 돌리면 다시 열림) |
 | org 테이블 전부 (앱 기록 2개 제외) | `change_log` |
 
 ---
@@ -184,6 +186,7 @@ lake에서 제외: `timestamp`, `date`.
 | `07_comments.sql` | COMMENT |
 | `08_data.sql.gz` | 샘플 데이터 |
 | `09_org_permission.sql` | schema `org` 구조 + 트리거 + GRANT (app_hr 포함) |
+| `11_ai.sql` | schema `ai`: `defect_label`(불량 유형 라벨, 유형별 boolean), `defect_discard`(판정 불가 샷). 한 샷은 둘 중 한 곳만 (트리거) / `model_registry`(모델 목록·성과지표·파일 경로·배포, 공정당 배포 1개, 배포 시 기존 배포 자동 해제) / `ppe_gate_rule`(게이트별 필수 보호구) · `ppe_check`(보호구 검사 기록, 출입 로그 IN 참조. 주조팀·하청만 검사) |
 | `10_org_permission_seed.sql` | `org` 목업 (사원 54, 2026-08-04~10-11 출입·근무) |
 
 ---
@@ -192,6 +195,11 @@ lake에서 제외: `timestamp`, `date`.
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-11-18 | `ai.ppe_gate_rule`·`ai.ppe_check` (보호구 착용 위반 대시보드). 목업 2,756건 |
+| 2026-11-18 | `ai.model_registry` (모델 레지스트리, DH 요청). 파일 저장 경로는 서버 관리자가 정함 |
+| 2026-11-18 | schema `ai` 신설 + `defect_label`·`defect_discard` (불량 유형 라벨링). 읽기: role_lake·role_spark, 쓰기 계정은 담당 확정 후 |
+| 2026-11-18 | 페이지 `worker_safety` → `ppe_violation`(보호구 착용 위반 대시보드), 권한 테이블 `ppe_violation_page` |
+| 2026-11-18 | `org.employee` 재직 상태(`employment_status`, `resigned_at`) + 퇴사 트리거. 인사 관리 열람 = 사원 이상 |
 | 2026-11-17 | `org` 새 구조 (MS): 코드 숫자화·일련번호, `vender`→`vendor`, `age`→`birth_date`, 페이지 권한 9개(접근 코드 기준), 트리거(접근 코드·명단·근태), `app_hr` 계정 init 반영. 서버 적용 완료 |
 | 2026-11-16 | schema `org` (DH). init 09/10. `app_lake` SELECT. DB 서술 → `DB연동_내역`. SQLite·MS DB 장문 정리 |
 | 2026-11-10 | 현행 init 기준으로 루트 문서 신설. 계정 `shift` / `app_mes`·`app_spark`·`app_mart`·`app_lake`. 지속 갱신 의무 명시 |
