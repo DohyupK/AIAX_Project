@@ -121,12 +121,12 @@ export default function HrManagement() {
             <button type="button" className={`${po.panel} ${s.card}`} disabled={!current.can_view} onClick={() => setListOpen(true)}
               aria-label={current.can_view ? '전체 명단 보기' : '열람 권한 없음'}>
               <div className={s.cardHead}>
-                <h3>{'dept_name' in current ? `${current.dept_name} (${current.dept_code})` : `${current.team_name} (${current.team_code})`}</h3>
+                <h3>{'dept_name' in current ? current.dept_name : current.team_name}</h3>
                 <span className={po.sub}>{current.can_view ? '눌러서 전체 명단 보기 →' : '열람 권한 없음 (자기 팀만 볼 수 있습니다)'}</span>
               </div>
               <dl className={cd.meta}>
                 <dt>대표</dt>
-                <dd>{current.rep_no ? `${current.rep_no} · ${current.rep_position ?? ''}${'rep_dept' in current && current.rep_dept ? ` (부서 ${current.rep_dept})` : ''}` : '—'}</dd>
+                <dd>{current.rep_no ? `${current.rep_no} · ${current.rep_position ?? ''}` : '—'}</dd>
                 <dt>인원</dt><dd className={po.num}>{current.headcount}명</dd>
                 <dt>{'by_position' in current ? '직급별' : '소속 부서별'}</dt>
                 <dd className={s.chips}>
