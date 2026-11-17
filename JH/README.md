@@ -22,7 +22,7 @@
 | 공정 안전 플랫폼 인덱스 | `frontend/pages/platform_index/` | 루트 layout 연결 |
 | 공정 최적화 대시보드 | `frontend/pages/process_optimization/`, `frontend/common/casting/` | 목업 데이터, `/casting/process-optimization` 연결 |
 | 메인 대시보드 | `frontend/pages/main_dashboard/` | 공지·일정 하드코딩, 메모 localStorage, `/` 연결 |
-| 작업자 안전 관리 대시보드 | `frontend/pages/worker_safety/` | 목업 기록 하드코딩, `/safety/worker-safety` 연결 |
+| 보호구 착용 위반 대시보드 | `frontend/pages/ppe_violation/` | 목업 기록 하드코딩, 월별 위반 보고서 팝업, `/safety/ppe-violation` 연결 |
 
 ## 다른 폴더
 

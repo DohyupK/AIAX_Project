@@ -1,5 +1,5 @@
 // 경영 관리자 리포트 목업 — 생산·근태·안전 집계 API 연동 전 자리 (연동 시 이 파일만 API 호출로 교체)
-import type { Gear } from "../worker_safety/rules";
+import type { Gear } from "../ppe_violation/rules";
 
 export type Period = "daily" | "weekly" | "monthly";
 

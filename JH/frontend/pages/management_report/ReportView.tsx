@@ -1,4 +1,4 @@
-import { GEAR_LABEL } from '../worker_safety/rules';
+import { GEAR_LABEL } from '../ppe_violation/rules';
 import { DEFECT_LABEL, FIXED, RECYCLE_VALUE, UNIT_PRICE, type PeriodReport } from './data';
 import { compareReport, computeReport } from './logic';
 import po from '../process_optimization/ProcessOptimization.module.css';
@@ -32,7 +32,7 @@ export default function ReportView({ r, prev, prevLabel, cumulative }: {
         <Summary k="P 인력" v={`출근 ${pct(c.attendanceRate)}`} tone={(c.attendanceRate ?? 1) < 0.95 ? 'warn' : 'ok'} />
       </div>
 
-      <Section badge="S" title="안전 (검색대 안전장구)" note="작업자 안전 관리 대시보드 집계">
+      <Section badge="S" title="안전 (검색대 안전장구)" note="보호구 착용 위반 대시보드 집계">
         <div className={s.cards}>
           <Card label="검색대 통과율" value={pct(c.safetyPassRate)} sub={`태깅 ${n0(r.safety.scans)}건`} tone={(c.safetyPassRate ?? 1) < 0.98 ? 'warn' : 'ok'} />
           <Card label="미착용 위반" value={n0(r.safety.violations)} unit="건" tone={r.safety.violations ? 'bad' : 'ok'}
