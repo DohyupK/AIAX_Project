@@ -327,6 +327,8 @@
 .btnPrimary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btnPrimary:hover { background: #2563eb; }
 
+.deployBtn { margin-left: 10px; vertical-align: middle; }
+
 @media (max-width: 900px) {
   .overviewGrid { grid-template-columns: 1fr; gap: 12px; }
   .metricSet { grid-template-columns: repeat(2, minmax(0, 1fr)); }

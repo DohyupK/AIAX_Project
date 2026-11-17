@@ -27,12 +27,15 @@ export type Errors = Partial<Record<keyof Draft | "file", string>>;
  */
 export const createdAtNow = (d = new Date()) => d.toLocaleDateString("sv-SE");
 
+/** DieCasting 명명: 알고리즘 토큰 (등록 폼에서 입력하는 부분) */
+export const ALGO_NAME_RE = /^[A-Za-z][A-Za-z0-9]*$/;
+
 /** 등록 입력값 검사 — 오류가 없으면 빈 객체 */
 export function validateDraft(d: Draft, processes: ProcessTable): Errors {
   const e: Errors = {};
-  // name = 공정 앞부분 뒤에 붙는 모델 종류 (예: xgb, lgbm)
-  if (!d.name.trim()) e.name = "모델 종류를 입력하세요 (예: xgb)";
-  else if (!/^[a-z0-9][a-z0-9_-]*$/.test(d.name.trim())) e.name = "영문 소문자·숫자·-·_ 만 가능";
+  // name = DieCasting_ 뒤에 붙는 알고리즘 (예: XGB, LGBM)
+  if (!d.name.trim()) e.name = "알고리즘을 입력하세요 (예: XGB)";
+  else if (!ALGO_NAME_RE.test(d.name.trim())) e.name = "영문·숫자만 가능 (예: XGB, CatB)";
   if (!d.version.trim()) e.version = "버전을 입력하세요";
   if (!Object.hasOwn(processes, d.process)) e.process = "관리공정을 선택하세요";
   for (const key of METRIC_KEYS) {
@@ -40,4 +43,31 @@ export function validateDraft(d: Draft, processes: ProcessTable): Errors {
     if (d[key].trim() === "" || !Number.isFinite(n) || n < 0 || n > 1) e[key] = "0~1 사이 숫자";
   }
   return e;
+}
+
+/** 등록 시 최종 모델명 = DieCasting_{Algo}_{YYYYMMDD}_{임시순번01} */
+export function buildModelName(prefix: string, algo: string, createdAt: string): string {
+  const ymd = createdAt.replaceAll("-", "");
+  return `${prefix}_${algo.trim()}_${ymd}_01`;
+}
+
+/**
+ * 배포 전환: 같은 공정에서 id 하나만 deployed.
+ * 이미 배포 중이면 목록 그대로 반환.
+ */
+export function applyDeploy(list: Model[], id: number): Model[] {
+  const target = list.find((m) => m.id === id);
+  if (!target) return list;
+  if (target.deployed) return list;
+  return list.map((m) => {
+    if (m.id === id) return { ...m, deployed: true, applyCount: m.applyCount + 1 };
+    if (m.process === target.process && m.deployed) return { ...m, deployed: false };
+    return m;
+  });
+}
+
+/** localStorage 활성 id에 맞춰 deployed 플래그 동기화 (공정 무관 전역 1개) */
+export function syncDeployedFlags(list: Model[], activeId: number): Model[] {
+  if (!list.some((m) => m.id === activeId)) return list;
+  return list.map((m) => ({ ...m, deployed: m.id === activeId }));
 }
