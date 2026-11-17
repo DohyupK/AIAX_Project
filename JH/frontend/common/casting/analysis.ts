@@ -1,7 +1,5 @@
 import type { FeatureKey, ModelInfo, Shot } from './types';
 
-export const STREAK_ALERT = 3;       // 연속 Fail 알림 기준
-
 export const LABELS: Record<FeatureKey, string> = {
   injection_pressure: '주입 압력', sleeve_temperature: '슬리브 온도',
   top_temp1: '상금형온도 1', top_temp2: '상금형온도 2', top_temp3: '상금형온도 3',
@@ -25,7 +23,6 @@ export const GUIDE: Partial<Record<FeatureKey, string>> = {
 
 export type Severity = 'ok' | 'warn' | 'bad' | 'na';
 
-export const isFail = (s: Shot, th: number) => s.prob >= th;
 export const fmt = (v: number | null | undefined) =>
   v == null ? '—' : Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(1);
 export const unitOf = (k: FeatureKey) =>
@@ -57,24 +54,30 @@ export const isOutOfRange = (s: Shot, model: ModelInfo, keys: FeatureKey[]) =>
 /** keys = 알람과 관련된 변수 (팝업 조치 가이드 표시용) */
 export interface AlertItem { time: string; shotId: number; critical: boolean; message: string; keys: FeatureKey[] }
 
-export function buildAlerts(shots: Shot[], th: number, model: ModelInfo, keys: FeatureKey[]): AlertItem[] {
+/**
+ * 알람 = 공정 변수 모니터 판정과 같은 기준 (severity). 변수가 정상 → 주의/이탈로 나빠지는 순간 1번 울림
+ * (같은 상태가 계속되면 다시 울리지 않음 — 정상으로 돌아왔다가 다시 벗어나면 다시 울림)
+ * 이탈 = 위험(빨강), 주의 = 주의(주황). 한 샷에서 여러 변수가 걸리면 등급별로 묶어서 1건
+ */
+export function buildAlerts(shots: Shot[], model: ModelInfo, keys: FeatureKey[]): AlertItem[] {
   const out: AlertItem[] = [];
-  let streak = 0, prevKey = '';
+  const rank = { ok: 0, na: 0, warn: 1, bad: 2 } as const;
+  const prev: Partial<Record<FeatureKey, number>> = {};
+  const range = (k: FeatureKey) => `${fmt(model.bands[k][0])}~${fmt(model.bands[k][2])}`;
   for (const s of shots) {
-    const fail = isFail(s, th);
-    const ip = s.features.injection_pressure;
-    if (fail) {
-      streak++;
-      if (ip != null && ip < 600)
-        out.push({ time: s.time, shotId: s.shotId, critical: true, message: `#${s.shotId} 주입 압력 ${Math.round(ip)} 급감 (정상 640 이상)`, keys: ['injection_pressure'] });
-      if (streak === STREAK_ALERT)
-        out.push({ time: s.time, shotId: s.shotId, critical: true, message: `연속 Fail ${STREAK_ALERT}샷 발생, 라인 점검 필요`, keys: [] });
-    } else streak = 0;
-    const off = keys.filter(k => k !== 'injection_pressure' && severity(model, k, s.features[k]) === 'bad');
-    const key = off.join();
-    if (fail && off.length && key !== prevKey) // 같은 변수 이탈이 연속되면 한 번만
-      out.push({ time: s.time, shotId: s.shotId, critical: false, message: `#${s.shotId} ${off.map(k => LABELS[k]).join(', ')} 정상 범위 이탈`, keys: off });
-    prevKey = fail ? key : '';
+    const hit: Record<1 | 2, FeatureKey[]> = { 1: [], 2: [] };
+    for (const k of keys) {
+      const v = s.features[k];
+      if (v == null) continue; // 결측은 상태 유지 (알람·해제 모두 안 함)
+      const r = rank[severity(model, k, v)];
+      if (r > (prev[k] ?? 0)) hit[r as 1 | 2].push(k);
+      prev[k] = r;
+    }
+    for (const r of [1, 2] as const) { // 최근 순으로 뒤집으므로 같은 샷이면 이탈이 위
+      if (!hit[r].length) continue;
+      const what = hit[r].map(k => `${LABELS[k]} ${fmt(s.features[k])}${unitOf(k)} (정상 ${range(k)})`).join(", ");
+      out.push({ time: s.time, shotId: s.shotId, critical: r === 2, message: `#${s.shotId} ${r === 2 ? "이탈" : "주의"}: ${what}`, keys: hit[r] });
+    }
   }
   return out.reverse();
 }
