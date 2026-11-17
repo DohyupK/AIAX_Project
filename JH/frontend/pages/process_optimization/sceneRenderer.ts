@@ -6,7 +6,7 @@ import type { FeatureKey } from '../../common/casting/types';
 export type SceneStatus = 'ok' | 'warn' | 'bad' | 'na';
 export interface SceneShot { time: string; features: Partial<Record<FeatureKey, number | null>> }
 
-/** 공정 단계 (한 사이클 약 15.6초). group: 0 형폐·주탕 / 1 사출 / 2 응고·냉각·취출 — 공정 변수 모니터 묶음과 같음 */
+/** 공정 단계 — d 는 비율(합 15.6). 실제 한 바퀴 시간은 options.cycleSec() 에 맞춰 늘이고 줄임. group: 0 형폐·주탕 / 1 사출 / 2 응고·냉각·취출 — 공정 변수 모니터 묶음과 같음 */
 export const PHASES = [
   { k: 'close', n: '형폐', e: 'Die Close', d: 1.2, group: 0 },
   { k: 'ladle', n: '주탕', e: 'Ladling', d: 3.4, group: 0 },
@@ -18,12 +18,17 @@ export const PHASES = [
   { k: 'eject', n: '취출', e: 'Ejection & Extraction', d: 2.4, group: 2 },
   { k: 'spray', n: '이형제 도포', e: 'Die Spray', d: 1.8, group: 2 },
 ] as const;
+const BASE_CYCLE = PHASES.reduce((a, p) => a + p.d, 0);
+/** 다음 샷이 이미 와 있으면 지금 사이클의 남은 동작을 이 시간(초) 안에 마치고 다음 샷으로 */
+const CATCHUP_SEC = 1.5;
 
 export interface SceneOptions {
   /** CSS Module 클래스 맵 (DiecastScene.module.css) */
   cls: Record<string, string>;
   /** 사이클 시작(형폐) 때마다 호출 — 가장 최근 샷 */
   getShot: () => SceneShot | null;
+  /** 한 바퀴 시간(초) = 평균 설비 사이클 ÷ 배속 — 매 프레임 읽음 */
+  cycleSec: () => number;
   statusOf: (k: FeatureKey, v: number | null) => SceneStatus;
   /** 정상 중앙값(p50) — 용탕량 비율 연출용 */
   mid: (k: FeatureKey) => number | null;
@@ -514,7 +519,8 @@ export function createDiecastScene(svg: SVGSVGElement, o: SceneOptions) {
 
   /* ---------- 상태 ---------- */
   let cur: SceneShot | null = null, prev: SceneShot | null = null;
-  let phase = 0, pt = 0, paused = false, raf = 0, lastT = performance.now();
+  // up = 현재 단계 진행률(0~1), boost = 따라잡기 배율 (사이클 시작 때 1로 초기화)
+  let phase = 0, up = 0, boost = 1, paused = false, raf = 0, lastT = performance.now();
   let part: { on?: boolean; belt?: boolean; x?: number } = {};
   let mist: { x: number; y: number; z: number; vx: number; vz: number; life: number }[] = [];
   const valOf = (s: SceneShot | null, k: FeatureKey) => s?.features[k] ?? null;
@@ -720,10 +726,25 @@ export function createDiecastScene(svg: SVGSVGElement, o: SceneOptions) {
   function frame(now: number) {
     const dt = Math.min(0.05, (now - lastT) / 1000);
     lastT = now;
-    const sdt = paused ? 0 : dt;
-    pt += sdt;
-    while (pt >= PHASES[phase].d) { pt -= PHASES[phase].d; phase = (phase + 1) % PHASES.length; enterPhase(phase); }
-    const u = pt / PHASES[phase].d, K = kin(phase, u);
+    const scale = Math.max(0.05, o.cycleSec() / BASE_CYCLE); // 설계 1초 → 실제 scale초
+    const latest = o.getShot();
+    const newer = !!latest && latest !== cur;
+    if (newer && boost === 1) {
+      // 다음 샷이 도착 — 남은 동작을 CATCHUP_SEC 안에 끝내도록 가속 (이미 빨리 끝나면 그대로)
+      let left = (1 - up) * PHASES[phase].d;
+      for (let j = phase + 1; j < PHASES.length; j++) left += PHASES[j].d;
+      boost = Math.max(1, (left * scale) / CATCHUP_SEC);
+    }
+    const sdt = paused ? 0 : (dt * boost) / scale; // 설계 시간 기준 경과
+    up += sdt / PHASES[phase].d;
+    while (up >= 1) {
+      // 마지막 단계까지 끝났는데 다음 샷이 아직 없으면 그 자리에서 대기 (데이터보다 앞서지 않게)
+      if (phase === PHASES.length - 1 && !newer) { up = 1; break; }
+      up -= 1; phase = (phase + 1) % PHASES.length;
+      if (phase === 0) { boost = 1; up = Math.min(up, 0.99); }
+      enterPhase(phase);
+    }
+    const u = Math.min(up, 1), K = kin(phase, u);
     updateScene(phase, u, sdt, K);
     updateLabels(phase, u, dt, K.mx + 2.5);
     raf = requestAnimationFrame(frame);

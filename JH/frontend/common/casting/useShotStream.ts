@@ -13,7 +13,10 @@ const MOCK_START = 20;      // 시작 샷 수 (150→20: 마운트 직후 분석
  * 실제: POLL_MS마다 API를 다시 조회 (SSE/WebSocket으로 바꿀 때도 이 훅만 수정)
  * 탭이 숨겨지면 재생·폴링을 멈춰 백그라운드 CPU 낭비 방지
  */
-export function useShotStream(line: string, date: string, playing: boolean) {
+/** stepMs: 실데이터 재생 시 1샷 간격(ms) — 공정 최적화는 평균 사이클 ÷ 배속 (설비 장면 한 바퀴와 같음) */
+export function useShotStream(line: string, date: string, playing: boolean, real = false, stepMs?: number) {
+  // 재생 모드: 목업, 또는 지난 날짜 실데이터(real) — 하루치를 받아 처음부터 재생
+  const replay = USE_MOCK || real;
   const [all, setAll] = useState<Shot[]>([]);
   const [count, setCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -29,15 +32,17 @@ export function useShotStream(line: string, date: string, playing: boolean) {
     keyRef.current = key;
     setLoading(true);
     setError(null);
-    return fetchShots(line, date)
+    if (!date) { setAll([]); return Promise.resolve(); } // 날짜 목록 받기 전 (로딩 표시 유지)
+    return fetchShots(line, date, real)
       .then(s => {
         if (keyRef.current !== key) return; // 이미 다른 라인·날짜로 바뀜
         setAll(s);
-        setCount(c => (USE_MOCK ? Math.max(c, Math.min(MOCK_START, s.length)) : s.length));
+        // 실데이터 재생은 날짜를 바꾸면 처음부터 (목업은 단일 날짜라 진행 위치 유지)
+        setCount(c => (replay ? Math.min(real ? MOCK_START : Math.max(c, MOCK_START), s.length) : s.length));
       })
       .catch((e: Error) => { if (keyRef.current === key) setError(e.message); })
       .finally(() => { if (keyRef.current === key) setLoading(false); });
-  }, [line, date]);
+  }, [line, date, real, replay]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -52,17 +57,17 @@ export function useShotStream(line: string, date: string, playing: boolean) {
   useEffect(() => {
     if (!playing || !visible || !all.length) return;
     const t = setInterval(() => {
-      if (USE_MOCK) {
-        setCount(c => Math.min(c + MOCK_BATCH, allLenRef.current));
+      if (replay) {
+        setCount(c => Math.min(c + (stepMs ? 1 : MOCK_BATCH), allLenRef.current));
       } else {
         const key = `${line}|${date}`;
         fetchShots(line, date)
           .then(s => { if (keyRef.current === key) { setAll(s); setCount(s.length); } })
           .catch((e: Error) => { if (keyRef.current === key) setError(e.message); });
       }
-    }, USE_MOCK ? MOCK_REPLAY_MS : POLL_MS);
+    }, replay ? (stepMs ?? MOCK_REPLAY_MS) : POLL_MS);
     return () => clearInterval(t);
-  }, [playing, visible, all.length, line, date]);
+  }, [playing, visible, all.length, line, date, replay, stepMs]);
 
   // count가 바뀔 때만 새 배열 — 불필요 slice 재생성 방지에 가깝게 유지
   const shots = useMemo(() => all.slice(0, count), [all, count]);
@@ -72,7 +77,7 @@ export function useShotStream(line: string, date: string, playing: boolean) {
     loading,
     error,
     retry: load,
-    finished: USE_MOCK && all.length > 0 && count >= all.length,
+    finished: replay && all.length > 0 && count >= all.length,
     restart: () => setCount(Math.min(MOCK_START, all.length)),
   };
 }

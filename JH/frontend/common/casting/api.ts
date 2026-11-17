@@ -10,7 +10,8 @@ import mockModel from './mock/model.json';
  * 목업 shots는 public/mocks 로 두어 클라이언트 번들에 244KB JSON이 들어가지 않게 함.
  */
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false';
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+// 기본: JH API 서버 (JH/api, 127.0.0.1:8000)
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 /** 정적 목업 샷 — Next public 경로 (번들 비포함) */
 const MOCK_SHOTS_URL = '/mocks/casting/shots.json';
 
@@ -33,9 +34,12 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/** 해당 날짜의 샷별 예측 결과 (shotId 오름차순) */
-export async function fetchShots(line: string, date: string): Promise<Shot[]> {
-  if (USE_MOCK) {
+/**
+ * 해당 날짜의 샷별 예측 결과 (shotId 오름차순)
+ * real=true 면 USE_MOCK 과 관계없이 실데이터(mes) — 공정 최적화만 먼저 전환 (품질 검사·라벨링은 모델 연결 전이라 목업)
+ */
+export async function fetchShots(line: string, date: string, real = false): Promise<Shot[]> {
+  if (USE_MOCK && !real) {
     // 목업 데이터는 line_no1 한 라인뿐 — 다른 라인은 빈 목록(화면에 「데이터 연결 전」 표시)
     if (line !== MOCK_LINE) return [];
     // 목업: 정적 파일 fetch — 첫 방문 시 캐시 가능, JS 번들과 분리
@@ -45,6 +49,11 @@ export async function fetchShots(line: string, date: string): Promise<Shot[]> {
   }
   // ponytail: 매번 하루치 전체 조회. 샷이 많아지면 &since=<마지막 shotId>로 증분 조회로 바꾸세요
   return get<Shot[]>(`/api/casting/predictions?line=${encodeURIComponent(line)}&date=${date}`);
+}
+
+/** 실데이터가 있는 날짜 (최근 날짜가 먼저) */
+export function fetchDates(line: string): Promise<string[]> {
+  return get<string[]>(`/api/casting/dates?line=${encodeURIComponent(line)}`);
 }
 
 /** 현재 배포된 주조 불량 예측 모델 */

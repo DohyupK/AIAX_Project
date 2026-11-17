@@ -53,3 +53,8 @@
 @media (prefers-reduced-motion: reduce) {
   .alarm .box, .warn .ring, .alarm .ring, .flow, .flicker { animation: none; }
 }
+
+/* 배속 버튼 — 장면 위 별도 줄 (센서 라벨과 겹치지 않게) */
+.speed { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 10px 14px 0; }
+.speedInfo { font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+.speedOn { background: var(--accent); border-color: var(--accent); color: #ffffff; }
