@@ -30,9 +30,14 @@ export function useShotStream(line: string, date: string, playing: boolean, real
   const load = useCallback(() => {
     const key = `${line}|${date}`;
     keyRef.current = key;
-    setLoading(true);
     setError(null);
-    if (!date) { setAll([]); return Promise.resolve(); } // 날짜 목록 받기 전 (로딩 표시 유지)
+    // 날짜 미정: 샷 조회 안 함. loading을 켜 두지 않음(부모 dates 조회와 분리 — 무한 「불러오는 중」방지)
+    if (!date) {
+      setAll([]);
+      setLoading(false);
+      return Promise.resolve();
+    }
+    setLoading(true);
     return fetchShots(line, date, real)
       .then(s => {
         if (keyRef.current !== key) return; // 이미 다른 라인·날짜로 바뀜

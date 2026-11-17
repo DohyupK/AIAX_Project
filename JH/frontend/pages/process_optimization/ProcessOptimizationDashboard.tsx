@@ -8,10 +8,13 @@ import type { FeatureKey, ModelInfo } from '../../common/casting/types';
 import KpiCards from './KpiCards';
 import AlertLog from './AlertLog';
 import SensorMonitor, { SENSOR_MONITOR_ID } from './SensorMonitor';
-import DiecastScene from './DiecastScene';
 import s from './ProcessOptimization.module.css';
 
-// SPC 차트는 초기 번들에서 분리 — 마운트 후 로드
+// 설비 장면·SPC는 초기 번들에서 분리 — 라우트 「페이지를 불러오는 중」노출 시간 단축
+const DiecastScene = dynamic(() => import('./DiecastScene'), {
+  ssr: false,
+  loading: () => <div className={s.panel}>설비 장면 불러오는 중…</div>,
+});
 const SpcChart = dynamic(() => import('./SpcChart'), {
   ssr: false,
   loading: () => <div className={s.panel}>관리도 불러오는 중…</div>,
@@ -127,11 +130,21 @@ export default function ProcessOptimizationDashboard() {
       {err && (
         <div className={s.errorBox} role="alert">
           <span>데이터를 불러오지 못했습니다: {err}</span>
-          <button type="button" className={s.btn} onClick={() => { setMetaError(null); retry(); }}>다시 시도</button>
+          <button type="button" className={s.btn} onClick={() => {
+            setMetaError(null);
+            // 날짜 목록부터 다시
+            setDates(null);
+            fetchDates(line)
+              .then(ds => { setDates(ds); setDate(d => (ds.includes(d) ? d : ds[0] ?? '')); })
+              .catch((e: Error) => setMetaError(e.message));
+            retry();
+          }}>다시 시도</button>
         </div>
       )}
 
-      {loading && dates?.length !== 0 && !shots.length && !err && <div className={s.panel}>데이터를 불러오는 중입니다…</div>}
+      {/* 셸(헤더·배너)은 유지하고 데이터 영역만 상태 표시 */}
+      {dates === null && !err && <div className={s.panel}>날짜 목록을 불러오는 중입니다…</div>}
+      {loading && !!date && !shots.length && !err && <div className={s.panel}>데이터를 불러오는 중입니다…</div>}
       {/* 해당 라인의 샷이 아직 없음 (목업: line_no1 만 데이터 있음 / 실제: 오늘 생산 전이거나 미연결) */}
       {(dates?.length === 0 || (!loading && date && !shots.length)) && !err && (
         <div className={`${s.panel} ${s.emptyLine}`} role="status">
@@ -140,7 +153,8 @@ export default function ProcessOptimizationDashboard() {
         </div>
       )}
 
-      {model && latest && (
+      {/* 모델만 있으면 골격 표시 — latest 대기 중에도 장면·패널 자리 확보 */}
+      {model && (
         <>
           <section className={`${s.grid} ${s.top}`}>
             <DiecastScene shots={shots} model={model} playing={playing} cycleSec={cycle} speed={speed} onSpeed={setSpeed} onPick={pickFromScene} onPhase={setActiveGroup} />

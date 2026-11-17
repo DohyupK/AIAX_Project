@@ -99,11 +99,19 @@ export default function QualityInspectionDashboard() {
       {error && (
         <div className={po.errorBox} role="alert">
           <span>데이터를 불러오지 못했습니다: {error}</span>
-          <button type="button" className={po.btn} onClick={load}>다시 시도</button>
+          <button type="button" className={po.btn} onClick={() => {
+            setDates(null);
+            fetchDates(line)
+              .then(ds => { setDates(ds); setDate(d => (ds.includes(d) ? d : ds[0] ?? '')); })
+              .catch((e: Error) => setMetaError(e.message));
+            load();
+          }}>다시 시도</button>
         </div>
       )}
 
-      {loading && dates?.length !== 0 && !shots.length && !error && <div className={po.panel}>데이터를 불러오는 중입니다…</div>}
+      {/* 셸(헤더·배너)은 유지하고 데이터 영역만 상태 표시 */}
+      {dates === null && !error && <div className={po.panel}>날짜 목록을 불러오는 중입니다…</div>}
+      {loading && !!date && !shots.length && !error && <div className={po.panel}>데이터를 불러오는 중입니다…</div>}
       {(dates?.length === 0 || (!loading && date && !shots.length)) && !error && (
         <div className={`${po.panel} ${po.emptyLine}`} role="status">
           <b>{line}</b> 데이터가 아직 연결되지 않았습니다.
@@ -111,11 +119,12 @@ export default function QualityInspectionDashboard() {
         </div>
       )}
 
-      {model && shots.length > 0 && (
+      {/* 모델만 있으면 KPI·목록 골격 표시 — 샷 0건이어도 레이아웃 유지 */}
+      {model && (
         <>
           <section className={`${po.grid} ${s.kpis3}`} aria-label="품질 요약 지표">
             <Kpi label="전체 생산 샷" value={shots.length.toLocaleString()} unit="샷" />
-            <Kpi label="불량률" value={pct(rate(defects, shots.length))} unit="%" bad={defects > 0} />
+            <Kpi label="불량률" value={shots.length ? pct(rate(defects, shots.length)) : '—'} unit="%" bad={defects > 0} />
             <Kpi label="불량 개수" value={String(defects)} unit="개" bad={defects > 0} />
           </section>
 
@@ -138,7 +147,9 @@ export default function QualityInspectionDashboard() {
                   <table className={s.table}>
                     <thead><tr><th>샷</th><th>시각</th><th>판정</th></tr></thead>
                     <tbody>
-                      {list.map(x => (
+                      {list.length === 0 ? (
+                        <tr><td colSpan={3} className={po.sub}>{loading ? '불러오는 중…' : '표시할 샷이 없습니다'}</td></tr>
+                      ) : list.map(x => (
                         <tr key={x.shotId} className={x.shotId === selected?.shotId ? s.rowSelected : ''}
                           onClick={() => setSelectedId(x.shotId)}>
                           <td>

@@ -14,6 +14,8 @@ export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false';
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 /** 정적 목업 샷 — Next public 경로 (번들 비포함) */
 const MOCK_SHOTS_URL = '/mocks/casting/shots.json';
+/** 브라우저 fetch 상한 — 무한 pending으로 「불러오는 중」고착 방지 */
+const FETCH_TIMEOUT_MS = 10_000;
 
 /**
  * 목업: 설비 예열 구간(1~100번 샷, 05:02~08:13) 제외 → 101~575번 샷(475샷)만 사용
@@ -29,9 +31,21 @@ export type Line = (typeof LINES)[number];
 export const MOCK_LINE = 'line_no1';
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
-  return res.json() as Promise<T>;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: ctrl.signal });
+    if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
+    return res.json() as Promise<T>;
+  } catch (e) {
+    // AbortController 타임아웃 — 브라우저별 Error/DOMException
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error(`${path} 요청 시간 초과 (${FETCH_TIMEOUT_MS / 1000}초)`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
