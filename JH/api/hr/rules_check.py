@@ -2,7 +2,7 @@
 from datetime import date
 
 from hr.rules import (
-    Viewer, access_code_of, age_on, can_create, can_view_row, can_write_team, filter_fields,
+    Viewer, age_on, can_create, can_view_row, can_write_team, filter_fields,
     next_employee_no, sort_key, tier_of, validate_person, visible_fields,
 )
 
@@ -61,12 +61,7 @@ try:
 except ValueError:
     pass
 
-# access_code = 직급 + 부서 + 팀 + 부서 대표 100 + 팀 대표 1 (DB 실데이터 예)
-assert access_code_of(3000, 20000, 10, False, False) == 23010   # e0022 생산부 사원
-assert access_code_of(3000, 20000, 20, False, True) == 23021    # e0028 생산부 사원 20팀 대표
-assert access_code_of(3000, 50000, 30, True, True) == 53131     # e0016 생산부 차장 부서·팀 대표
-assert access_code_of(2000, 50000, 30, True, False) == 52130    # e0007 설비부 차장 부서 대표
-assert access_code_of(1000, 70000, None, True, False) == 71100  # e0001 소장 (팀 없음)
+# access_code·부서/팀 명단은 DB 트리거(org.trg_employee_sync)가 계산 — API 쪽 계산 함수 없음
 
 # 입력 검증
 ok = {"employee_name": "홍길동", "birth_date": "1996-05-20", "gender": "M", "phone": "010-1234-5678", "address": "서울시", "email": "a@b.co"}

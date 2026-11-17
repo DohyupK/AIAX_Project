@@ -57,3 +57,9 @@
 | `hr_access_log` | 구조 그대로, `09`에 포함 | — |
 
 - 검증 시 로컬 API로 조회 시험 → `org.hr_access_log` 에 시험 조회 기록 약 10건 남음 (데이터 변경 없음, 추가 시도는 모두 검증 단계에서 거부)
+
+## 변경 (2026-11-18) — MS 전달사항 1·5번 반영
+
+- 부서·팀 명단(`dept_roster`·`team_roster`)과 `access_code` 는 DB 트리거 `org.trg_employee_sync` 가 employee INSERT/UPDATE 때 자동으로 맞춤 → API의 직접 쓰기(`_sync_rosters`)와 계산 함수(`access_code_of`) 제거. 삭제는 트리거 대상이 아니라 명단·접근 코드 DELETE 는 API에 유지
+- 팀 이름: `org.team.team_name` 을 조회해 사원 목록·상세·요약·목업 계정·`/me` 에 `team_name` 으로 내려줌 (저장은 `team_code` 정수)
+- 검증: 읽기 시험만 (사원 추가·수정 쓰기 시험은 하지 않음)

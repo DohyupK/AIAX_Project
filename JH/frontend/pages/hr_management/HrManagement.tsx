@@ -11,7 +11,7 @@ import s from './HrManagement.module.css';
 type By = 'dept' | 'team';
 const ACCOUNT_KEY = 'jh.hr.mock_employee_no';   // 목업 계정 선택 기억 (로그인 전 전용)
 const DEFAULT_ACCOUNT = 'e0002';                // 경영부 부장 (org 2026-11-17 개편 사번)
-const DETAIL_FIELDS = ['employee_no', 'employee_name', 'dept_name', 'position_name', 'team_code', 'email', 'phone',
+const DETAIL_FIELDS = ['employee_no', 'employee_name', 'dept_name', 'position_name', 'team_name', 'email', 'phone',
   'years_of_service', 'annual_leave_used', 'monthly_overtime_hour', 'age', 'gender', 'address', 'created_at'];
 
 const show = (k: string, v: unknown) =>
@@ -78,7 +78,7 @@ export default function HrManagement() {
               {!accounts.some(a => a.employee_no === who) && who && <option value={who}>{who}</option>}
               {accounts.map(a => (
                 <option key={a.employee_no} value={a.employee_no}>
-                  {a.employee_no} · {a.dept_name} {a.position_name} · {a.team_code ?? '팀 없음'}{a.is_team_rep ? ' (팀 대표)' : ''}
+                  {a.employee_no} · {a.dept_name} {a.position_name} · {a.team_name ?? '팀 없음'}{a.is_team_rep ? ' (팀 대표)' : ''}
                 </option>
               ))}
             </select>
@@ -94,7 +94,7 @@ export default function HrManagement() {
 
       <div className={po.banner}>
         로그인 전 단계: 위 「목업 계정」으로 사용자를 바꿔 권한별 화면을 확인합니다. 데이터는 NCP DB 원본(실시간)이며, 조회·변경은 모두 기록됩니다.
-        {me && <> · 현재 권한: <b>{me.scope === 'all' ? '전 직원' : me.scope === 'team' ? `${me.team_code ?? '팀 없음'} 팀만` : '열람 불가'}</b>
+        {me && <> · 현재 권한: <b>{me.scope === 'all' ? '전 직원' : me.scope === 'team' ? `${me.team_name ?? '팀 없음'} 팀만` : '열람 불가'}</b>
           {me.tier && <> · 열람 등급 <b>{TIER_LABEL[me.tier]}</b></>}</>}
       </div>
       {error && <div className={po.errorBox} role="alert">{error}</div>}
@@ -112,7 +112,7 @@ export default function HrManagement() {
             {items.map(x => (
               <button key={keyOf(x)} type="button" aria-pressed={selected === keyOf(x)}
                 className={`${cd.catBtn} ${selected === keyOf(x) ? cd.catOn : ''}`} onClick={() => setSelected(keyOf(x))}>
-                {'dept_name' in x ? x.dept_name : x.team_code} <span className={po.num}>{x.headcount}</span>
+                {'dept_name' in x ? x.dept_name : x.team_name} <span className={po.num}>{x.headcount}</span>
               </button>
             ))}
           </div>
@@ -121,7 +121,7 @@ export default function HrManagement() {
             <button type="button" className={`${po.panel} ${s.card}`} disabled={!current.can_view} onClick={() => setListOpen(true)}
               aria-label={current.can_view ? '전체 명단 보기' : '열람 권한 없음'}>
               <div className={s.cardHead}>
-                <h3>{'dept_name' in current ? `${current.dept_name} (${current.dept_code})` : current.team_code}</h3>
+                <h3>{'dept_name' in current ? `${current.dept_name} (${current.dept_code})` : `${current.team_name} (${current.team_code})`}</h3>
                 <span className={po.sub}>{current.can_view ? '눌러서 전체 명단 보기 →' : '열람 권한 없음 (자기 팀만 볼 수 있습니다)'}</span>
               </div>
               <dl className={cd.meta}>
@@ -145,7 +145,7 @@ export default function HrManagement() {
 
       {listOpen && current && me && (
         <ListDialog who={who} me={me} by={by} keyValue={keyOf(current)}
-          title={'dept_name' in current ? current.dept_name : `${current.team_code}팀`} version={version}
+          title={'dept_name' in current ? current.dept_name : current.team_name} version={version}
           onEdit={emp => setForm({ mode: 'edit', emp })} onChanged={refresh} onClose={() => setListOpen(false)} />
       )}
       {form && me && summary && (
@@ -201,7 +201,7 @@ function ListDialog({ who, me, by, keyValue, title, version, onEdit, onChanged, 
                     <td className={po.num}>{r.employee_no}</td>
                     <td>{r.employee_name}{(r.is_dept_rep || r.is_team_rep) && <span className={s.rep}>{r.is_dept_rep ? '부서 대표' : '팀 대표'}</span>}</td>
                     <td>{r.position_name}</td>
-                    <td>{by === 'dept' ? r.team_code ?? '—' : r.dept_name}</td>
+                    <td>{by === 'dept' ? r.team_name ?? '—' : r.dept_name}</td>
                     <td>{r.email}</td>
                     {showPhone && <td className={po.num}>{r.phone ?? '—'}</td>}
                   </tr>
@@ -345,7 +345,7 @@ function EmployeeForm({ who, me, summary, editing, onClose, onSaved }: {
               <select value={v.team_code} onChange={set('team_code')} disabled={teamLocked} aria-invalid={!!errors.team_code}>
                 {!teamLocked && <option value="">없음</option>}
                 {summary.teams.filter(t => !teamLocked || t.team_code === me.team_code)
-                  .map(t => <option key={t.team_code} value={t.team_code}>{t.team_code}</option>)}
+                  .map(t => <option key={t.team_code} value={t.team_code}>{t.team_name}</option>)}
               </select>
               {teamLocked && <small className={po.sub}>팀 대표는 자기 팀으로만 추가·수정</small>}
               {errors.team_code && <small className={cd.err}>{errors.team_code}</small>}
