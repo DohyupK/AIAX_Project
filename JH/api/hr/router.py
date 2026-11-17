@@ -23,7 +23,7 @@ DB = "HR_DATABASE_URL"
 # 사원 1명 = employee + 개인정보 + 상태 + 부서명·직급코드·대표 여부
 ROW_SQL = """
 SELECT e.employee_no, e.dept_code, d.dept_name, e.position_name, p.position_code, e.team_code, e.created_at,
-       i.employee_name, i.age, i.gender, i.phone, i.address, i.email,
+       i.employee_name, i.birth_date, date_part('year', age(i.birth_date))::int AS age, i.gender, i.phone, i.address, i.email,
        s.monthly_overtime_hour, s.annual_leave_used, s.years_of_service,
        (d.department_representative = e.employee_no) AS is_dept_rep,
        EXISTS (SELECT 1 FROM org.team t WHERE t.team_representative = e.employee_no) AS is_team_rep
@@ -117,7 +117,7 @@ def summary(v: Viewer = Depends(current_viewer)):
 
 
 @router.get("/employees")
-def list_employees(dept: str | None = None, team: str | None = None, v: Viewer = Depends(current_viewer)):
+def list_employees(dept: int | None = None, team: int | None = None, v: Viewer = Depends(current_viewer)):
     """부서 또는 팀 명단 — 권한 범위 안의 사원만, 등급에 맞는 칼럼만, 직급순"""
     tier = _tier_or_403(v)
     if dept and not v.is_hr:
@@ -152,11 +152,11 @@ def get_employee(employee_no: str, v: Viewer = Depends(current_viewer)):
 
 # ---------- 추가·수정·삭제 ----------
 class EmployeeIn(BaseModel):
-    dept_code: str
+    dept_code: int
     position_name: str
-    team_code: str | None = None
+    team_code: int | None = None
     employee_name: str
-    age: int
+    birth_date: str          # 'YYYY-MM-DD' — 형식·나이 범위는 rules.validate_person 에서 한글 오류로 검증
     gender: Literal["M", "F", "other"]
     phone: str
     address: str
@@ -164,18 +164,18 @@ class EmployeeIn(BaseModel):
 
 
 class EmployeePatch(BaseModel):
-    dept_code: str | None = None
+    dept_code: int | None = None
     position_name: str | None = None
-    team_code: str | None = None
+    team_code: int | None = None
     employee_name: str | None = None
-    age: int | None = None
+    birth_date: str | None = None
     gender: Literal["M", "F", "other"] | None = None
     phone: str | None = None
     address: str | None = None
     email: str | None = None
 
 
-def _check_refs(conn, dept: str, position: str, team: str | None) -> int:
+def _check_refs(conn, dept: int, position: str, team: int | None) -> int:
     """부서·직급·팀이 실제 있는지 확인, 직급코드 반환"""
     if not conn.execute("SELECT 1 FROM org.department WHERE dept_code = %s", [dept]).fetchone():
         raise HTTPException(422, {"dept_code": "없는 부서입니다."})
@@ -196,7 +196,7 @@ def _lock(conn) -> None:
     conn.execute("SELECT pg_advisory_xact_lock(hashtext('jh_hr_employee_write'))")
 
 
-def _sync_rosters(conn, no: str, dept: str, team: str | None, position_code: int, is_team_rep: bool) -> None:
+def _sync_rosters(conn, no: str, dept: int, team: int | None, position_code: int, is_dept_rep: bool, is_team_rep: bool) -> None:
     """부서·팀 명단과 access_code 를 employee 와 같게 맞춤 (org 시드 규칙)"""
     conn.execute("DELETE FROM org.dept_roster WHERE employee_no = %s", [no])
     conn.execute("INSERT INTO org.dept_roster (dept_roster_idx, dept_code, employee_no) VALUES (%s,%s,%s)",
@@ -205,7 +205,7 @@ def _sync_rosters(conn, no: str, dept: str, team: str | None, position_code: int
     if team:
         conn.execute("INSERT INTO org.team_roster (team_roster_idx, team_code, employee_no) VALUES (%s,%s,%s)",
                      [_next_idx(conn, "team_roster"), team, no])
-    code = rules.access_code_of(dept, position_code, is_team_rep)
+    code = rules.access_code_of(dept, position_code, team, is_dept_rep, is_team_rep)
     if conn.execute("UPDATE org.access_code SET access_code = %s WHERE employee_no = %s", [code, no]).rowcount == 0:
         conn.execute("INSERT INTO org.access_code (access_code_idx, employee_no, access_code) VALUES (%s,%s,%s)",
                      [_next_idx(conn, "access_code"), no, code])
@@ -226,21 +226,21 @@ def create_employee(body: EmployeeIn, v: Viewer = Depends(current_viewer)):
             _lock(conn)
             pcode = _check_refs(conn, body.dept_code, body.position_name, body.team_code)
             existing = [r["employee_no"] for r in conn.execute("SELECT employee_no FROM org.employee").fetchall()]
-            no = rules.next_employee_no(existing, body.dept_code)
+            no = rules.next_employee_no(existing)
             conn.execute("""INSERT INTO org.employee (employee_idx, employee_no, dept_code, position_name, team_code)
                             VALUES (%s,%s,%s,%s,%s)""",
                          [_next_idx(conn, "employee"), no, body.dept_code, body.position_name, body.team_code])
-            conn.execute("""INSERT INTO org.employee_info (employee_info_idx, employee_no, employee_name, age, gender, phone, address, email)
+            conn.execute("""INSERT INTO org.employee_info (employee_info_idx, employee_no, employee_name, birth_date, gender, phone, address, email)
                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                         [_next_idx(conn, "employee_info"), no, d["employee_name"].strip(), d["age"], d["gender"],
+                         [_next_idx(conn, "employee_info"), no, d["employee_name"].strip(), rules.parse_date(d["birth_date"]), d["gender"],
                           d["phone"].strip(), d["address"].strip(), d["email"].strip()])
             conn.execute("""INSERT INTO org.employee_status (employee_status_idx, employee_no, annual_leave_used, years_of_service)
                             VALUES (%s,%s,0,0)""", [_next_idx(conn, "employee_status"), no])
-            _sync_rosters(conn, no, body.dept_code, body.team_code, pcode, False)
+            _sync_rosters(conn, no, body.dept_code, body.team_code, pcode, False, False)
             _log_access(conn, v, "create", no, rules.tier_of(v) or "basic", 1)
             r = conn.execute(ROW_SQL + " WHERE e.employee_no = %s", [no]).fetchone()
-    except ValueError as e:                    # 사번 999 초과 등
-        raise HTTPException(422, {"dept_code": str(e)})
+    except ValueError as e:                    # 사번 e9999 초과
+        raise HTTPException(422, {"employee_no": str(e)})
     log.info("사원 추가 %s by %s", no, v.employee_no)
     return rules.filter_fields(r, rules.tier_of(v)) | {"can_edit": True}
 
@@ -265,12 +265,14 @@ def update_employee(employee_no: str, body: EmployeePatch, v: Viewer = Depends(c
         conn.execute("UPDATE org.employee SET dept_code = %s, position_name = %s, team_code = %s WHERE employee_no = %s",
                      [new["dept_code"], new["position_name"], new["team_code"], employee_no])
         info = {k: (d[k].strip() if isinstance(d[k], str) else d[k])
-                for k in ("employee_name", "age", "gender", "phone", "address", "email") if k in d}
+                for k in ("employee_name", "gender", "phone", "address", "email") if k in d}
+        if "birth_date" in d:
+            info["birth_date"] = rules.parse_date(d["birth_date"])
         if info:
             sets = ", ".join(f"{k} = %s" for k in info)
             conn.execute(f"UPDATE org.employee_info SET {sets} WHERE employee_no = %s", [*info.values(), employee_no])
         if any(k in d for k in ("dept_code", "position_name", "team_code")):
-            _sync_rosters(conn, employee_no, new["dept_code"], new["team_code"], pcode, cur["is_team_rep"])
+            _sync_rosters(conn, employee_no, new["dept_code"], new["team_code"], pcode, cur["is_dept_rep"], cur["is_team_rep"])
         _log_access(conn, v, "update", employee_no, rules.tier_of(v) or "basic", 1)
         r = conn.execute(ROW_SQL + " WHERE e.employee_no = %s", [employee_no]).fetchone()
     log.info("사원 수정 %s by %s (%s)", employee_no, v.employee_no, ",".join(d))

@@ -1,0 +1,124 @@
+/* 위반 보고서 팝업 (목록 + 출력본 양식) — 색은 출력본 PDF 기준 */
+.backdrop {
+  --ink: #1d2433;
+  --muted: #6b7484;
+  --line: #c9ced6;
+  --head: #e8ecf3;
+  --accent: #3b82f6;
+  --bad: #c53030;
+  --good: #1f8a4c;
+  --soft: #f3f5f8;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.dialog {
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 20px 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.listDialog { width: min(860px, 100%); }
+.reportDialog { width: min(900px, 100%); }
+
+.toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.listTitle { margin: 0; font-size: 17px; }
+.sub { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+
+.closeBtn {
+  margin-left: auto;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.printBtn + .closeBtn { margin-left: 0; }
+.closeBtn:hover { background: var(--soft); }
+
+.backBtn,
+.printBtn {
+  font: inherit;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.printBtn { margin-left: auto; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.backBtn:hover { border-color: var(--accent); }
+.printBtn:hover { filter: brightness(1.08); }
+
+.closeBtn:focus-visible,
+.backBtn:focus-visible,
+.printBtn:focus-visible,
+.rowBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.num { font-variant-numeric: tabular-nums; }
+.bad { color: var(--bad); }
+.good { color: var(--good); }
+
+/* 목록 */
+.listWrap { overflow-x: auto; }
+.listTable { width: 100%; border-collapse: collapse; }
+.listTable th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.listTable td { padding: 8px; border-bottom: 1px solid #e1e5eb; white-space: nowrap; }
+.listTable tbody tr { cursor: pointer; }
+.listTable tbody tr:hover { background: var(--soft); }
+.rowBtn { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.rowBtn:hover { text-decoration: underline; }
+
+/* 출력본 양식 */
+.paper { display: flex; flex-direction: column; }
+
+.sign { align-self: flex-end; border-collapse: collapse; font-size: 12px; }
+.sign th, .sign td { border: 1px solid var(--line); text-align: center; }
+.sign th { width: 76px; padding: 5px; background: var(--head); font-weight: 600; }
+.sign th:first-child { width: 30px; line-height: 1.6; }
+.sign td { height: 46px; }
+
+.title { margin: 14px 0 6px; text-align: center; font-size: 21px; }
+.subtitle { margin: 0 0 10px; text-align: center; color: var(--muted); font-size: 12px; }
+
+.sec { margin: 14px 0 6px; font-size: 13.5px; color: #1e3a6e; }
+.sec small { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.kpi { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; break-inside: avoid; }
+.kpi span, .kpi small { color: var(--muted); font-size: 11.5px; }
+.kpi b { font-size: 20px; }
+
+.grid, .action { width: 100%; border-collapse: collapse; break-inside: avoid; }
+.grid th, .grid td, .action th, .action td { border: 1px solid var(--line); padding: 6px 8px; text-align: center; }
+.grid th, .action th { background: var(--head); font-weight: 600; }
+.totalRow td { background: var(--head); font-weight: 700; }
+
+.line { margin: 0; border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; break-inside: avoid; }
+
+.action th { width: 140px; }
+.action td { height: 70px; }
+
+.writer { margin: 8px 0 0; text-align: right; font-size: 12.5px; }
+.foot { margin: 8px 0 0; padding-top: 6px; border-top: 1px solid #e1e5eb; color: var(--muted); font-size: 11px; line-height: 1.6; }
+
+@media (max-width: 700px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid { font-size: 12px; }
+}
