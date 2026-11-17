@@ -22,7 +22,7 @@ DB = "HR_DATABASE_URL"
 
 # 사원 1명 = employee + 개인정보 + 상태 + 부서명·직급코드·대표 여부
 ROW_SQL = """
-SELECT e.employee_no, e.dept_code, d.dept_name, e.position_name, p.position_code, e.team_code, e.created_at,
+SELECT e.employee_no, e.dept_code, d.dept_name, e.position_name, p.position_code, e.team_code, tm.team_name, e.created_at,
        i.employee_name, i.birth_date, date_part('year', age(i.birth_date))::int AS age, i.gender, i.phone, i.address, i.email,
        s.monthly_overtime_hour, s.annual_leave_used, s.years_of_service,
        (d.department_representative = e.employee_no) AS is_dept_rep,
@@ -30,6 +30,7 @@ SELECT e.employee_no, e.dept_code, d.dept_name, e.position_name, p.position_code
 FROM org.employee e
 JOIN org.department d USING (dept_code)
 JOIN org."position" p USING (position_name)
+LEFT JOIN org.team tm ON tm.team_code = e.team_code
 LEFT JOIN org.employee_info i USING (employee_no)
 LEFT JOIN org.employee_status s USING (employee_no)
 """
@@ -40,7 +41,7 @@ def _load_viewer(conn, employee_no: str) -> Viewer | None:
     r = conn.execute(ROW_SQL + " WHERE e.employee_no = %s", [employee_no]).fetchone()
     if not r:
         return None
-    return Viewer(r["employee_no"], r["dept_code"], r["position_code"], r["team_code"], r["is_team_rep"])
+    return Viewer(r["employee_no"], r["dept_code"], r["position_code"], r["team_code"], r["is_team_rep"], r["team_name"])
 
 
 def current_viewer(x_employee_no: str = Header(..., alias="X-Employee-No")) -> Viewer:
@@ -68,7 +69,7 @@ def _log_access(conn, v: Viewer, action: str, target: str, tier: str, n: int) ->
 def me(v: Viewer = Depends(current_viewer)):
     tier = rules.tier_of(v)
     return {
-        "employee_no": v.employee_no, "dept_code": v.dept_code, "team_code": v.team_code,
+        "employee_no": v.employee_no, "dept_code": v.dept_code, "team_code": v.team_code, "team_name": v.team_name,
         "is_team_rep": v.is_team_rep, "is_hr": v.is_hr,
         "tier": tier, "visible_fields": rules.visible_fields(tier) if tier else [],
         "scope": "all" if v.is_hr else ("team" if tier else "none"),
@@ -81,7 +82,7 @@ def mock_accounts():
     """목업 계정 선택용 (이름·개인정보 없음). ponytail: 로그인 도입 시 삭제"""
     with connect(DB) as conn:
         rows = conn.execute(ROW_SQL + " ORDER BY e.dept_code, p.position_code DESC, e.employee_no").fetchall()
-    return [{k: r[k] for k in ("employee_no", "dept_code", "dept_name", "position_name", "team_code", "is_team_rep")} for r in rows]
+    return [{k: r[k] for k in ("employee_no", "dept_code", "dept_name", "position_name", "team_code", "team_name", "is_team_rep")} for r in rows]
 
 
 @router.get("/summary")
@@ -98,12 +99,12 @@ def summary(v: Viewer = Depends(current_viewer)):
             LEFT JOIN org.employee rp ON rp.employee_no = d.department_representative
             GROUP BY 1, 2, 3, 4 ORDER BY 1""").fetchall()
         teams = conn.execute("""
-            SELECT t.team_code, t.team_representative AS rep_no, rp.position_name AS rep_position, rp.dept_code AS rep_dept,
+            SELECT t.team_code, t.team_name, t.team_representative AS rep_no, rp.position_name AS rep_position, rp.dept_code AS rep_dept,
                    count(e.employee_no) AS headcount
             FROM org.team t
             LEFT JOIN org.employee e ON e.team_code = t.team_code
             LEFT JOIN org.employee rp ON rp.employee_no = t.team_representative
-            GROUP BY 1, 2, 3, 4 ORDER BY 1""").fetchall()
+            GROUP BY 1, 2, 3, 4, 5 ORDER BY 1""").fetchall()
         by_dept = conn.execute("SELECT dept_code AS k, position_name, count(*) AS n FROM org.employee GROUP BY 1, 2").fetchall()
         by_team = conn.execute("""SELECT e.team_code AS k, d.dept_name AS name, count(*) AS n FROM org.employee e
                                   JOIN org.department d USING (dept_code) WHERE e.team_code IS NOT NULL GROUP BY 1, 2""").fetchall()
@@ -196,21 +197,6 @@ def _lock(conn) -> None:
     conn.execute("SELECT pg_advisory_xact_lock(hashtext('jh_hr_employee_write'))")
 
 
-def _sync_rosters(conn, no: str, dept: int, team: int | None, position_code: int, is_dept_rep: bool, is_team_rep: bool) -> None:
-    """부서·팀 명단과 access_code 를 employee 와 같게 맞춤 (org 시드 규칙)"""
-    conn.execute("DELETE FROM org.dept_roster WHERE employee_no = %s", [no])
-    conn.execute("INSERT INTO org.dept_roster (dept_roster_idx, dept_code, employee_no) VALUES (%s,%s,%s)",
-                 [_next_idx(conn, "dept_roster"), dept, no])
-    conn.execute("DELETE FROM org.team_roster WHERE employee_no = %s", [no])
-    if team:
-        conn.execute("INSERT INTO org.team_roster (team_roster_idx, team_code, employee_no) VALUES (%s,%s,%s)",
-                     [_next_idx(conn, "team_roster"), team, no])
-    code = rules.access_code_of(dept, position_code, team, is_dept_rep, is_team_rep)
-    if conn.execute("UPDATE org.access_code SET access_code = %s WHERE employee_no = %s", [code, no]).rowcount == 0:
-        conn.execute("INSERT INTO org.access_code (access_code_idx, employee_no, access_code) VALUES (%s,%s,%s)",
-                     [_next_idx(conn, "access_code"), no, code])
-
-
 @router.post("/employees", status_code=201)
 def create_employee(body: EmployeeIn, v: Viewer = Depends(current_viewer)):
     if not rules.can_create(v):
@@ -224,7 +210,7 @@ def create_employee(body: EmployeeIn, v: Viewer = Depends(current_viewer)):
     try:
         with connect(DB) as conn:              # 한 트랜잭션: 하나라도 실패하면 전부 취소
             _lock(conn)
-            pcode = _check_refs(conn, body.dept_code, body.position_name, body.team_code)
+            _check_refs(conn, body.dept_code, body.position_name, body.team_code)
             existing = [r["employee_no"] for r in conn.execute("SELECT employee_no FROM org.employee").fetchall()]
             no = rules.next_employee_no(existing)
             conn.execute("""INSERT INTO org.employee (employee_idx, employee_no, dept_code, position_name, team_code)
@@ -236,7 +222,7 @@ def create_employee(body: EmployeeIn, v: Viewer = Depends(current_viewer)):
                           d["phone"].strip(), d["address"].strip(), d["email"].strip()])
             conn.execute("""INSERT INTO org.employee_status (employee_status_idx, employee_no, annual_leave_used, years_of_service)
                             VALUES (%s,%s,0,0)""", [_next_idx(conn, "employee_status"), no])
-            _sync_rosters(conn, no, body.dept_code, body.team_code, pcode, False, False)
+            # 부서·팀 명단과 access_code 는 DB 트리거(org.trg_employee_sync)가 employee INSERT 때 자동 생성
             _log_access(conn, v, "create", no, rules.tier_of(v) or "basic", 1)
             r = conn.execute(ROW_SQL + " WHERE e.employee_no = %s", [no]).fetchone()
     except ValueError as e:                    # 사번 e9999 초과
@@ -261,7 +247,7 @@ def update_employee(employee_no: str, body: EmployeePatch, v: Viewer = Depends(c
         new = {k: d.get(k, cur[k]) for k in ("dept_code", "position_name", "team_code")}
         if not rules.can_write_team(v, new["team_code"]):
             raise HTTPException(403, {"team_code": "팀 대표는 자기 팀 밖으로 옮길 수 없습니다."})
-        pcode = _check_refs(conn, new["dept_code"], new["position_name"], new["team_code"])
+        _check_refs(conn, new["dept_code"], new["position_name"], new["team_code"])
         conn.execute("UPDATE org.employee SET dept_code = %s, position_name = %s, team_code = %s WHERE employee_no = %s",
                      [new["dept_code"], new["position_name"], new["team_code"], employee_no])
         info = {k: (d[k].strip() if isinstance(d[k], str) else d[k])
@@ -271,8 +257,7 @@ def update_employee(employee_no: str, body: EmployeePatch, v: Viewer = Depends(c
         if info:
             sets = ", ".join(f"{k} = %s" for k in info)
             conn.execute(f"UPDATE org.employee_info SET {sets} WHERE employee_no = %s", [*info.values(), employee_no])
-        if any(k in d for k in ("dept_code", "position_name", "team_code")):
-            _sync_rosters(conn, employee_no, new["dept_code"], new["team_code"], pcode, cur["is_dept_rep"], cur["is_team_rep"])
+        # 부서·직급·팀이 바뀌면 명단과 access_code 는 DB 트리거(org.trg_employee_sync)가 다시 맞춤
         _log_access(conn, v, "update", employee_no, rules.tier_of(v) or "basic", 1)
         r = conn.execute(ROW_SQL + " WHERE e.employee_no = %s", [employee_no]).fetchone()
     log.info("사원 수정 %s by %s (%s)", employee_no, v.employee_no, ",".join(d))

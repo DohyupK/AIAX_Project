@@ -7,18 +7,18 @@ const BASE = process.env.NEXT_PUBLIC_HR_API_BASE_URL ?? 'http://127.0.0.1:8000';
 export type Tier = 'basic' | 'manage' | 'hr';
 
 export interface Me {
-  employee_no: string; dept_code: number; team_code: number | null; is_team_rep: boolean; is_hr: boolean;
+  employee_no: string; dept_code: number; team_code: number | null; team_name: string | null; is_team_rep: boolean; is_hr: boolean;
   tier: Tier | null; visible_fields: string[]; scope: 'all' | 'team' | 'none'; can_create: boolean;
 }
 export interface MockAccount {
-  employee_no: string; dept_code: number; dept_name: string; position_name: string; team_code: number | null; is_team_rep: boolean;
+  employee_no: string; dept_code: number; dept_name: string; position_name: string; team_code: number | null; team_name: string | null; is_team_rep: boolean;
 }
 export interface DeptSummary {
   dept_code: number; dept_name: string; rep_no: string | null; rep_position: string | null; headcount: number;
   by_position: Record<string, number>; can_view: boolean;
 }
 export interface TeamSummary {
-  team_code: number; rep_no: string | null; rep_position: string | null; rep_dept: number | null; headcount: number;
+  team_code: number; team_name: string; rep_no: string | null; rep_position: string | null; rep_dept: number | null; headcount: number;
   by_dept: Record<string, number>; can_view: boolean;
 }
 export interface Summary {
@@ -29,7 +29,7 @@ export interface Summary {
 /** 권한 등급에 따라 칼럼이 빠져서 옴 — 없는 칼럼은 볼 권한 없음 */
 export interface Employee {
   employee_no: string; employee_name: string; dept_code: number; dept_name: string;
-  position_name: string; position_code: number; team_code: number | null; email: string;
+  position_name: string; position_code: number; team_code: number | null; team_name: string | null; email: string;
   is_dept_rep: boolean; is_team_rep: boolean; can_edit: boolean;
   phone?: string; years_of_service?: number | null; annual_leave_used?: number | null; monthly_overtime_hour?: number | null;
   // age = 서버가 birth_date 로 계산한 만 나이
@@ -79,7 +79,7 @@ export const hrApi = {
 
 /** 화면 표시용 칼럼 이름 (서버가 보낸 칼럼만 표시) */
 export const FIELD_LABEL: Record<string, string> = {
-  employee_no: '사번', employee_name: '이름', dept_name: '부서', position_name: '직급', team_code: '팀', email: '사내 이메일',
+  employee_no: '사번', employee_name: '이름', dept_name: '부서', position_name: '직급', team_code: '팀 코드', team_name: '팀', email: '사내 이메일',
   phone: '전화번호', years_of_service: '근속연수', annual_leave_used: '연차 사용', monthly_overtime_hour: '월 초과근무(시간)',
   age: '나이', birth_date: '생년월일', gender: '성별', address: '주소', created_at: '등록 일시',
 };
