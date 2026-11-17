@@ -1,0 +1,17 @@
+# 서버에 복사: /etc/systemd/system/myapp.service
+# 적용: systemctl daemon-reload && systemctl enable --now myapp
+# 원커맨드: systemctl restart myapp
+
+[Unit]
+Description=AIAX Next(:3000) + JH API(:8000) via tmux myapp
+After=network.target docker.service
+
+[Service]
+Type=forking
+WorkingDirectory=/root/AIAX_Project
+ExecStart=/root/AIAX_Project/scripts/dev-up.sh
+ExecStop=/usr/bin/tmux kill-session -t myapp
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
