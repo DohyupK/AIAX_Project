@@ -4,6 +4,7 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-17 | 인사 관리: org DB 개편 대응 — 생년월일 입력·나이 자동 계산, 새 부서·직급·팀 코드·사번·권한 코드 규칙 | [hr_management](../기능표.md#인사-관리-hr_management) |
 | 2026-11-17 | 보호구 착용 위반 대시보드: 명칭·경로 변경(/safety/ppe-violation), 업체 필터·정렬, 우측 상단 「위반 보고서」 → 월별 목록 → 출력본 양식 보고서·PDF 출력 (업로드 삭제) | [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |
 | 2026-11-17 | Model Management: 배포 버튼 → localStorage → 대시보드 활성 모델명 연동 (추론 미연동) | [model_management](../기능표.md#model-management-model_management) |
 | 2026-11-17 | Model Management: TM DieCasting 56건 목업·명명 규칙 반영 (DH 허가) | [model_management](../기능표.md#model-management-model_management) |

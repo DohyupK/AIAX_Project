@@ -7,18 +7,18 @@ const BASE = process.env.NEXT_PUBLIC_HR_API_BASE_URL ?? 'http://127.0.0.1:8000';
 export type Tier = 'basic' | 'manage' | 'hr';
 
 export interface Me {
-  employee_no: string; dept_code: string; team_code: string | null; is_team_rep: boolean; is_hr: boolean;
+  employee_no: string; dept_code: number; team_code: number | null; is_team_rep: boolean; is_hr: boolean;
   tier: Tier | null; visible_fields: string[]; scope: 'all' | 'team' | 'none'; can_create: boolean;
 }
 export interface MockAccount {
-  employee_no: string; dept_code: string; dept_name: string; position_name: string; team_code: string | null; is_team_rep: boolean;
+  employee_no: string; dept_code: number; dept_name: string; position_name: string; team_code: number | null; is_team_rep: boolean;
 }
 export interface DeptSummary {
-  dept_code: string; dept_name: string; rep_no: string | null; rep_position: string | null; headcount: number;
+  dept_code: number; dept_name: string; rep_no: string | null; rep_position: string | null; headcount: number;
   by_position: Record<string, number>; can_view: boolean;
 }
 export interface TeamSummary {
-  team_code: string; rep_no: string | null; rep_position: string | null; rep_dept: string | null; headcount: number;
+  team_code: number; rep_no: string | null; rep_position: string | null; rep_dept: number | null; headcount: number;
   by_dept: Record<string, number>; can_view: boolean;
 }
 export interface Summary {
@@ -28,15 +28,16 @@ export interface Summary {
 }
 /** 권한 등급에 따라 칼럼이 빠져서 옴 — 없는 칼럼은 볼 권한 없음 */
 export interface Employee {
-  employee_no: string; employee_name: string; dept_code: string; dept_name: string;
-  position_name: string; position_code: number; team_code: string | null; email: string;
+  employee_no: string; employee_name: string; dept_code: number; dept_name: string;
+  position_name: string; position_code: number; team_code: number | null; email: string;
   is_dept_rep: boolean; is_team_rep: boolean; can_edit: boolean;
   phone?: string; years_of_service?: number | null; annual_leave_used?: number | null; monthly_overtime_hour?: number | null;
-  age?: number; gender?: string; address?: string; created_at?: string;
+  // age = 서버가 birth_date 로 계산한 만 나이
+  age?: number | null; birth_date?: string | null; gender?: string; address?: string; created_at?: string;
 }
 export interface EmployeeInput {
-  dept_code: string; position_name: string; team_code: string | null;
-  employee_name: string; age: number; gender: string; phone: string; address: string; email: string;
+  dept_code: number; position_name: string; team_code: number | null;
+  employee_name: string; birth_date: string; gender: string; phone: string; address: string; email: string;
 }
 
 /** 서버 오류 — fields: 항목별 오류 문구 (입력 검증 실패 시) */
@@ -70,7 +71,7 @@ export const hrApi = {
   mockAccounts: () => call<MockAccount[]>('', 'GET', '/mock-accounts'),
   me: (who: string) => call<Me>(who, 'GET', '/me'),
   summary: (who: string) => call<Summary>(who, 'GET', '/summary'),
-  list: (who: string, by: 'dept' | 'team', key: string) => call<Employee[]>(who, 'GET', `/employees?${by}=${encodeURIComponent(key)}`),
+  list: (who: string, by: 'dept' | 'team', key: number) => call<Employee[]>(who, 'GET', `/employees?${by}=${key}`),
   create: (who: string, body: EmployeeInput) => call<Employee>(who, 'POST', '/employees', body),
   update: (who: string, no: string, body: Partial<EmployeeInput>) => call<Employee>(who, 'PATCH', `/employees/${encodeURIComponent(no)}`, body),
   remove: (who: string, no: string) => call<void>(who, 'DELETE', `/employees/${encodeURIComponent(no)}`),
@@ -80,7 +81,7 @@ export const hrApi = {
 export const FIELD_LABEL: Record<string, string> = {
   employee_no: '사번', employee_name: '이름', dept_name: '부서', position_name: '직급', team_code: '팀', email: '사내 이메일',
   phone: '전화번호', years_of_service: '근속연수', annual_leave_used: '연차 사용', monthly_overtime_hour: '월 초과근무(시간)',
-  age: '나이', gender: '성별', address: '주소', created_at: '등록 일시',
+  age: '나이', birth_date: '생년월일', gender: '성별', address: '주소', created_at: '등록 일시',
 };
 export const TIER_LABEL: Record<Tier, string> = { basic: '기본', manage: '관리', hr: '인사(전체)' };
 export const GENDER_LABEL: Record<string, string> = { M: '남', F: '여', other: '기타' };

@@ -10,7 +10,7 @@ import s from './HrManagement.module.css';
 
 type By = 'dept' | 'team';
 const ACCOUNT_KEY = 'jh.hr.mock_employee_no';   // 목업 계정 선택 기억 (로그인 전 전용)
-const DEFAULT_ACCOUNT = 'E10001';               // 경영부 부장
+const DEFAULT_ACCOUNT = 'e0002';                // 경영부 부장 (org 2026-11-17 개편 사번)
 const DETAIL_FIELDS = ['employee_no', 'employee_name', 'dept_name', 'position_name', 'team_code', 'email', 'phone',
   'years_of_service', 'annual_leave_used', 'monthly_overtime_hour', 'age', 'gender', 'address', 'created_at'];
 
@@ -29,7 +29,7 @@ export default function HrManagement() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [by, setBy] = useState<By>('dept');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [form, setForm] = useState<{ mode: 'create' } | { mode: 'edit'; emp: Employee } | null>(null);
   const [version, setVersion] = useState(0);     // 추가·수정·삭제 후 다시 조회
@@ -37,7 +37,8 @@ export default function HrManagement() {
   useEffect(() => {
     let saved: string | null = null;
     try { saved = localStorage.getItem(ACCOUNT_KEY); } catch { /* 저장소 막힘 → 기본 계정 */ }
-    setWho(saved || DEFAULT_ACCOUNT);
+    // 개편 전 사번(E10001 등)이 저장돼 있으면 버리고 기본 계정으로
+    setWho(saved && /^e\d{4}$/.test(saved) ? saved : DEFAULT_ACCOUNT);
     hrApi.mockAccounts().then(setAccounts).catch((e: Error) => setError(e.message));
   }, []);
 
@@ -144,7 +145,7 @@ export default function HrManagement() {
 
       {listOpen && current && me && (
         <ListDialog who={who} me={me} by={by} keyValue={keyOf(current)}
-          title={'dept_name' in current ? current.dept_name : current.team_code} version={version}
+          title={'dept_name' in current ? current.dept_name : `${current.team_code}팀`} version={version}
           onEdit={emp => setForm({ mode: 'edit', emp })} onChanged={refresh} onClose={() => setListOpen(false)} />
       )}
       {form && me && summary && (
@@ -165,7 +166,7 @@ function useEscape(onClose: () => void) {
 
 /** 명단 팝업 — 직급 높은 순(서버 정렬). 행을 누르면 상세 */
 function ListDialog({ who, me, by, keyValue, title, version, onEdit, onChanged, onClose }: {
-  who: string; me: Me; by: By; keyValue: string; title: string; version: number;
+  who: string; me: Me; by: By; keyValue: number; title: string; version: number;
   onEdit: (e: Employee) => void; onChanged: () => void; onClose: () => void;
 }) {
   const [rows, setRows] = useState<Employee[] | null>(null);
@@ -265,11 +266,12 @@ function EmployeeForm({ who, me, summary, editing, onClose, onSaved }: {
 }) {
   const teamLocked = !me.is_hr;
   const [v, setV] = useState({
-    dept_code: editing?.dept_code ?? (teamLocked ? me.dept_code : ''),
+    // select 값은 문자열 → 저장할 때 숫자로 바꿈
+    dept_code: String(editing?.dept_code ?? (teamLocked ? me.dept_code : '')),
     position_name: editing?.position_name ?? '',
-    team_code: editing ? editing.team_code ?? '' : teamLocked ? me.team_code ?? '' : '',
+    team_code: String(editing ? editing.team_code ?? '' : teamLocked ? me.team_code ?? '' : ''),
     employee_name: editing?.employee_name ?? '',
-    age: editing?.age != null ? String(editing.age) : '',
+    birth_date: editing?.birth_date ?? '',
     gender: editing?.gender ?? '',
     phone: editing?.phone ?? '',
     address: editing?.address ?? '',
@@ -288,8 +290,8 @@ function EmployeeForm({ who, me, summary, editing, onClose, onSaved }: {
     e.preventDefault();
     setSaving(true); setErrors({}); setMessage(null);
     const body: EmployeeInput = {
-      dept_code: v.dept_code, position_name: v.position_name, team_code: v.team_code || null,
-      employee_name: v.employee_name, age: Number(v.age), gender: v.gender, phone: v.phone, address: v.address, email: v.email,
+      dept_code: Number(v.dept_code), position_name: v.position_name, team_code: v.team_code ? Number(v.team_code) : null,
+      employee_name: v.employee_name, birth_date: v.birth_date, gender: v.gender, phone: v.phone, address: v.address, email: v.email,
     };
     try {
       if (editing) {
@@ -351,7 +353,8 @@ function EmployeeForm({ who, me, summary, editing, onClose, onSaved }: {
           </div>
           <div className={cd.row3}>
             {field('employee_name', '이름', <input value={v.employee_name} maxLength={50} onChange={set('employee_name')} aria-invalid={!!errors.employee_name} />)}
-            {field('age', '나이', <input type="number" min={15} max={100} value={v.age} onChange={set('age')} aria-invalid={!!errors.age} />)}
+            {/* 나이는 서버가 생년월일로 계산 (만 15~100세만 허용) */}
+            {field('birth_date', '생년월일', <input type="date" value={v.birth_date} max={new Date().toLocaleDateString('sv-SE')} onChange={set('birth_date')} aria-invalid={!!errors.birth_date} />)}
             {field('gender', '성별', (
               <select value={v.gender} onChange={set('gender')} aria-invalid={!!errors.gender}>
                 <option value="">선택</option>

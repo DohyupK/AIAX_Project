@@ -37,3 +37,10 @@
 - 적용 SQL: [`JH/전달사항/sql/2026-11-16_lake_sync_setup.sql`](../JH/전달사항/sql/2026-11-16_lake_sync_setup.sql), [`JH/전달사항/sql/2026-11-16_hr_api_setup.sql`](../JH/전달사항/sql/2026-11-16_hr_api_setup.sql)
 - MS 요청: 위 SQL `MS/db/init/` 반영, `app_hr` 를 `00_roles.sh` 에 추가, 루트 `DB구조.md` 갱신, 실행기·Spark 작업 ([전달 문서](../JH/전달사항/2026-11-16_MS_mes변경시_lake자동갱신_요청.md))
 - 검증 시 시험 사원 `E30019` 를 추가→수정→삭제함 → `org.change_log` 에 I/U/D 기록과 `org.hr_access_log` 에 시험 조회 기록이 남아 있음 (데이터는 원래 53명으로 복구됨, Spark 반영 시 순 변화 없음)
+
+## 변경 (2026-11-17) — org DB 개편 대응
+
+- `org.employee_info`: `age` 열 삭제, `birth_date`(date) 추가 → API는 `age(birth_date)` 로 만 나이를 계산해 내려주고, 추가·수정 시 `birth_date` 저장
+- 코드 체계: 부서 1000~7000(경영부 1000), 직급 10000(인턴)~70000(소장), 팀 10~60(정수), 사번 `e0001`~ 일련번호
+- `org.access_code` = 직급코드 + 부서코드 + 팀코드 + 부서 대표 100 + 팀 대표 1 (2026-11-17 DB 54명 대조 일치)
+- 검증 시 로컬 API로 조회 시험 → `org.hr_access_log` 에 시험 조회 기록 약 10건 남음 (데이터 변경 없음, 추가 시도는 모두 검증 단계에서 거부)
