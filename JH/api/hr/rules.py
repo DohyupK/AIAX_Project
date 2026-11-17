@@ -27,7 +27,7 @@ MANAGER_CODE = 40000      # 과장 이상
 # 등급별로 "추가로" 보이는 칼럼. 위 등급은 아래 등급 칼럼을 모두 포함
 FIELD_TIERS: dict[str, tuple[str, ...]] = {
     "basic": ("employee_no", "employee_name", "dept_code", "dept_name", "position_name", "position_code",
-              "team_code", "email", "is_dept_rep", "is_team_rep"),
+              "team_code", "team_name", "email", "is_dept_rep", "is_team_rep"),
     "manage": ("phone", "years_of_service", "annual_leave_used", "monthly_overtime_hour"),
     "hr": ("age", "birth_date", "gender", "address", "created_at"),  # age = birth_date 로 계산한 만 나이
 }
@@ -41,6 +41,7 @@ class Viewer:
     position_code: int
     team_code: int | None
     is_team_rep: bool
+    team_name: str | None = None   # 표시용 (casting1 … tf)
 
     @property
     def is_intern(self) -> bool:
@@ -110,11 +111,6 @@ def next_employee_no(existing: list[str]) -> str:
     if nxt > 9999:
         raise ValueError("사번이 가득 찼습니다 (e9999).")
     return f"e{nxt:04d}"
-
-
-def access_code_of(dept_code: int, position_code: int, team_code: int | None, is_dept_rep: bool, is_team_rep: bool) -> int:
-    """org 규칙: 직급코드 + 부서코드 + 팀코드 + 부서 대표 100 + 팀 대표 1. 예: 생산부 차장·30팀·부서/팀 대표 = 53131"""
-    return position_code + dept_code + (team_code or 0) + (100 if is_dept_rep else 0) + (1 if is_team_rep else 0)
 
 
 GENDERS = ("M", "F", "other")
