@@ -17,7 +17,7 @@ const SECTIONS: IndexSection[] = [
       { label: "불량 유형 라벨링", href: "/casting/defect-labeling" },
     ],
   },
-  { title: "작업자 안전 관리 대시보드", href: "/safety/worker-safety", items: [] },
+  { title: "보호구 착용 위반 대시보드", href: "/safety/ppe-violation", items: [] },
   { title: "인사 관리", href: "/hr", items: [] },
   { title: "경영 관리자 리포트", href: "/management-report", items: [] },
   { title: "Model Management", href: "/model-management", items: [] },

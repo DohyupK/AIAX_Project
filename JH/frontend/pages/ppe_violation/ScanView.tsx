@@ -1,4 +1,4 @@
-import styles from "./WorkerSafety.module.css";
+import styles from "./PpeViolation.module.css";
 import { GEAR_LABEL, type Gear, type GearStatus } from "./rules";
 
 // 촬영 이미지 자리 — DL 연동 전 실루엣 + 장구별 고정 박스. 연동 시 <image> + 모델 bbox 좌표로 교체

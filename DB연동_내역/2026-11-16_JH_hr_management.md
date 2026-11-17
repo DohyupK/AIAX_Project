@@ -52,3 +52,9 @@
 | `access_code`·`dept_roster`·`team_roster`를 앱이 직접 맞춤 | DB 트리거가 자동으로 맞춤 (employee만 바꾸면 됨) |
 | `app_hr` 계정·권한 | `MS/db/init/00_roles.sh`, `09_org_permission.sql`에 반영 (MS 요청 처리 완료) |
 | `hr_access_log` | 구조 그대로, `09`에 포함 |
+## 변경 (2026-11-17) — org DB 개편 대응
+
+- `org.employee_info`: `age` 열 삭제, `birth_date`(date) 추가 → API는 `age(birth_date)` 로 만 나이를 계산해 내려주고, 추가·수정 시 `birth_date` 저장
+- 코드 체계: 부서 1000~7000(경영부 1000), 직급 10000(인턴)~70000(소장), 팀 10~60(정수), 사번 `e0001`~ 일련번호
+- `org.access_code` = 직급코드 + 부서코드 + 팀코드 + 부서 대표 100 + 팀 대표 1 (2026-11-17 DB 54명 대조 일치)
+- 검증 시 로컬 API로 조회 시험 → `org.hr_access_log` 에 시험 조회 기록 약 10건 남음 (데이터 변경 없음, 추가 시도는 모두 검증 단계에서 거부)

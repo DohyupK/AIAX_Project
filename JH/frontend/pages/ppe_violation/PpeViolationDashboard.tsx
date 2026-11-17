@@ -1,31 +1,53 @@
 "use client";
 import { useState } from "react";
-import styles from "./WorkerSafety.module.css";
+import styles from "./PpeViolation.module.css";
 import ScanView from "./ScanView";
+import ViolationReports from "./ViolationReports";
 import { SCAN_RECORDS, type ScanRecord } from "./data";
-import { GEAR_LABEL, gearStatus, missingGear, violationMessage, type Gate } from "./rules";
-import { openCompanyReport, type ReportRow } from "./report";
+import { GEAR_LABEL, gearStatus, missingGear, violationMessage, type Gate, type Gear } from "./rules";
 
 type Filter = "all" | "pass" | "fail";
+type SortKey = "time_desc" | "time_asc" | "company" | "gate" | "result";
 
+const SORT_LABEL: Record<SortKey, string> = {
+  time_desc: "시간 최신순",
+  time_asc: "시간 오래된순",
+  company: "업체명순",
+  gate: "Gate순",
+  result: "위반 먼저",
+};
+
+type Row = ScanRecord & { missing: Gear[]; pass: boolean };
 // 기록별 판정 결과를 한 번만 계산
-const ROWS: ReportRow[] = SCAN_RECORDS.map((r) => {
+const ROWS: Row[] = SCAN_RECORDS.map((r) => {
   const missing = missingGear(r.gate, r.detected);
   return { ...r, missing, pass: missing.length === 0 };
 });
-type Row = ReportRow;
 const COMPANIES = [...new Set(ROWS.map((r) => r.company))];
 
+const stamp = (r: Row) => `${r.date} ${r.time}`;
+// 같은 값이면 최신순으로 이어서 정렬
+const SORTERS: Record<SortKey, (a: Row, b: Row) => number> = {
+  time_desc: (a, b) => stamp(b).localeCompare(stamp(a)),
+  time_asc: (a, b) => stamp(a).localeCompare(stamp(b)),
+  company: (a, b) => a.company.localeCompare(b.company, "ko") || SORTERS.time_desc(a, b),
+  gate: (a, b) => a.gate.localeCompare(b.gate) || SORTERS.time_desc(a, b),
+  result: (a, b) => Number(a.pass) - Number(b.pass) || SORTERS.time_desc(a, b),
+};
+
 /**
- * 작업자 안전 관리 대시보드 (/safety/worker-safety) — 안전 작업 관리자(소장)용
+ * 보호구 착용 위반 대시보드 (/safety/ppe-violation) — 안전 작업 관리자(소장)용
  * 게이트 카드 태깅 → 카메라 SCAN(DL) → 게이트별 필수 장구 확인 → 개찰구 개방/잠금 기록을 보여줌
  */
-export default function WorkerSafetyDashboard() {
+export default function PpeViolationDashboard() {
   const [filter, setFilter] = useState<Filter>("all");
   const [gate, setGate] = useState<Gate | "all">("all");
+  const [companyFilter, setCompanyFilter] = useState("all");
+  const [sort, setSort] = useState<SortKey>("time_desc");
   const [selectedId, setSelectedId] = useState<number | undefined>(ROWS[0]?.id);
   // 회사 출입 현황 칸에서 보는 회사 — 기본은 선택한 기록의 회사, 행을 바꾸면 그 회사로 돌아감
   const [company, setCompany] = useState(ROWS[0]?.company ?? "");
+  const [reportsOpen, setReportsOpen] = useState(false);
 
   function selectRow(r: Row) {
     setSelectedId(r.id);
@@ -33,14 +55,21 @@ export default function WorkerSafetyDashboard() {
   }
 
   const selected: Row | undefined = ROWS.find((r) => r.id === selectedId);
-  // 게이트 필터 → 결과 필터 순서. 결과 버튼 건수는 선택한 게이트 기준
-  const gateRows = ROWS.filter((r) => gate === "all" || r.gate === gate);
-  const visible = gateRows.filter((r) => filter === "all" || (filter === "pass") === r.pass);
-  const passCount = gateRows.filter((r) => r.pass).length;
-  const counts: Record<Filter, number> = { all: gateRows.length, pass: passCount, fail: gateRows.length - passCount };
+  // 게이트·업체 필터 → 결과 필터 → 정렬. 결과 버튼 건수는 게이트·업체 기준
+  const scopedRows = ROWS.filter((r) => (gate === "all" || r.gate === gate) && (companyFilter === "all" || r.company === companyFilter));
+  const visible = scopedRows.filter((r) => filter === "all" || (filter === "pass") === r.pass).sort(SORTERS[sort]);
+  const passCount = scopedRows.filter((r) => r.pass).length;
+  const counts: Record<Filter, number> = { all: scopedRows.length, pass: passCount, fail: scopedRows.length - passCount };
 
   return (
     <div className={styles.page}>
+      <div className={styles.topBar}>
+        <button type="button" className={`${styles.filterBtn} ${styles.primaryBtn}`} onClick={() => setReportsOpen(true)}>
+          위반 보고서
+        </button>
+      </div>
+      {reportsOpen && <ViolationReports onClose={() => setReportsOpen(false)} />}
+
       {selected ? (
         <Detail row={selected} company={company} onCompanyChange={setCompany} />
       ) : (
@@ -69,6 +98,17 @@ export default function WorkerSafetyDashboard() {
             ))}
           </div>
           <span className={`${styles.sub} ${styles.hint}`}>행을 누르면 위에 상세가 표시됩니다.</span>
+          <select className={styles.select} value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} aria-label="업체 필터">
+            <option value="all">전체 업체</option>
+            {COMPANIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <select className={styles.select} value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="정렬">
+            {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+              <option key={k} value={k}>{SORT_LABEL[k]}</option>
+            ))}
+          </select>
           <div className={styles.filters} role="group" aria-label="게이트 필터">
             {(
               [
@@ -138,16 +178,10 @@ export default function WorkerSafetyDashboard() {
 /** 선택한 기록의 촬영 이미지 + 판정 상세 */
 function Detail({ row, company, onCompanyChange }: { row: Row; company: string; onCompanyChange: (c: string) => void }) {
   const gears = gearStatus(row.gate, row.detected);
-  // 회사 전체 기록 기준 (게이트·결과 필터와 무관)
-  const companyRows = ROWS.filter((r) => r.company === company);
+  // 회사 전체 기록 기준 (게이트·결과 필터와 무관), 최신순
+  const companyRows = ROWS.filter((r) => r.company === company).sort(SORTERS.time_desc);
   const companyPass = companyRows.filter((r) => r.pass).length;
 
-  function printReport() {
-    if (!openCompanyReport(company, companyRows)) {
-      console.warn("[worker_safety] 보고서 창 열기 실패 (팝업 차단)");
-      alert("보고서 창이 차단되었습니다. 브라우저 주소창의 팝업 차단을 해제한 뒤 다시 눌러 주세요.");
-    }
-  }
   return (
     <section className={`${styles.card} ${styles.detail}`} aria-label="선택한 검색 기록 상세">
       <div className={styles.scanCol}>
@@ -202,9 +236,6 @@ function Detail({ row, company, onCompanyChange }: { row: Row; company: string; 
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
-                <button type="button" className={`${styles.filterBtn} ${styles.smallBtn}`} onClick={printReport}>
-                  보고서
-                </button>
               </div>
             </div>
             <p className={styles.companyName}>
@@ -215,7 +246,7 @@ function Detail({ row, company, onCompanyChange }: { row: Row; company: string; 
               <div className={`${styles.stat} ${styles.statOk}`}><span>통과</span><b>{companyPass}</b></div>
               <div className={`${styles.stat} ${styles.statBad}`}><span>위반</span><b>{companyRows.length - companyPass}</b></div>
             </div>
-            {/* 인원 목록 — 보기 전용, 최신순(ROWS 순서). 길면 칸 안에서만 스크롤 */}
+            {/* 인원 목록 — 보기 전용, 최신순. 길면 칸 안에서만 스크롤 */}
             <div className={styles.peopleWrap}>
               <ul className={styles.people} aria-label={`${company} 출입 기록`}>
                 {companyRows.map((r) => (
