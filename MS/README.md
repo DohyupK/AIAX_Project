@@ -22,6 +22,7 @@
 |------|------|------|
 | DB·데이터 파이프라인 인프라 (PostgreSQL 18.6, Kafka 3.9.2, Spark 4.2.1, Flink 2.2.1) | [`db/`](db/README.md) | 구축·검증 완료 |
 | 주조 데이터셋 DB 적재 (mes·lake·mart, 데이터 덤프 포함) | [`db/`](db/README.md) | 적재·검증 완료 (2026-11-07) |
+| 조직·권한 DB 새 구조 (org: 접근 코드·페이지 권한·트리거·목업) | [`db/init/09`](db/init/09_org_permission.sql)·[`10`](db/init/10_org_permission_seed.sql), [`전달사항/2026-11-17_org_새구조`](전달사항/2026-11-17_org_새구조/) | 서버 적용 완료 (2026-11-17) |
 
 ## 다른 폴더
 

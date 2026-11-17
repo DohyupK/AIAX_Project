@@ -38,6 +38,20 @@
 - MS 요청: 위 SQL `MS/db/init/` 반영, `app_hr` 를 `00_roles.sh` 에 추가, 루트 `DB구조.md` 갱신, 실행기·Spark 작업 ([전달 문서](../JH/전달사항/2026-11-16_MS_mes변경시_lake자동갱신_요청.md))
 - 검증 시 시험 사원 `E30019` 를 추가→수정→삭제함 → `org.change_log` 에 I/U/D 기록과 `org.hr_access_log` 에 시험 조회 기록이 남아 있음 (데이터는 원래 53명으로 복구됨, Spark 반영 시 순 변화 없음)
 
+---
+
+## 2026-11-17 org 구조 변경 영향 (MS 추가)
+
+서버 `org`가 새 구조로 바뀌어 이 기록의 일부 테이블·컬럼 이름이 달라졌습니다. 앱 수정 안내는 [`MS/전달사항/2026-11-17_org_새구조/02 팀원 전달 사항.md`](../MS/전달사항/2026-11-17_org_새구조/) 참고.
+
+| 이 기록의 내용 | 새 구조 |
+|---|---|
+| `employee_info.age` | 삭제 → `birth_date` (나이는 조회 때 계산) |
+| 사번 `E10001` 형식 | `e0001` ~ `e0054` |
+| `dept_code` text, `team_code` text | integer (`team_name` 추가) |
+| `access_code`·`dept_roster`·`team_roster`를 앱이 직접 맞춤 | DB 트리거가 자동으로 맞춤 (employee만 바꾸면 됨) |
+| `app_hr` 계정·권한 | `MS/db/init/00_roles.sh`, `09_org_permission.sql`에 반영 (MS 요청 처리 완료) |
+| `hr_access_log` | 구조 그대로, `09`에 포함 |
 ## 변경 (2026-11-17) — org DB 개편 대응
 
 - `org.employee_info`: `age` 열 삭제, `birth_date`(date) 추가 → API는 `age(birth_date)` 로 만 나이를 계산해 내려주고, 추가·수정 시 `birth_date` 저장
