@@ -1,23 +1,20 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./ModelManagement.module.css";
-import { PROCESS, type Metrics, type Model, type Process } from "./data";
-import { buildModelName, createdAtNow, validateDraft, type Draft, type Errors } from "./logic";
+import { METRIC_LABEL, PROCESS, PROCESS_METRICS, type Process } from "./data";
+import { validateDraft, type Draft, type Errors } from "./logic";
 
-// 서버 연동 전: 파일은 이름만 기록 (실제 업로드 없음)
+// 파일은 이름만 확인 (실제 업로드 없음 — 서버 저장 폴더는 DH 결정)
 const ALLOWED_EXT = [".pkl", ".pt", ".onnx", ".joblib"];
-const METRIC_FIELDS: { key: keyof Metrics; label: string }[] = [
-  { key: "accuracy", label: "Accuracy" },
-  { key: "recall", label: "Recall" },
-  { key: "precision", label: "Precision" },
-  { key: "f1", label: "F1-Score" },
-];
+// ponytail: ai 쓰기 계정(MS) 전이라 저장 안 함 — 입력 검사만. 계정이 생기면 submit 에서 POST /api/models 호출
+const SAVE_BLOCKED = "DB 쓰기 계정 연결 전이라 아직 저장할 수 없습니다. 입력값 검사만 했습니다.";
 
-const EMPTY: Draft = { name: "", version: "", process: "", description: "", accuracy: "", recall: "", precision: "", f1: "" };
+const EMPTY: Draft = { name: "", version: "", process: "", description: "", accuracy: "", prAuc: "", recall: "", precision: "", f1: "" };
 
-/** 모델 등록 팝업 — 등록 시 onSubmit(새 모델, id 제외) */
-export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; onSubmit: (m: Omit<Model, "id">) => void }) {
+/** 모델 등록 팝업 — 지금은 입력 검사까지 (DB 저장은 쓰기 계정 연결 후) */
+export default function ModelForm({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [blocked, setBlocked] = useState(false);
   const [fileName, setFileName] = useState("");
   const [errors, setErrors] = useState<Errors>({});
   const firstRef = useRef<HTMLSelectElement>(null);
@@ -36,6 +33,7 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
   const set = (key: keyof Draft, value: string) => {
     setDraft((d) => ({ ...d, [key]: value }));
     setErrors((e) => ({ ...e, [key]: undefined }));
+    setBlocked(false);
   };
 
   function onFile(file: File | undefined) {
@@ -52,23 +50,9 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const found = validateDraft(draft, PROCESS);
+    const found = validateDraft(draft, PROCESS, PROCESS_METRICS);
     if (Object.keys(found).length) return setErrors(found);
-    const createdAt = createdAtNow(); // 등록 버튼 누른 시점 자동 기록
-    const prefix = PROCESS[draft.process as Process].prefix;
-    const name = buildModelName(prefix, draft.name, createdAt);
-    onSubmit({
-      // 최종 모델명 = DieCasting_{Algo}_{YYYYMMDD}_01 (순번은 레지스트리 연동 시 서버에서 부여)
-      name,
-      version: draft.version.trim(),
-      createdAt,
-      process: draft.process as Process,
-      description: draft.description.trim(),
-      metrics: { accuracy: Number(draft.accuracy), recall: Number(draft.recall), precision: Number(draft.precision), f1: Number(draft.f1) },
-      applyCount: 0,
-      deployed: false,
-      fileName: fileName || undefined,
-    });
+    setBlocked(true);
   }
 
   const prefix = Object.hasOwn(PROCESS, draft.process) ? PROCESS[draft.process as Process].prefix : "";
@@ -130,9 +114,10 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
 
         <fieldset className={styles.metricSet}>
           <legend>성과지표 * (0~1)</legend>
-          {METRIC_FIELDS.map(({ key, label }) => (
+          {/* 지표 종류는 고른 공정에 따라 다름 (공정 선택 전엔 Accuracy 기준 목록으로 표시) */}
+          {PROCESS_METRICS[Object.hasOwn(PROCESS, draft.process) ? (draft.process as Process) : "qc2"].map((key) => (
             <label key={key} className={styles.field}>
-              <span>{label}</span>
+              <span>{METRIC_LABEL[key]}</span>
               <input type="number" inputMode="decimal" min={0} max={1} step={0.001} value={draft[key]} onChange={(e) => set(key, e.target.value)} />
               {err(key)}
             </label>
@@ -149,6 +134,7 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
           {err("file")}
         </div>
 
+        {blocked && <p className={styles.fieldError} role="status">{SAVE_BLOCKED}</p>}
         <div className={styles.dialogActions}>
           <button type="button" className={styles.btn} onClick={onClose}>취소</button>
           <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>등록</button>

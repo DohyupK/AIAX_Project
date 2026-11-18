@@ -4,6 +4,7 @@ import { LINES, fetchActiveModel, fetchDates, fetchMlModel, type Line } from '..
 import { useShotStream } from '../../common/casting/useShotStream';
 import type { MlModel, ModelInfo, Shot } from '../../common/casting/types';
 import SensorMonitor from '../process_optimization/SensorMonitor';
+import { fetchDeployedModel, type Model } from '../model_management/data';
 import KeyVariables from './KeyVariables';
 import ProbChart from './ProbChart';
 import { DL_CONNECTED, confusion, firstFail, rate } from './inspection';
@@ -29,11 +30,13 @@ const LIST_FILTERS: { key: ListFilter; label: string }[] = [
 /**
  * 품질 검사 대시보드 — 1차 검사(ML) 후 1차 양품 샷만 2차 검사(DL). 최종 불량 = 1차 불량 + 2차 불량
  * 1차 = 샷 점수(prob, TM 배포 모델 DieCasting_XGB_20261114_09) ≥ 기준값. 실제 판정(passorfail)과 비교해 보여 줌
+ * 모델 = Model Management 배포 모델 (1차 = 「품질 1차 검사」, 2차 = 「품질 2차 검사」 — 2차는 이름만, DL 실행은 연결 후)
  * 2차 = DL 모델 연결 전 (inspection.ts DL_CONNECTED). 정상 범위는 목업 model.json (공정 변수 모니터와 같은 기준)
  */
 export default function QualityInspectionDashboard() {
   const [model, setModel] = useState<ModelInfo | null>(null);
   const [ml, setMl] = useState<MlModel | null>(null); // 1차 검사 모델 (점수 기준값·검증 성적)
+  const [dl, setDl] = useState<Model | null | undefined>(undefined); // 2차 배포 모델 (undefined = 조회 전, null = 없음)
   const [metaError, setMetaError] = useState<string | null>(null);
   const [mlOpen, setMlOpen] = useState(false);
   const [playing, setPlaying] = useState(true);
@@ -48,6 +51,8 @@ export default function QualityInspectionDashboard() {
   const loadModels = () => {
     fetchActiveModel().then(setModel).catch((e: Error) => setMetaError(e.message));
     fetchMlModel().then(setMl).catch((e: Error) => setMetaError(`1차 검사 모델: ${e.message}`));
+    // 2차는 표시용 — 실패해도 화면은 계속 (콘솔에만)
+    fetchDeployedModel('qc2').then(setDl).catch((e: unknown) => { console.error('[quality_inspection] 2차 배포 모델 조회 실패', e); setDl(null); });
   };
   useEffect(loadModels, []);
   const loadDates = (l: Line) => {
@@ -153,7 +158,11 @@ export default function QualityInspectionDashboard() {
           <section className={`${po.grid} ${s.models}`}>
             <button type="button" className={`${po.panel} ${s.modelCard}`} onClick={() => setMlOpen(true)}>
               <span className={s.modelHead}><b>ML 모델 · 1차 검사</b><span className={po.sub}>누르면 샷 목록</span></span>
-              <ModelStats label="1차" n={first} rateV={rate(first, day.length)} base={`하루 전체 ${day.length.toLocaleString()}샷 기준 · ${replayNote} · ${ml.name}`} />
+              <ModelStats label="1차" n={first} rateV={rate(first, day.length)} base={`하루 전체 ${day.length.toLocaleString()}샷 기준 · ${replayNote}`} />
+              <span className={po.sub}>
+                모델 <b>{ml.name}{ml.version && ` ${ml.version}`}</b>
+                {ml.source === 'registry' ? ' · Model Management 「품질 1차 검사」 배포 모델' : ' · 레지스트리 미등록 — 기본 모델'}
+              </span>
               <span className={s.cardSection}>
                 <span className={po.sub}>실제 판정과 비교 (하루 전체 기준)</span>
                 <span className={s.stats}>
@@ -180,6 +189,11 @@ export default function QualityInspectionDashboard() {
                   <Stat label="2차 불량 개수" value="— 개" />
                 </span>
                 <span className={po.sub}>1차 양품 {secondTargets}샷이 2차 대상 · {DL_PENDING}</span>
+                <span className={po.sub}>
+                  {dl === undefined ? '배포 모델 조회 중…'
+                    : dl ? <>배포 모델 <b>{dl.name} {dl.version}</b> (Model Management 「품질 2차 검사」)</>
+                    : 'Model Management 「품질 2차 검사」에 배포된 모델 없음'}
+                </span>
               </span>
               <span className={s.cardSection}>
                 <span className={po.sub}>실시간 2차 분석 · 최근 2차 불량 샷</span>
