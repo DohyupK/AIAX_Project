@@ -1,6 +1,6 @@
 import { MODELS } from '../../pages/model_management/data';
 import { getActiveModelId, toModelInfo } from './activeModel';
-import type { ModelInfo, Shot } from './types';
+import type { MlModel, ModelInfo, Shot } from './types';
 import mockModel from './mock/model.json';
 
 /**
@@ -70,6 +70,11 @@ export async function fetchShots(line: string, date: string, real = false): Prom
 /** 실데이터가 있는 날짜 (최근 날짜가 먼저) */
 export function fetchDates(line: string): Promise<string[]> {
   return get<string[]>(`/api/casting/dates?line=${encodeURIComponent(line)}`);
+}
+
+/** 1차(ML) 검사 모델 정보 — 실데이터 화면용 (JH API 가 TM 배포 pkl 로 점수 계산) */
+export function fetchMlModel(): Promise<MlModel> {
+  return get<MlModel>('/api/casting/model');
 }
 
 /** 현재 배포된 주조 불량 예측 모델 (목업: Model Management 배포 id + model.json 밴드) */
