@@ -272,6 +272,26 @@
   gap: 6px;
 }
 
+/* 본사 부서 버튼 — 부서가 많으면 다음 줄로. 크기는 옆 선택 상자(.select)에 맞춤 */
+.deptFilters {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.deptFilters .filterBtn {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+.boxHead + .deptFilters { margin-bottom: 6px; }
+
+/* 조회 기간: 시작일 ~ 종료일 (브라우저 기본 달력) */
+.dateRange {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.dateRange .select { max-width: none; }
+
 /* 결과 필터는 왼쪽, 안내 문구 + 게이트 필터는 오른쪽 */
 .hint {
   margin-left: auto;
