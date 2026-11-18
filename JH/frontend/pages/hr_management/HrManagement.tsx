@@ -2,13 +2,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ApiError, FIELD_LABEL, GENDER_LABEL, TIER_LABEL, hrApi,
-  type Employee, type EmployeeInput, type Me, type MockAccount, type Summary,
+  type DeptSummary, type Employee, type EmployeeInput, type Me, type MockAccount, type Summary, type TeamSummary,
 } from './hrApi';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import cd from '../company_documents/CompanyDocuments.module.css';
 import s from './HrManagement.module.css';
 
 type By = 'dept' | 'team';
+const ALL = 'all';   // 「전체」 버튼 선택값 = 부서(또는 팀) 카드 전부 표시 — 인사팀(is_hr)만 보임
+type Item = DeptSummary | TeamSummary;
 const ACCOUNT_KEY = 'jh.hr.mock_employee_no';   // 목업 계정 선택 기억 (로그인 전 전용)
 const DEFAULT_ACCOUNT = 'e0002';                // 경영부 부장 (org 2026-11-17 개편 사번)
 const DETAIL_FIELDS = ['employee_no', 'employee_name', 'dept_name', 'position_name', 'team_name', 'email', 'phone',
@@ -29,8 +31,8 @@ export default function HrManagement() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [by, setBy] = useState<By>('dept');
-  const [selected, setSelected] = useState<number | null>(null);
-  const [listOpen, setListOpen] = useState(false);
+  const [selected, setSelected] = useState<number | typeof ALL | null>(null);
+  const [listKey, setListKey] = useState<number | null>(null);   // 명단 팝업을 연 카드 (부서·팀 코드)
   const [form, setForm] = useState<{ mode: 'create' } | { mode: 'edit'; emp: Employee } | null>(null);
   const [version, setVersion] = useState(0);     // 추가·수정·삭제 후 다시 조회
 
@@ -55,14 +57,17 @@ export default function HrManagement() {
   function changeAccount(no: string) {
     setWho(no);
     setSelected(null);
-    setListOpen(false);
+    setListKey(null);
     try { localStorage.setItem(ACCOUNT_KEY, no); } catch { /* 무시 */ }
   }
   const refresh = useCallback(() => setVersion(v => v + 1), []);
 
   const items = summary ? (by === 'dept' ? summary.departments : summary.teams) : [];
   const keyOf = (x: (typeof items)[number]) => ('dept_code' in x ? x.dept_code : x.team_code);
-  const current = items.find(x => keyOf(x) === selected) ?? null;
+  const showAll = !!me?.is_hr;
+  // 화면에 보일 카드: 「전체」면 탭의 카드 전부, 아니면 고른 하나
+  const shown = selected === ALL && showAll ? items : items.filter(x => keyOf(x) === selected);
+  const listItem = items.find(x => keyOf(x) === listKey) ?? null;
 
   return (
     <div className={po.page}>
@@ -105,54 +110,69 @@ export default function HrManagement() {
           <div className={cd.categories} role="group" aria-label="분류">
             {(['dept', 'team'] as By[]).map(b => (
               <button key={b} type="button" aria-pressed={by === b} className={`${cd.catBtn} ${by === b ? cd.catOn : ''}`}
-                onClick={() => { setBy(b); setSelected(null); }}>{b === 'dept' ? '부서별' : '팀별'}</button>
+                onClick={() => { setBy(b); setSelected(null); setListKey(null); }}>{b === 'dept' ? '부서별' : '팀별'}</button>
             ))}
           </div>
           <div className={cd.categories} role="group" aria-label={by === 'dept' ? '부서 선택' : '팀 선택'}>
+            {showAll && (
+              <button type="button" aria-pressed={selected === ALL}
+                className={`${cd.catBtn} ${selected === ALL ? cd.catOn : ''}`} onClick={() => setSelected(ALL)}>
+                전체
+              </button>
+            )}
             {items.map(x => (
               <button key={keyOf(x)} type="button" aria-pressed={selected === keyOf(x)}
                 className={`${cd.catBtn} ${selected === keyOf(x) ? cd.catOn : ''}`} onClick={() => setSelected(keyOf(x))}>
-                {'dept_name' in x ? x.dept_name : x.team_name} <span className={po.num}>{x.headcount}</span>
+                {'dept_name' in x ? x.dept_name : x.team_name} <span className={po.num}>{x.headcount}명</span>
               </button>
             ))}
           </div>
 
-          {current ? (
-            <button type="button" className={`${po.panel} ${s.card}`} disabled={!current.can_view} onClick={() => setListOpen(true)}
-              aria-label={current.can_view ? '전체 명단 보기' : '열람 권한 없음'}>
-              <div className={s.cardHead}>
-                <h3>{'dept_name' in current ? current.dept_name : current.team_name}</h3>
-                <span className={po.sub}>{current.can_view ? '눌러서 전체 명단 보기 →' : '열람 권한 없음 (자기 팀만 볼 수 있습니다)'}</span>
-              </div>
-              <dl className={cd.meta}>
-                <dt>대표</dt>
-                <dd>{current.rep_no ? `${current.rep_no} · ${current.rep_position ?? ''}` : '—'}</dd>
-                <dt>인원</dt><dd className={po.num}>{current.headcount}명</dd>
-                <dt>{'by_position' in current ? '직급별' : '소속 부서별'}</dt>
-                <dd className={s.chips}>
-                  {('by_position' in current
-                    ? summary.positions.filter(p => current.by_position[p.position_name]).map(p => [p.position_name, current.by_position[p.position_name]] as const)
-                    : Object.entries(current.by_dept)
-                  ).map(([k, n]) => <span key={k} className={po.chip}>{k} <b>{n}</b></span>)}
-                </dd>
-              </dl>
-            </button>
+          {shown.length > 0 ? (
+            <div className={shown.length > 1 ? s.cardGrid : undefined}>
+              {shown.map(x => (
+                <InfoCard key={keyOf(x)} item={x} positions={summary.positions} onOpen={() => setListKey(keyOf(x))} />
+              ))}
+            </div>
           ) : (
             <p className={po.sub}>{by === 'dept' ? '부서' : '팀'}를 선택하면 정보가 표시됩니다.</p>
           )}
         </>
       )}
 
-      {listOpen && current && me && (
-        <ListDialog who={who} me={me} by={by} keyValue={keyOf(current)}
-          title={'dept_name' in current ? current.dept_name : current.team_name} version={version}
-          onEdit={emp => setForm({ mode: 'edit', emp })} onChanged={refresh} onClose={() => setListOpen(false)} />
+      {listItem && me && (
+        <ListDialog who={who} me={me} by={by} keyValue={keyOf(listItem)}
+          title={'dept_name' in listItem ? listItem.dept_name : listItem.team_name} version={version}
+          onEdit={emp => setForm({ mode: 'edit', emp })} onChanged={refresh} onClose={() => setListKey(null)} />
       )}
       {form && me && summary && (
         <EmployeeForm who={who} me={me} summary={summary} editing={form.mode === 'edit' ? form.emp : null}
           onClose={() => setForm(null)} onSaved={() => { setForm(null); refresh(); }} />
       )}
     </div>
+  );
+}
+
+/** 부서·팀 정보 카드 — 누르면 명단 팝업 (열람 권한 없으면 비활성) */
+function InfoCard({ item, positions, onOpen }: { item: Item; positions: Summary['positions']; onOpen: () => void }) {
+  const chips = 'by_position' in item
+    ? positions.filter(p => item.by_position[p.position_name]).map(p => [p.position_name, item.by_position[p.position_name]] as const)
+    : Object.entries(item.by_dept);
+  return (
+    <button type="button" className={`${po.panel} ${s.card}`} disabled={!item.can_view} onClick={onOpen}
+      aria-label={item.can_view ? '전체 명단 보기' : '열람 권한 없음'}>
+      <div className={s.cardHead}>
+        <h3>{'dept_name' in item ? item.dept_name : item.team_name}</h3>
+        <span className={po.sub}>{item.can_view ? '눌러서 전체 명단 보기 →' : '열람 권한 없음 (자기 팀만 볼 수 있습니다)'}</span>
+      </div>
+      <dl className={cd.meta}>
+        <dt>대표</dt>
+        <dd>{item.rep_no ? `${item.rep_no} · ${item.rep_position ?? ''}` : '—'}</dd>
+        <dt>인원</dt><dd className={po.num}>{item.headcount}명</dd>
+        <dt>{'by_position' in item ? '직급별' : '소속 부서별'}</dt>
+        <dd className={s.chips}>{chips.map(([k, n]) => <span key={k} className={po.chip}>{k} <b>{n}</b></span>)}</dd>
+      </dl>
+    </button>
   );
 }
 
