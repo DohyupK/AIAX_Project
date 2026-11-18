@@ -87,7 +87,6 @@ def model_info() -> dict:
     except Exception:
         log.exception("1차 검사 모델 로드 실패")
         raise HTTPException(503, "1차 검사 모델을 불러오지 못했습니다.")
-    return [to_shot(r) for r in rows]
 
 
 # ---- 불량 유형 라벨링 (lake 정제본 + ai 라벨) ----
