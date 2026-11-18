@@ -4,6 +4,8 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-18 | Model Management: 탭 이름 품질 1차 검사·품질 2차 검사·보호구 착용 위반, 세 탭 DB 연결. 배포 모델 = 실제 사용 모델 (품질 검사 1차 판정 모델 교체, 2차·보호구는 이름 표시) | [model_management](../기능표.md#model-management-model_management) |
+| 2026-11-18 | Model Management: 성과지표 공정별(공정 최적화 = PR-AUC·Recall·Precision·F1), 공정 최적화 탭 서버 DB 연결(읽기), 목업 56건·localStorage 배포 연동 삭제 | [model_management](../기능표.md#model-management-model_management) |
 | 2026-11-18 | 품질 검사: 1차·2차 카드 배치 복원 — 1차 = 실제 모델, 2차(DL)는 「연결 전」 자리 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-18 | 품질 검사: 1차(ML) 검사 연결 — TM 배포 모델 DieCasting_XGB_20261114_09 로 샷 점수·판정, 실제 판정과 비교(맞힌/놓친 불량·Recall·Precision), 점수 그래프. xgboost-cpu 승인·추가 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-18 | 불량 유형 라벨링: 목업 → DB 연결 (불량 샷 = lake passorfail=1, 라벨 상태 = ai.defect_label·defect_discard), 일자 선택. 저장은 쓰기 계정 연결 전까지 막음 | [defect_labeling](../기능표.md#불량-유형-라벨링-defect_labeling) |

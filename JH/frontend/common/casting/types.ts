@@ -24,9 +24,11 @@ export interface Shot {
   contributions?: Partial<Record<FeatureKey, number>>;
 }
 
-/** 1차(ML) 검사 모델 — JH API /api/casting/model (TM 배포 pkl 메타데이터) */
+/** 1차(ML) 검사 모델 — JH API /api/casting/model (Model Management 「품질 1차 검사」 배포 모델, 없으면 기본 모델) */
 export interface MlModel {
   name: string;
+  version: string;        // 기본 모델이면 ''
+  source: 'registry' | 'default'; // registry = DB 배포 모델 / default = 레지스트리 등록 전 기본 모델
   threshold: number;      // 점수 ≥ threshold 면 1차 불량
   trainedOn: string;      // 학습 데이터 설명
   features: string[];     // 입력 순서

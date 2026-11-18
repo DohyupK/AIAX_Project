@@ -4,6 +4,7 @@ import styles from "./PpeViolation.module.css";
 import ScanView from "./ScanView";
 import ViolationReports from "./ViolationReports";
 import { fetchScanDates, fetchScanRecords, type ScanRecord } from "./data";
+import { fetchDeployedModel, type Model } from "../model_management/data";
 import { GEAR_LABEL, gearStatus, missingGear, violationMessage, type Gate, type Gear, type GearStatus } from "./rules";
 
 type Filter = "all" | "pass" | "fail" | "check";
@@ -102,6 +103,15 @@ export default function PpeViolationDashboard() {
   const [viewOrg, setViewOrg] = useState("");
   const [viewDept, setViewDept] = useState("all");
   const [reportsOpen, setReportsOpen] = useState(false);
+  // 판정 모델 = Model Management 「보호구 착용 위반」 배포 모델 (판정은 현장 카메라가 해서 ai.ppe_check 로 들어옴 — 여기선 이름 표시)
+  const [ppeModel, setPpeModel] = useState<Model | null | undefined>(undefined);
+
+  useEffect(() => {
+    // 표시용 — 실패해도 화면은 계속 (콘솔에만)
+    fetchDeployedModel("ppe")
+      .then(setPpeModel)
+      .catch((e: unknown) => { console.error("[ppe_violation] 배포 모델 조회 실패", e); setPpeModel(null); });
+  }, []);
 
   // 처음: 기록 있는 날짜 목록(최신순) → 기간 = 가장 최근 날 하루
   useEffect(() => {
@@ -194,6 +204,11 @@ export default function PpeViolationDashboard() {
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
+        <span className={`${styles.sub} ${styles.modelNote}`}>
+          {ppeModel === undefined ? "판정 모델 조회 중…"
+            : ppeModel ? <>판정 모델 <b>{ppeModel.name} {ppeModel.version}</b> (Model Management 「보호구 착용 위반」 배포)</>
+            : "Model Management 「보호구 착용 위반」에 배포된 모델 없음"}
+        </span>
         <button type="button" className={`${styles.filterBtn} ${styles.primaryBtn}`} onClick={() => setReportsOpen(true)}>
           위반 보고서
         </button>

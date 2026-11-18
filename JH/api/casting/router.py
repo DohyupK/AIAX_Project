@@ -1,7 +1,7 @@
 """공정(주조) 데이터 API — mes.investment_casting 원본·lake 정제본·ai 라벨을 읽기 전용 계정(app_lake)으로 조회
 
 응답 형식은 프런트 JH/frontend/common/casting/types.ts 의 Shot 과 같음.
-prob = 1차(ML) 불량 점수 (TM 배포 모델 DieCasting_XGB_20261114_09, casting/model.py), actual = 실제 판정(passorfail).
+prob = 1차(ML) 불량 점수 (Model Management 「품질 1차 검사」 배포 모델, 없으면 기본 모델 — casting/model.py), actual = 실제 판정(passorfail).
 """
 from __future__ import annotations
 
@@ -73,6 +73,9 @@ def predictions(date: Date, line: str = LINE) -> list[dict]:
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
     try:
         sc = model.scores(rows)
+    except model.ModelError as e:   # 배포 모델 파일·형식 문제 — 무엇이 틀렸는지 화면에 그대로
+        log.error("1차 검사 배포 모델 사용 불가: %s", e)
+        raise HTTPException(503, str(e))
     except Exception:
         log.exception("1차 검사 모델 점수 계산 실패 line=%s date=%s", line, date)
         raise HTTPException(503, "1차 검사 모델을 실행하지 못했습니다.")
@@ -81,9 +84,12 @@ def predictions(date: Date, line: str = LINE) -> list[dict]:
 
 @router.get("/model")
 def model_info() -> dict:
-    """1차(ML) 검사 모델 정보 — 이름·기준값·검증 성적"""
+    """1차(ML) 검사 모델 정보 — 이름·버전·출처(배포 / 기본)·기준값·검증 성적"""
     try:
         return model.info()
+    except model.ModelError as e:
+        log.error("1차 검사 배포 모델 사용 불가: %s", e)
+        raise HTTPException(503, str(e))
     except Exception:
         log.exception("1차 검사 모델 로드 실패")
         raise HTTPException(503, "1차 검사 모델을 불러오지 못했습니다.")

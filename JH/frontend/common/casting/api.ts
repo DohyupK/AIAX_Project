@@ -1,5 +1,3 @@
-import { MODELS } from '../../pages/model_management/data';
-import { getActiveModelId, toModelInfo } from './activeModel';
 import type { MlModel, ModelInfo, Shot } from './types';
 import mockModel from './mock/model.json';
 
@@ -77,15 +75,10 @@ export function fetchMlModel(): Promise<MlModel> {
   return get<MlModel>('/api/casting/model');
 }
 
-/** 현재 배포된 주조 불량 예측 모델 (목업: Model Management 배포 id + model.json 밴드) */
+/**
+ * 공정 변수 정상 범위(bands)·변수 영향도 — 공정 모니터·주요 변수용 목업 (mock/model.json)
+ * ponytail: 정상 범위를 DB·모델에서 받게 되면 이 함수만 API 호출로 교체. 배포 모델 이름은 Model Management(DB)에서
+ */
 export function fetchActiveModel(): Promise<ModelInfo> {
-  if (USE_MOCK) {
-    const base = mockModel as unknown as ModelInfo;
-    const fallbackId = MODELS.find((m) => m.deployed)?.id ?? MODELS[0]?.id ?? 1;
-    const id = getActiveModelId(fallbackId);
-    const m = MODELS.find((x) => x.id === id) ?? MODELS.find((x) => x.deployed) ?? MODELS[0];
-    if (!m) return Promise.resolve(base);
-    return Promise.resolve(toModelInfo(m, base));
-  }
-  return get<ModelInfo>('/api/models/active?process=casting');
+  return Promise.resolve(mockModel as unknown as ModelInfo);
 }

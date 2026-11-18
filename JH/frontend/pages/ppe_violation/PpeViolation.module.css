@@ -251,8 +251,11 @@
 .topBar {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 6px;
 }
+/* 판정 모델 안내 — 왼쪽 끝, 버튼은 오른쪽 */
+.modelNote { margin-right: auto; }
 
 .primaryBtn { background: var(--accent); border-color: var(--accent); color: #fff; }
 .primaryBtn:hover { background: #2f6fd6; }
