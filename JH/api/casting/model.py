@@ -1,9 +1,9 @@
 """1차(ML) 품질 검사 모델 — Model Management 에서 「품질 1차 검사」(DB process_code CAST-QC1)로 배포된 모델 사용
 
-배포 모델 = ai.model_registry 의 CAST-QC1·deployed 행 → file_name 으로 TM/model/<이름>/<파일> 을 불러옴.
+배포 모델 = ai.model_registry 의 CAST-QC1·deployed 행 → file_name 으로 TM/model_ml/<이름>/<파일> 을 불러옴.
 배포 모델이 없으면 기본 모델(TM 배포 DieCasting_XGB_20261114_09)을 씀 — 레지스트리 등록 전까지 (사용자 결정 1a).
 pkl 형식: TM 최종 모델 형식(dict: model·features·threshold·thresholds). 명세: TM/기능표.md
-보안: pickle 은 불러올 때 코드가 실행되므로 TM/model 폴더 안 .pkl 만 허용 (DB 값이라도 다른 경로·형식 거절).
+보안: pickle 은 불러올 때 코드가 실행되므로 TM/model_ml 폴더 안 .pkl 만 허용 (DB 값이라도 다른 경로·형식 거절).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from common.db import connect
 
 log = logging.getLogger("jh.casting.model")
 
-MODEL_DIR = (Path(__file__).resolve().parents[3] / "TM" / "model").resolve()
+MODEL_DIR = (Path(__file__).resolve().parents[3] / "TM" / "model_ml").resolve()
 DEFAULT_NAME = "DieCasting_XGB_20261114_09"            # 레지스트리 등록 전 기본 모델
 DEFAULT_FILE = f"{DEFAULT_NAME}.pkl"
 PROCESS_CODE = "CAST-QC1"                              # DB 코드 = 화면 「품질 1차 검사」
@@ -49,7 +49,7 @@ def _path(file_name: str | None) -> Path:
         raise ModelError(f"배포 모델 파일 이름이 올바르지 않습니다: {file_name!r} (.pkl 파일 이름만 허용)")
     p = (MODEL_DIR / Path(file_name).stem / file_name).resolve()
     if not p.is_relative_to(MODEL_DIR) or not p.is_file():
-        raise ModelError(f"배포 모델 파일을 찾을 수 없습니다: TM/model/{Path(file_name).stem}/{file_name}")
+        raise ModelError(f"배포 모델 파일을 찾을 수 없습니다: TM/model_ml/{Path(file_name).stem}/{file_name}")
     return p
 
 

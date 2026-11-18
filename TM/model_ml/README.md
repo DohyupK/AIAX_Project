@@ -1,4 +1,4 @@
-# TM/model — DieCasting 모델 아티팩트
+# TM/model_ml — DieCasting 모델 아티팩트
 
 주조 PassOrFail 실험·배포 모델입니다. **파일명 = 폴더명** (확장자만 다름).
 
@@ -82,7 +82,7 @@ DieCasting_{Algo}_{YYYYMMDD}_{NN}
 ## 경로
 
 ```text
-TM/model/
+TM/model_ml/
   DieCasting_*/          # 폴더 = 모델명
     DieCasting_*.joblib | .pkl | .json
   README.md
