@@ -1,4 +1,4 @@
-"""공정(주조) 데이터 API — mes.investment_casting 원본을 읽기 전용 계정(app_lake)으로 조회
+"""공정(주조) 데이터 API — mes.investment_casting 원본·lake 정제본·ai 라벨을 읽기 전용 계정(app_lake)으로 조회
 
 응답 형식은 프런트 JH/frontend/common/casting/types.ts 의 Shot 과 같음.
 ponytail: 모델 연결 전이라 prob = 실제 판정(passorfail 0/1). 모델 API가 생기면 prob 만 모델 출력으로 교체.
@@ -14,7 +14,7 @@ from common.db import connect
 
 router = APIRouter(prefix="/api/casting")
 log = logging.getLogger("jh.casting")
-DB = "DATABASE_URL"   # app_lake — mes 읽기만
+DB = "DATABASE_URL"   # app_lake — mes·lake·ai 읽기만
 
 # 프런트 FEATURES 이름 ← DB 칼럼 (DB는 소문자)
 FEATURES = {
@@ -71,3 +71,56 @@ def predictions(date: Date, line: str = LINE) -> list[dict]:
         log.exception("공정 샷 조회 실패 line=%s date=%s", line, date)
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
     return [to_shot(r) for r in rows]
+
+
+# ---- 불량 유형 라벨링 (lake 정제본 + ai 라벨) ----
+# ponytail: DL 모델 연결 전이라 「불량 샷」 = 실제 판정 passorfail = 1. 모델이 생기면 모델 판정으로 교체.
+# lake 에는 라인 칼럼이 없음 (원본이 전부 line_no1) → 라인 구분 없이 조회
+DEFECT_TYPES = ("blowhole", "edge_burr", "surface_rough")   # ai.defect_label 칼럼 = 화면 코드 소문자
+
+
+@router.get("/defect-dates")
+def defect_dates() -> list[str]:
+    """불량 샷이 있는 날짜 (최근 날짜가 먼저)"""
+    try:
+        with connect(DB) as conn:
+            rows = conn.execute(
+                'SELECT DISTINCT "timestamp" AS d FROM lake.lake_investment_casting WHERE passorfail = 1 ORDER BY 1 DESC'
+            ).fetchall()
+    except Exception:
+        log.exception("불량 날짜 조회 실패")
+        raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
+    return [r["d"].isoformat() for r in rows]
+
+
+@router.get("/defects")
+def defects(date: Date) -> list[dict]:
+    """그날 불량 샷 + 라벨 상태 (최신순). status: unlabeled / labeled / discarded"""
+    try:
+        with connect(DB) as conn:
+            rows = conn.execute(
+                """SELECT l.casting_id, l.date AS t, dl.blowhole, dl.edge_burr, dl.surface_rough,
+                          dl.labeled_at, dd.discarded_at
+                   FROM lake.lake_investment_casting l
+                   LEFT JOIN ai.defect_label dl USING (casting_id)
+                   LEFT JOIN ai.defect_discard dd USING (casting_id)
+                   WHERE l."timestamp" = %s AND l.passorfail = 1
+                   ORDER BY l.date DESC, l.casting_id DESC""",
+                (date,),
+            ).fetchall()
+    except Exception:
+        log.exception("불량 샷 조회 실패 date=%s", date)
+        raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
+    out = []
+    for r in rows:
+        t = r["t"]
+        # DB 규칙상 한 샷은 두 테이블 중 한 곳에만 있음 (MS 11_ai.sql)
+        status = "discarded" if r["discarded_at"] else "labeled" if r["labeled_at"] else "unlabeled"
+        out.append({
+            "castingId": r["casting_id"],
+            "shotId": int(r["casting_id"].rsplit("_", 1)[-1]),   # casting_id = YYMMDD_HHMMSS_생산번호
+            "time": f"{t.hour}:{t.minute:02d}:{t.second:02d}",
+            "status": status,
+            "types": [k.upper() for k in DEFECT_TYPES if r[k]] if status == "labeled" else [],
+        })
+    return out
