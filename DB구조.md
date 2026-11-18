@@ -186,6 +186,7 @@ lake에서 제외: `timestamp`, `date`.
 | `07_comments.sql` | COMMENT |
 | `08_data.sql.gz` | 샘플 데이터 |
 | `09_org_permission.sql` | schema `org` 구조 + 트리거 + GRANT (app_hr 포함) |
+| `12_lake_sync.sql` | lake 자동 갱신 준비: `mes` 변경 기록, `lake.etl_watermark`, lake 의 org 복사본 26개(`employee_info`·`hr_access_log`·`change_log` 제외) + 첫 전체 복사. 매일 갱신은 `MS/db/spark/jobs/lake_sync.py` + `MS/db/apps/src/apps/lake_runner.py` |
 | `11_ai.sql` | schema `ai`: `defect_label`(불량 유형 라벨, 유형별 boolean), `defect_discard`(판정 불가 샷). 한 샷은 둘 중 한 곳만 (트리거) / `model_registry`(모델 목록·성과지표·파일 경로·배포, 공정당 배포 1개, 배포 시 기존 배포 자동 해제) / `ppe_gate_rule`(게이트별 필수 보호구) · `ppe_check`(보호구 검사 기록, 출입 로그 IN 참조. 주조팀·하청만 검사) |
 | `10_org_permission_seed.sql` | `org` 목업 (사원 54, 2026-08-04~10-11 출입·근무) |
 
@@ -195,6 +196,7 @@ lake에서 제외: `timestamp`, `date`.
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-11-18 | lake 의 org 복사본을 새 구조 26개로 재생성 (옛 23개 삭제), `etl_watermark` 재설정. Spark 작업·00:00 KST 실행기 코드 추가 (서버 Spark 설치 전) |
 | 2026-11-18 | `ai.ppe_gate_rule`·`ai.ppe_check` (보호구 착용 위반 대시보드). 목업 2,756건 |
 | 2026-11-18 | `ai.model_registry` (모델 레지스트리, DH 요청). 파일 저장 경로는 서버 관리자가 정함 |
 | 2026-11-18 | schema `ai` 신설 + `defect_label`·`defect_discard` (불량 유형 라벨링). 읽기: role_lake·role_spark, 쓰기 계정은 담당 확정 후 |
