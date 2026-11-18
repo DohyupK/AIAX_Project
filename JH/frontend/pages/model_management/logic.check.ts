@@ -22,12 +22,12 @@ assert.deepEqual(
   ["v1.2", "v1.10"],
 );
 
-// 공정 이름·DB 코드 (코드 이름은 그대로, 화면 이름만 변경)
+// 공정 이름·DB 코드
 assert.deepEqual(
   Object.values(PROCESS).map((p) => [p.label, p.code]),
-  [["품질 1차 검사", "CAST-OPT"], ["품질 2차 검사", "CAST-QC"], ["보호구 착용 위반", "SAFE-GATE"]],
+  [["품질 1차 검사", "CAST-QC1"], ["품질 2차 검사", "CAST-QC2"], ["보호구 착용 위반", "SAFE-PPE"]],
 );
-// 공정별 지표: 품질 1차 = PR-AUC·Recall·Precision·F1 (DB ai.model_metric_cast_opt), 나머지 = Accuracy·Recall·Precision·F1
+// 공정별 지표: 품질 1차 = PR-AUC·Recall·Precision·F1 (DB ai.model_metric_cast_qc1), 나머지 = Accuracy·Recall·Precision·F1
 assert.deepEqual(PROCESS_METRICS.qc1, ["prAuc", "recall", "precision", "f1"]);
 assert.deepEqual(PROCESS_METRICS.qc2, ["accuracy", "recall", "precision", "f1"]);
 assert.deepEqual(PROCESS_METRICS.ppe, ["accuracy", "recall", "precision", "f1"]);

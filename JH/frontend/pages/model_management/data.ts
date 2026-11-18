@@ -2,14 +2,14 @@
 // 데이터: 서버 DB ai.model_registry + 공정별 지표 테이블 (JH API GET /api/models, 읽기 전용)
 // 각 공정의 배포 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차 = 품질 검사 1차 판정에 사용)
 
-/** 화면 공정 키 — DB process_code 와 이름이 다름 (코드 이름은 MS 결정 전까지 유지) */
+/** 화면 공정 키 ↔ DB process_code (CAST-QC1 / CAST-QC2 / SAFE-PPE) */
 export type Process = "qc1" | "qc2" | "ppe";
 
 /** 관리 공정: 화면 표시명 + DB 공정 코드 + 모델명 앞부분 + 배포 모델을 쓰는 화면 */
 export const PROCESS: Record<Process, { label: string; code: string; prefix: string; usedBy: string }> = {
-  qc1: { label: "품질 1차 검사", code: "CAST-OPT", prefix: "DieCasting", usedBy: "품질 검사 대시보드 1차(ML) 판정" },
-  qc2: { label: "품질 2차 검사", code: "CAST-QC", prefix: "DieCasting", usedBy: "품질 검사 대시보드 2차(DL) 검사" },
-  ppe: { label: "보호구 착용 위반", code: "SAFE-GATE", prefix: "DieCasting", usedBy: "보호구 착용 위반 대시보드 판정" },
+  qc1: { label: "품질 1차 검사", code: "CAST-QC1", prefix: "DieCasting", usedBy: "품질 검사 대시보드 1차(ML) 판정" },
+  qc2: { label: "품질 2차 검사", code: "CAST-QC2", prefix: "DieCasting", usedBy: "품질 검사 대시보드 2차(DL) 검사" },
+  ppe: { label: "보호구 착용 위반", code: "SAFE-PPE", prefix: "DieCasting", usedBy: "보호구 착용 위반 대시보드 판정" },
 };
 const BY_CODE = Object.fromEntries(Object.entries(PROCESS).map(([k, v]) => [v.code, k as Process]));
 
@@ -22,7 +22,7 @@ export const METRIC_LABEL: Record<MetricKey, string> = {
   precision: "Precision",
   f1: "F1-Score",
 };
-/** 공정별 지표 4개 (화면 카드·등록 폼 순서). 품질 1차 = ai.model_metric_cast_opt */
+/** 공정별 지표 4개 (화면 카드·등록 폼 순서). 품질 1차 = ai.model_metric_cast_qc1, 2차 = _cast_qc2, 보호구 = _safe_ppe */
 export const PROCESS_METRICS: Record<Process, MetricKey[]> = {
   qc1: ["prAuc", "recall", "precision", "f1"],
   qc2: ["accuracy", "recall", "precision", "f1"],
