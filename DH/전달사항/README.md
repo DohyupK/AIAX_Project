@@ -13,6 +13,7 @@
 - [2차 참고 목록 (할일만, 구현 지시 전)](../2차_참고목록.md)
 - [MS — casting_image init·Spark](2026-11-19_MS_casting_image_init반영.md)
 - [JH — lake 조회 연결](2026-11-19_JH_image_pipeline_API연결.md)
+- [JH — 파이프라인 2차 검증 체크리스트 (단계 게이트·정리 포함)](2026-11-19_JH_image_pipeline_2차_검증.md)
 - [타 PC Docker 검증·장애 대응](2026-11-19_타PC_image_pipeline_검증.md)
 
 ## 양식

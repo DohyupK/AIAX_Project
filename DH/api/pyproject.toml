@@ -1,0 +1,12 @@
+[project]
+name = "dh-api"
+version = "0.2.0"
+description = "DH API — 이미지 파이프라인 2차 (Kafka→mes→lake). 실행: uv run python -m image_pipeline.status_server"
+requires-python = ">=3.13"
+dependencies = [
+    "confluent-kafka==2.16.1",
+    "psycopg[binary]==3.3.7",
+]
+
+[tool.uv]
+package = false
