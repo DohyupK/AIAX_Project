@@ -9,6 +9,7 @@
 | 토픽 T1 | `aiax.image.ingest` / `aiax.image.mes_write` / `aiax.image.spark_sync` |
 | 페이로드 | E1a — JSON 메타 + Base64 (`image_base64`) |
 | 기본 싱크 | **A** (Flink→mes 직접 INSERT). B 도 설정으로 전환 가능 |
+| Flink 역할 (2026-11-19) | Python `flink_role_a` → **Flink job `MS/db/flink/jobs/image_ingest.py`** 로 이전·삭제. 서버 실행: `JH/전달사항/2026-11-19_DH_이미지수집_Flink_서버실행.md` |
 | 테이블 | `mes.casting_image` → Spark 최신건 → `lake.lake_casting_image` |
 | `original_uri` | **기록만, 로드 금지** |
 | 1차 | 뼈대·문서·상태 API (지시받아 구현됨) |

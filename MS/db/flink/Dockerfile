@@ -1,4 +1,4 @@
-# 팀용 Flink 이미지: Flink 2.2.1 + PyFlink(Python 3.12) + Kafka 커넥터
+# 팀용 Flink 이미지: Flink 2.2.1 + PyFlink(Python 3.12) + Kafka 커넥터 + 이미지 수집 job 용 psycopg·confluent-kafka
 # 기본 Flink 이미지에는 Python이 없고, OS 기본 Python 버전은 PyFlink 지원 범위(3.9~3.12)를 벗어날 수 있어
 # uv로 Python 3.12를 직접 지정해 설치한다.
 FROM flink:2.2.1-java17
@@ -15,10 +15,12 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # flink 사용자도 읽을 수 있도록 /opt 아래에 Python과 가상환경 설치
+# psycopg·confluent-kafka: jobs/image_ingest.py (DH flink_role_a 이전) 용 — DH/api 와 같은 버전 (2026-11-19 승인)
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
 RUN uv python install 3.12 \
  && uv venv /opt/pyflink --python 3.12 \
  && uv pip install --python /opt/pyflink/bin/python --no-cache apache-flink==2.2.1 \
+ && uv pip install --python /opt/pyflink/bin/python --no-cache "psycopg[binary]==3.3.7" confluent-kafka==2.16.1 \
  && ln -sf /opt/pyflink/bin/python /usr/local/bin/python \
  && ln -sf /opt/pyflink/bin/python /usr/local/bin/python3 \
  && chmod -R a+rX /opt/uv-python /opt/pyflink

@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, result)
                 return
             if path == "/v1/image/ingest":
-                # Kafka publish only — flink_role_a / lake_sync_consumer 가 후속 처리
+                # Kafka publish only — Flink job(MS/db/flink/jobs/image_ingest.py) / lake_sync_consumer 가 후속 처리
                 result = publish_ingest(data)
                 self._json(200, result)
                 return
