@@ -40,23 +40,22 @@
 
 ---
 
-## 2026-11-17 org 구조 변경 영향 (MS 추가)
+## 변경 (2026-11-17~18) — org DB 개편 대응 (JH·MS)
 
-서버 `org`가 새 구조로 바뀌어 이 기록의 일부 테이블·컬럼 이름이 달라졌습니다. 앱 수정 안내는 [`MS/전달사항/2026-11-17_org_새구조/02 팀원 전달 사항.md`](../MS/전달사항/2026-11-17_org_새구조/) 참고.
+서버 `org`가 새 구조로 바뀌어 이 기록의 일부 테이블·컬럼이 달라졌습니다. 전체 안내는 [`MS/전달사항/2026-11-17_org_새구조/`](../MS/전달사항/2026-11-17_org_새구조/) 참고.
 
-| 이 기록의 내용 | 새 구조 |
-|---|---|
-| `employee_info.age` | 삭제 → `birth_date` (나이는 조회 때 계산) |
-| 사번 `E10001` 형식 | `e0001` ~ `e0054` |
-| `dept_code` text, `team_code` text | integer (`team_name` 추가) |
-| `access_code`·`dept_roster`·`team_roster`를 앱이 직접 맞춤 | DB 트리거가 자동으로 맞춤 (employee만 바꾸면 됨) |
-| `app_hr` 계정·권한 | `MS/db/init/00_roles.sh`, `09_org_permission.sql`에 반영 (MS 요청 처리 완료) |
-| `hr_access_log` | 구조 그대로, `09`에 포함 |
-## 변경 (2026-11-17) — org DB 개편 대응
+| 이 기록의 내용 | 새 구조 | 인사 API 반영 (JH) |
+|---|---|---|
+| `employee_info.age` | 삭제 → `birth_date`(date) | `age(birth_date)`로 나이 계산, 추가·수정 시 `birth_date` 저장 |
+| 사번 `E10001` 형식 | `e0001` ~ `e0054` (부서와 무관한 일련번호) | 반영 |
+| 코드 체계 | 부서 1000~7000, 직급 10000~70000, 팀 10~60(정수, 이름은 `team_name`) | 반영, 팀 이름 표시 |
+| `access_code`·`dept_roster`·`team_roster` | DB 트리거가 자동으로 맞춤 (employee만 바꾸면 됨) | 직접 맞추던 코드 → 트리거 위임 |
+| `access_code` 규칙 | 직급 + 부서 + 부서장 100 + 팀 + 팀장 1 | — |
+| 인사 관리 열람 (2026-11-18) | read = 사원 이상 전원(인턴 제외), edit = 경영부 과장 이상 + 소장 (`hr_management_page`) | 같은 기준으로 맞춤 필요 |
+| 재직 상태 (2026-11-18) | `employee.employment_status`(active/resigned) + `resigned_at` 추가, 퇴사 시 게이트 자동 차단 | 삭제 버튼 → 퇴사 처리로 변경 필요 |
+| `app_hr` 계정·권한 | `MS/db/init/00_roles.sh`, `09_org_permission.sql`에 반영 | — |
+| `hr_access_log` | 구조 그대로, `09`에 포함 | — |
 
-- `org.employee_info`: `age` 열 삭제, `birth_date`(date) 추가 → API는 `age(birth_date)` 로 만 나이를 계산해 내려주고, 추가·수정 시 `birth_date` 저장
-- 코드 체계: 부서 1000~7000(경영부 1000), 직급 10000(인턴)~70000(소장), 팀 10~60(정수), 사번 `e0001`~ 일련번호
-- `org.access_code` = 직급코드 + 부서코드 + 팀코드 + 부서 대표 100 + 팀 대표 1 (2026-11-17 DB 54명 대조 일치)
 - 검증 시 로컬 API로 조회 시험 → `org.hr_access_log` 에 시험 조회 기록 약 10건 남음 (데이터 변경 없음, 추가 시도는 모두 검증 단계에서 거부)
 
 ## 변경 (2026-11-18) — MS 전달사항 1·5번 반영

@@ -74,7 +74,12 @@ CREATE TABLE org.employee (
     dept_code      integer     NOT NULL REFERENCES org.department(dept_code),
     position_name  text        NOT NULL REFERENCES org."position"(position_name),
     team_code      integer     REFERENCES org.team(team_code),               -- NULL = 팀 없음
-    created_at     timestamptz NOT NULL DEFAULT now()
+    employment_status text     NOT NULL DEFAULT 'active' CHECK (employment_status IN ('active', 'resigned')),  -- 재직 / 퇴사
+    resigned_at    date,                                                     -- 퇴사일 (재직이면 NULL)
+    created_at     timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT employee_resigned_check CHECK (
+        (employment_status = 'active'   AND resigned_at IS NULL) OR
+        (employment_status = 'resigned' AND resigned_at IS NOT NULL))
 );
 COMMENT ON TABLE org.employee IS '사원. 직급·부서·팀이 바뀌면 트리거가 접근 코드·부서/팀 명단을 자동으로 맞춤';
 
@@ -235,7 +240,7 @@ DECLARE
   p text;
 BEGIN
   FOREACH p IN ARRAY ARRAY['main', 'process_optimization', 'quality_inspection', 'defect_labeling',
-                           'worker_safety', 'hr_management', 'management_report', 'model_management',
+                           'ppe_violation', 'hr_management', 'management_report', 'model_management',
                            'company_documents']
   LOOP
     EXECUTE format($f$
@@ -420,6 +425,34 @@ END $$;
 CREATE TRIGGER trg_position_code
     AFTER UPDATE OF position_code ON org."position"
     FOR EACH ROW EXECUTE FUNCTION org.on_position_change();
+
+-- 7-5-1. 퇴사 처리: 부서장·팀장은 막기, 퇴사면 게이트 막기, 재직으로 돌리면 다시 열기
+CREATE FUNCTION org.on_employee_resign() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'org'
+AS $$
+BEGIN
+  IF NEW.employment_status IS NOT DISTINCT FROM OLD.employment_status THEN
+    RETURN NULL;
+  END IF;
+  IF NEW.employment_status = 'resigned' THEN
+    IF EXISTS (SELECT 1 FROM org.department WHERE department_representative = NEW.employee_no)
+       OR EXISTS (SELECT 1 FROM org.team WHERE team_representative = NEW.employee_no) THEN
+      RAISE EXCEPTION '부서장·팀장은 퇴사 처리할 수 없습니다. 대표자를 먼저 바꾸세요: %', NEW.employee_no;
+    END IF;
+    UPDATE org.gate_card g SET gate_a = false, gate_b = false
+      FROM org.employee_card c
+     WHERE c.employee_no = NEW.employee_no AND g.employee_card_id = c.card_id;
+  ELSE
+    UPDATE org.gate_card g SET gate_a = true, gate_b = true
+      FROM org.employee_card c
+     WHERE c.employee_no = NEW.employee_no AND g.employee_card_id = c.card_id;
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER trg_employee_resign
+    AFTER UPDATE OF employment_status ON org.employee
+    FOR EACH ROW EXECUTE FUNCTION org.on_employee_resign();
 
 -- 7-6. 근무 형태: 주조팀(casting1~3)은 3조 3교대, 1주 단위로 돌아감 / 그 외 정시 09~18
 --      기준 주: 2026-08-03(월) 주에 casting1 주간, casting2 오후, casting3 야간
