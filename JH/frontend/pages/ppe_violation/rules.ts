@@ -1,7 +1,7 @@
 // 게이트별 안전장구 판정 규칙 — 화면·백엔드가 같은 기준을 쓰도록 순수 함수로 분리 (import 없음)
 
 export type Gear = "helmet" | "shoes" | "vest" | "gloves" | "goggles";
-export type Gate = "A" | "B";
+export type Gate = "a" | "b";
 
 export const GEAR_LABEL: Record<Gear, string> = {
   helmet: "안전모",
@@ -11,20 +11,22 @@ export const GEAR_LABEL: Record<Gear, string> = {
   goggles: "보안경",
 };
 
-/** A = 다이캐스팅 설비 인원, B = 품질 검사 인원 */
+/** a·b = 회사 정문 (DB 게이트 코드 그대로). DB ai.ppe_gate_rule 과 같은 기준 — 규칙이 바뀌면 둘 다 고침 */
 export const GATE_RULES: Record<Gate, { required: Gear[]; optional: Gear[] }> = {
-  A: { required: ["helmet", "shoes", "vest", "gloves", "goggles"], optional: [] },
-  B: { required: ["helmet", "shoes", "vest", "gloves"], optional: ["goggles"] },
+  a: { required: ["helmet", "shoes", "vest", "gloves", "goggles"], optional: [] },
+  b: { required: ["helmet", "shoes", "vest", "gloves"], optional: ["goggles"] },
 };
 
-export type GearStatus = "worn" | "missing" | "optional_missing";
+export type GearStatus = "worn" | "missing" | "optional_missing" | "unknown";
 
-/** 장구별 상태: 착용 / 필수 미착용(위반) / 선택 미착용 */
-export function gearStatus(gate: Gate, detected: Gear[]): { gear: Gear; status: GearStatus }[] {
+/** 장구별 상태: 착용 / 필수 미착용(위반) / 선택 미착용 / 판정 불가(카메라가 못 봄) */
+export function gearStatus(gate: Gate, detected: Gear[], unknown: Gear[] = []): { gear: Gear; status: GearStatus }[] {
   const { required, optional } = GATE_RULES[gate];
   return [...required, ...optional].map((gear) => ({
     gear,
-    status: detected.includes(gear) ? "worn" : required.includes(gear) ? "missing" : "optional_missing",
+    status: unknown.includes(gear) ? "unknown"
+      : detected.includes(gear) ? "worn"
+      : required.includes(gear) ? "missing" : "optional_missing",
   }));
 }
 

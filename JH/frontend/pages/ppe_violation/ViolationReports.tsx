@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { GEAR_LABEL } from "./rules";
-import { PEAK_LABEL, SITE, listMonthlyReports, type MonthlyReport } from "./monthly";
+import { fetchMonthlyRaw } from "./data";
+import { SITE, listMonthlyReports, type MonthlyReport } from "./monthly";
 import s from "./PpeReport.module.css";
 
 // 인쇄 시 보고서 팝업만 출력: 팝업을 body 직속(portal)으로 두고 나머지 body 자식은 숨김
@@ -21,10 +22,22 @@ const int = (n: number) => n.toLocaleString("ko-KR");
 
 /** 위반 보고서 — 월별 목록 팝업, 행을 누르면 보고서 팝업 (닫으면 목록으로 복귀) */
 export default function ViolationReports({ onClose }: { onClose: () => void }) {
-  // ponytail: 목업 원자료로 계산. 집계 API 연동 시 monthly.ts 의 MONTHLY_RAW 만 교체
-  const reports = useMemo(() => listMonthlyReports(), []);
+  // 원자료는 API(ai.ppe_check + lake), 비율·순위는 monthly.ts 가 계산. null = 불러오는 중
+  const [reports, setReports] = useState<MonthlyReport[] | null>(null);
+  const [error, setError] = useState("");
   const [open, setOpen] = useState<MonthlyReport | null>(null);
   const close = open ? () => setOpen(null) : onClose;
+
+  useEffect(() => {
+    let alive = true; // 팝업을 닫은 뒤 도착한 응답은 버림
+    fetchMonthlyRaw()
+      .then((raw) => alive && setReports(listMonthlyReports(raw)))
+      .catch((e: unknown) => {
+        console.error("[ppe_violation] 월간 보고서 조회 실패", e);
+        if (alive) setError("보고서 데이터를 불러오지 못했습니다. JH API 서버(127.0.0.1:8000)를 확인해 주세요.");
+      });
+    return () => { alive = false; };
+  }, []);
 
   // Esc = 맨 위 팝업 닫기
   useEffect(() => {
@@ -41,14 +54,16 @@ export default function ViolationReports({ onClose }: { onClose: () => void }) {
             <h2 id="ppe-list-title" className={s.listTitle}>위반 보고서</h2>
             <button type="button" className={s.closeBtn} onClick={onClose} aria-label="닫기" autoFocus>×</button>
           </div>
-          <p className={s.sub}>월별 · 최신순 · {reports.length}건 · 행을 누르면 보고서 열기</p>
+          <p className={s.sub}>
+            {error || (reports ? `월별 · 최신순 · ${reports.length}건 · 행을 누르면 보고서 열기` : "불러오는 중…")}
+          </p>
           <div className={s.listWrap}>
             <table className={s.listTable}>
               <thead>
                 <tr><th>보고서</th><th>대상 기간</th><th>판정 수</th><th>위반</th><th>위반율(1,000회당)</th><th>전월 대비</th></tr>
               </thead>
               <tbody>
-                {reports.map((r) => (
+                {reports?.map((r) => (
                   <tr key={r.month} onClick={() => setOpen(r)}>
                     <td>
                       <button type="button" className={s.rowBtn} onClick={(e) => { e.stopPropagation(); setOpen(r); }}>
@@ -162,10 +177,13 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
           ))}
         </p>
 
-        <h3 className={s.sec}>④ 언제: 시간대</h3>
+        <h3 className={s.sec}>④ 언제: 태깅 시각별 <small>(위반 많은 순)</small></h3>
         <p className={s.line}>
-          {PEAK_LABEL} <b>{r.peak}건 ({r.peakPct}%)</b> · 그 외 {r.offPeak}건
-          {r.top && <> — {GEAR_LABEL[r.top.gear]} 미착용은 교대 직후 {r.top.peak}건, 그 외 {r.top.offPeak}건</>}
+          {r.slots.length === 0 ? "위반 없음" : r.slots.map((x, i) => (
+            <span key={x.hour}>
+              {i > 0 && " · "}{String(x.hour).padStart(2, "0")}시대 <b>{x.violations}건</b> ({x.pct}%)
+            </span>
+          ))}
         </p>
 
         <h3 className={s.sec}>⑤ 원인 및 조치</h3>
@@ -179,9 +197,9 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
 
         <p className={s.writer}>작성일: {r.month.slice(0, 4)}. &nbsp; . &nbsp; . &nbsp;&nbsp; 작성: 안전관리자</p>
         <p className={s.foot}>
-          위반율(1,000회당) = 위반 ÷ 판정 수 × 1,000. 위반은 1건, 보호구는 각각 집계. Gate B 보안경은 에어건 사용 시에만 착용하여 집계 제외.
-          {r.holidays.length > 0 && ` ${r.holidays.join("·")} 휴무.`}
-          <br />집계는 설비 가동일({r.start})부터. 가상 데이터.
+          위반율(1,000회당) = 위반 ÷ 판정 수 × 1,000. 위반은 1건, 보호구는 필수 미착용만 각각 집계 (게이트 b 보안경은 선택이라 제외).
+          판정 불가 건은 판정 수에 포함하고, 안전관리자가 위반으로 확인한 건만 위반으로 셈.
+          <br />가동일 = 검사 기록이 있는 날. 집계는 첫 검사일({r.start})부터. DB 목업 데이터.
         </p>
       </div>
     </div>
