@@ -7,4 +7,4 @@
 
 | 기능 id | frontend 상대경로 | api 상대경로 | 비고 |
 |---------|-------------------|--------------|------|
-| (예) | ../frontend/pages/example | ../api/example | 추가 시 기입 |
+| image_pipeline | (없음 — JH 이후 연결) | ../api/image_pipeline | 1차 뼈대·상태 API. 지침 `DH/지침_image_pipeline_임시.md` |
