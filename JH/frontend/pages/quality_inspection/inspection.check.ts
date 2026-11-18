@@ -1,6 +1,6 @@
 // 1차·2차 판정 자체 점검 — 실행: node JH/frontend/pages/quality_inspection/inspection.check.ts (Node 23.6+)
 import assert from "node:assert/strict";
-import { rate, secondFail, summarize, topDeviations } from "./inspection.ts";
+import { confusion, rate, secondFail, summarize, topDeviations } from "./inspection.ts";
 import type { ModelInfo, Shot } from "../../common/casting/types";
 
 const shot = (prob: number, actual: 0 | 1 | null, f: Partial<Shot["features"]> = {}) =>
@@ -24,5 +24,16 @@ const model = { bands: { injection_pressure: [0, 10, 20], sleeve_temperature: [0
 const top = topDeviations(shot(0, 0, { injection_pressure: 12, sleeve_temperature: 30, top_temp1: null }), model, 2);
 assert.deepEqual(top.map(t => t.key), ["sleeve_temperature", "injection_pressure"]);
 assert.equal(top[0].score, 2);
+
+// 1차 vs 실제: 기준값과 같으면 1차 불량, 실제 판정 없는 샷은 비교 제외
+{
+  const c = confusion([shot(0.9, 1), shot(0.5, 0), shot(0.2, 1), shot(0.1, 0), shot(0.1, 0), shot(0.8, null)], 0.5);
+  assert.deepEqual([c.tp, c.fp, c.fn, c.tn, c.unjudged], [1, 1, 1, 2, 1]);
+  assert.equal(c.recall, 0.5);
+  assert.equal(c.precision, 0.5);
+  const empty = confusion([], 0.5);
+  assert.equal(empty.recall, null);
+  assert.equal(empty.precision, null);
+}
 
 console.log("inspection.check OK");

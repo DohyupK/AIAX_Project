@@ -4,6 +4,10 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-18 | 품질 검사: 1차·2차 카드 배치 복원 — 1차 = 실제 모델, 2차(DL)는 「연결 전」 자리 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
+| 2026-11-18 | 품질 검사: 1차(ML) 검사 연결 — TM 배포 모델 DieCasting_XGB_20261114_09 로 샷 점수·판정, 실제 판정과 비교(맞힌/놓친 불량·Recall·Precision), 점수 그래프. xgboost-cpu 승인·추가 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
+| 2026-11-18 | 불량 유형 라벨링: 목업 → DB 연결 (불량 샷 = lake passorfail=1, 라벨 상태 = ai.defect_label·defect_discard), 일자 선택. 저장은 쓰기 계정 연결 전까지 막음 | [defect_labeling](../기능표.md#불량-유형-라벨링-defect_labeling) |
+| 2026-11-18 | 인사 관리: 탭 인원에 「명」 단위, 인사 담당자 전용 「전체」 버튼(부서·팀 카드 전부 한 화면에) | [hr_management](../기능표.md#인사-관리-hr_management) |
 | 2026-11-18 | 보호구 착용 위반 대시보드: 날짜 선택 → 달력으로 시작일~종료일 기간 조회 (최대 92일) | [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |
 | 2026-11-18 | 보호구 착용 위반 대시보드: 업체 필터·회사 출입 현황을 본사/하청 업체로 정리, 본사 선택 시 부서 버튼 필터 | [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |
 | 2026-11-18 | 보호구 착용 위반 대시보드: 목업 → DB 연결 (판정 ai.ppe_check + 출입·소속 lake), 칼럼 DB 기준(게이트 a·b, 사번·하청 카드), 날짜 선택·「확인 필요」, 월간 보고서 DB 집계 | [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |

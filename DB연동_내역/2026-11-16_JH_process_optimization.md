@@ -17,3 +17,5 @@
 - 불량 유형 라벨링은 목업 유지 (`fetchShots(..., real=false)`).
 
 **2026-11-17 품질 검사(`/casting/quality-inspection`) 전환** — 같은 API 사용. 실데이터로 바로 보이는 항목만 표시: KPI(생산 샷·불량률·불량 개수, 실제 판정 기준), 샷 판정 목록 + 주요 변수, 공정 변수 모니터. 1차(ML 확률)·2차(DL 이미지) 검사는 모델 연결 후 복원.
+
+**2026-11-18 1차(ML) 검사 연결** — `prob` = 실제 판정 → **TM 배포 모델 `DieCasting_XGB_20261114_09` 불량 점수(0~1)** 로 교체 (`JH/api/casting/model.py`, pkl 은 `TM/model/` 읽기만). 같은 조회 행(mes.investment_casting)의 `injection_pressure`·`top_temp1·2`·`bottom_temp1·2`·`biscuit_thickness`·`cooling_water_temp`·`mechanical_strength` 로 입력 8개 생성. 기준값 0.572 이상 = 1차 불량. 새 API `GET /api/casting/model`(이름·기준값·검증 성적). DB 쓰기 없음. 공정 최적화는 `prob` 를 쓰지 않아 영향 없음. 위 「임시 규칙」 첫 줄은 이 날짜부터 해당 없음.

@@ -14,13 +14,23 @@ export type Features = Record<FeatureKey, number | null>; // null = 결측 (molt
 
 /** 샷 1건의 예측 결과 */
 export interface Shot {
-  shotId: number;          // production_count
+  shotId: number;          // production_count — 하루 안에서 중복될 수 있음 (카운터 재시작). 화면 키로 쓰지 말 것
+  castingId?: string;      // 샷 고유키 'YYMMDD_HHMMSS_생산번호' (실데이터 API 만, 목업엔 없음)
   time: string;            // 'H:mm:ss'
-  prob: number;            // 불량 확률 0~1 (모델 출력)
+  prob: number;            // 1차(ML) 불량 점수 0~1 (모델 출력, 실제 확률보다 높게 나옴 — 확률 %로 표시 금지)
   actual: 0 | 1 | null;    // 실제 라벨(PassOrFail). 아직 모르면 null
   features: Features;
   /** 선택: 변수별 SHAP 기여도. 있으면 '주요 원인'에 그대로 사용 */
   contributions?: Partial<Record<FeatureKey, number>>;
+}
+
+/** 1차(ML) 검사 모델 — JH API /api/casting/model (TM 배포 pkl 메타데이터) */
+export interface MlModel {
+  name: string;
+  threshold: number;      // 점수 ≥ threshold 면 1차 불량
+  trainedOn: string;      // 학습 데이터 설명
+  features: string[];     // 입력 순서
+  test: { Recall?: number; Precision?: number; F1?: number }; // TM 검증 성적
 }
 
 /** 현재 배포된 모델 정보 (Model Management와 공유) */

@@ -88,7 +88,7 @@ function Spark({ shots, model, k, extra }: { shots: Shot[]; model: ModelInfo; k:
         const v = x.features[k];
         const sev = severity(model, k, v);
         return v != null && sev !== 'ok'
-          ? <rect key={x.shotId} x={X(i) - 1.6} y={Y(v) - 1.6} width="3.2" height="3.2" className={sev === 'bad' ? s.sparkBad : s.sparkWarn} />
+          ? <rect key={i} x={X(i) - 1.6} y={Y(v) - 1.6} width="3.2" height="3.2" className={sev === 'bad' ? s.sparkBad : s.sparkWarn} />
           : null;
       })}
     </svg>

@@ -120,7 +120,7 @@ function ControlChart({ k, pts, lim, title, note, ewma = false }: {
         <polyline fill="none" stroke="var(--accent)" strokeWidth={1.5}
           points={pts.map((p, i) => `${x(i).toFixed(1)},${y(p.y).toFixed(1)}`).join(' ')} />
         {pts.map((p, i) => (
-          <circle key={p.id} cx={x(i)} cy={y(p.y)} r={hover === i ? 5 : 3.5}
+          <circle key={i} cx={x(i)} cy={y(p.y)} r={hover === i ? 5 : 3.5}
             fill={isBad(p) ? 'var(--bad)' : p.rules.length ? 'var(--warn)' : 'var(--accent)'} stroke="var(--panel)" strokeWidth={1}
             onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
         ))}
