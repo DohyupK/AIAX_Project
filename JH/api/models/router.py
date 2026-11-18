@@ -1,9 +1,9 @@
 """Model Management API — 모델 레지스트리(ai.model_registry) + 공정별 성과지표 조회 (읽기 전용 계정 app_lake)
 
-DB 공정 코드 → 화면 이름 (코드 이름은 MS 결정 전까지 유지, 2026-11-18 사용자 결정 2a)
-  CAST-OPT  = 품질 1차 검사 (ML)  지표 ai.model_metric_cast_opt  : PR-AUC·Recall·Precision·F1
-  CAST-QC   = 품질 2차 검사 (DL)  지표 ai.model_metric_cast_qc   : Accuracy·Recall·Precision·F1
-  SAFE-GATE = 보호구 착용 위반     지표 ai.model_metric_safe_gate : Accuracy·Recall·Precision·F1
+DB 공정 코드 → 화면 이름 (MS 가 2026-11-18 코드·테이블 이름 변경)
+  CAST-QC1 = 품질 1차 검사 (ML)  지표 ai.model_metric_cast_qc1 : PR-AUC·Recall·Precision·F1
+  CAST-QC2 = 품질 2차 검사 (DL)  지표 ai.model_metric_cast_qc2 : Accuracy·Recall·Precision·F1
+  SAFE-PPE = 보호구 착용 위반     지표 ai.model_metric_safe_ppe : Accuracy·Recall·Precision·F1
 각 공정의 배포(deployed) 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차는 casting/model.py 가 파일을 불러 씀).
 ponytail: 등록·배포(쓰기)는 ai 쓰기 계정이 생긴 뒤 — 배포 시 같은 공정 기존 배포 해제는 DB 트리거가 처리.
 """
@@ -29,12 +29,12 @@ SELECT r.model_registry_idx, r.model_name, r.version, r.process_code, r.descript
        COALESCE(o.precision_score, q.precision_score, g.precision_score) AS precision_score,
        COALESCE(o.f1_score, q.f1_score, g.f1_score) AS f1_score
 FROM ai.model_registry r
-LEFT JOIN ai.model_metric_cast_opt o
-       ON r.process_code = 'CAST-OPT' AND (o.model_name, o.version) = (r.model_name, r.version)
-LEFT JOIN ai.model_metric_cast_qc q
-       ON r.process_code = 'CAST-QC' AND (q.model_name, q.version) = (r.model_name, r.version)
-LEFT JOIN ai.model_metric_safe_gate g
-       ON r.process_code = 'SAFE-GATE' AND (g.model_name, g.version) = (r.model_name, r.version)
+LEFT JOIN ai.model_metric_cast_qc1 o
+       ON r.process_code = 'CAST-QC1' AND (o.model_name, o.version) = (r.model_name, r.version)
+LEFT JOIN ai.model_metric_cast_qc2 q
+       ON r.process_code = 'CAST-QC2' AND (q.model_name, q.version) = (r.model_name, r.version)
+LEFT JOIN ai.model_metric_safe_ppe g
+       ON r.process_code = 'SAFE-PPE' AND (g.model_name, g.version) = (r.model_name, r.version)
 ORDER BY r.model_registry_idx
 """
 

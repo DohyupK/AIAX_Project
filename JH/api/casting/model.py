@@ -1,6 +1,6 @@
-"""1차(ML) 품질 검사 모델 — Model Management 에서 「품질 1차 검사」(DB process_code CAST-OPT)로 배포된 모델 사용
+"""1차(ML) 품질 검사 모델 — Model Management 에서 「품질 1차 검사」(DB process_code CAST-QC1)로 배포된 모델 사용
 
-배포 모델 = ai.model_registry 의 CAST-OPT·deployed 행 → file_name 으로 TM/model/<이름>/<파일> 을 불러옴.
+배포 모델 = ai.model_registry 의 CAST-QC1·deployed 행 → file_name 으로 TM/model/<이름>/<파일> 을 불러옴.
 배포 모델이 없으면 기본 모델(TM 배포 DieCasting_XGB_20261114_09)을 씀 — 레지스트리 등록 전까지 (사용자 결정 1a).
 pkl 형식: TM 최종 모델 형식(dict: model·features·threshold·thresholds). 명세: TM/기능표.md
 보안: pickle 은 불러올 때 코드가 실행되므로 TM/model 폴더 안 .pkl 만 허용 (DB 값이라도 다른 경로·형식 거절).
@@ -23,7 +23,7 @@ log = logging.getLogger("jh.casting.model")
 MODEL_DIR = (Path(__file__).resolve().parents[3] / "TM" / "model").resolve()
 DEFAULT_NAME = "DieCasting_XGB_20261114_09"            # 레지스트리 등록 전 기본 모델
 DEFAULT_FILE = f"{DEFAULT_NAME}.pkl"
-PROCESS_CODE = "CAST-OPT"                              # DB 코드 = 화면 「품질 1차 검사」 (코드 이름은 MS 결정 전까지 유지)
+PROCESS_CODE = "CAST-QC1"                              # DB 코드 = 화면 「품질 1차 검사」
 FILE_RE = re.compile(r"^[A-Za-z0-9_.-]+\.pkl$")        # 파일 이름만 (경로 구분자 금지)
 PRESSURE_LOW = 600                                     # pressure_low = injection_pressure < 600 (TM 전처리 규칙)
 
