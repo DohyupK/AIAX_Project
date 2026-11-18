@@ -109,11 +109,6 @@ export default function ProcessOptimizationDashboard() {
             </select>
           </label>
           <span className={s.chip}>품목 <b>{PRODUCT}</b></span>
-          {model && (
-            <span className={s.chip} title="Model Management에서 배포된 모델">
-              모델 <b>{model.name} {model.version}</b>
-            </span>
-          )}
           <span className={s.chip}>
             <span className={`${s.dot} ${playing ? s.dotLive : ''}`} />
             <b>{playing ? '실시간' : finished ? '재생 종료' : '일시정지'}</b>

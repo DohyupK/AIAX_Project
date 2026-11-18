@@ -1,68 +1,48 @@
 // 정렬·입력 검사 자체 점검 — 실행: node JH/frontend/pages/model_management/logic.check.ts (Node 23.6+)
 import assert from "node:assert/strict";
-import { MODELS, PROCESS } from "./data.ts";
-import { applyDeploy, buildModelName, createdAtNow, sortModels, syncDeployedFlags, validateDraft, type Draft } from "./logic.ts";
+import { PROCESS, PROCESS_METRICS, type Model } from "./data.ts";
+import { sortModels, validateDraft, type Draft } from "./logic.ts";
+
+const model = (id: number, over: Partial<Model> = {}): Model => ({
+  id, name: "DieCasting_XGB", version: String(id), createdAt: `2026-11-${String(10 + id).padStart(2, "0")}`,
+  process: "qc1", description: "", metrics: {}, deployed: false, fileName: null, ...over,
+});
+const LIST = [model(1), model(2, { deployed: true }), model(3), model(4, { process: "qc2", deployed: true })];
 
 // 배포 모델은 어떤 정렬에서도 맨 위
 for (const asc of [true, false]) {
-  const out = sortModels(MODELS, "createdAt", asc, PROCESS);
+  const out = sortModels(LIST, "createdAt", asc, PROCESS);
   const firstUndeployed = out.findIndex((m) => !m.deployed);
   assert.ok(out.slice(firstUndeployed).every((m) => !m.deployed), "배포 모델 상단 고정");
-  assert.equal(out.length, MODELS.length);
+  assert.equal(out.length, LIST.length);
 }
-assert.equal(MODELS.length, 56, "DieCasting 모델 56건");
-assert.equal(MODELS.filter((m) => m.deployed).length, 1, "배포 모델 1건");
-assert.ok(MODELS.every((m) => !m.version.includes("exp") && m.version !== "v1.0" && m.version !== "v1.0-val"), "exp/v1.0 버전 제거");
-assert.ok(MODELS.every((m) => /^DieCasting_[A-Za-z0-9]+$/.test(m.name)), "표시명 DieCasting_{Algo}");
-assert.ok(MODELS.every((m) => /^\d+(\.\d+)?$/.test(m.version)), "버전 숫자 형식");
-// 동일 표시명에 버전이 겹치지 않음
-{
-  const keys = MODELS.map((m) => `${m.name}@${m.version}`);
-  assert.equal(new Set(keys).size, keys.length, "name+version 유니크");
-}
-assert.ok(MODELS.some((m) => m.name === "DieCasting_XGB" && m.version === "1"), "XGB 시작 버전 1");
-assert.ok(MODELS.some((m) => m.name === "DieCasting_XGB" && m.version === "1.01"), "XGB 소폭 1.01");
-assert.ok(MODELS.some((m) => m.name === "DieCasting_XGB" && m.version === "1.1"), "XGB 큰 차이 1.1");
-
 // 버전은 숫자 기준 정렬 (v1.10 > v1.2)
-const v = sortModels(
-  [
-    { ...MODELS[0], id: 1, version: "v1.10", deployed: false },
-    { ...MODELS[0], id: 2, version: "v1.2", deployed: false },
-  ],
-  "version",
-  true,
-  PROCESS,
+assert.deepEqual(
+  sortModels([model(1, { version: "v1.10" }), model(2, { version: "v1.2" })], "version", true, PROCESS).map((m) => m.version),
+  ["v1.2", "v1.10"],
 );
-assert.deepEqual(v.map((m) => m.version), ["v1.2", "v1.10"]);
 
-const ok: Draft = { name: "XGB", version: "v1", process: "quality", description: "", accuracy: "0.9", recall: "1", precision: "0", f1: "0.5" };
-assert.deepEqual(validateDraft(ok, PROCESS), {});
-const bad = validateDraft({ ...ok, name: " ", process: "toString", accuracy: "1.2", recall: "", f1: "abc" }, PROCESS);
-assert.deepEqual(Object.keys(bad).sort(), ["accuracy", "f1", "name", "process", "recall"]);
+// 공정 이름·DB 코드
+assert.deepEqual(
+  Object.values(PROCESS).map((p) => [p.label, p.code]),
+  [["품질 1차 검사", "CAST-QC1"], ["품질 2차 검사", "CAST-QC2"], ["보호구 착용 위반", "SAFE-PPE"]],
+);
+// 공정별 지표: 품질 1차 = PR-AUC·Recall·Precision·F1 (DB ai.model_metric_cast_qc1), 나머지 = Accuracy·Recall·Precision·F1
+assert.deepEqual(PROCESS_METRICS.qc1, ["prAuc", "recall", "precision", "f1"]);
+assert.deepEqual(PROCESS_METRICS.qc2, ["accuracy", "recall", "precision", "f1"]);
+assert.deepEqual(PROCESS_METRICS.ppe, ["accuracy", "recall", "precision", "f1"]);
+
+// 입력 검사: 고른 공정의 지표 4개만 검사
+const ok: Draft = { name: "XGB", version: "v1", process: "qc2", description: "", accuracy: "0.9", prAuc: "", recall: "1", precision: "0", f1: "0.5" };
+assert.deepEqual(validateDraft(ok, PROCESS, PROCESS_METRICS), {}, "품질 2차는 PR-AUC 비어도 통과");
+assert.deepEqual(Object.keys(validateDraft({ ...ok, process: "qc1" }, PROCESS, PROCESS_METRICS)), ["prAuc"], "품질 1차는 PR-AUC 필수");
+assert.deepEqual(validateDraft({ ...ok, process: "qc1", prAuc: "0.83", accuracy: "" }, PROCESS, PROCESS_METRICS), {}, "품질 1차는 Accuracy 안 받음");
+const bad = validateDraft({ ...ok, name: " ", accuracy: "1.2", recall: "", f1: "abc" }, PROCESS, PROCESS_METRICS);
+assert.deepEqual(Object.keys(bad).sort(), ["accuracy", "f1", "name", "recall"]);
+assert.deepEqual(Object.keys(validateDraft({ ...ok, process: "toString" }, PROCESS, PROCESS_METRICS)), ["process"]);
 
 // 알고리즘: 영문 시작, 대문자 허용 (XGB, CatB)
-assert.deepEqual(validateDraft({ ...ok, name: "LGBM" }, PROCESS), {});
-assert.deepEqual(validateDraft({ ...ok, name: "CatB" }, PROCESS), {});
-for (const name of ["-xgb", "x gb", "casting/defect"]) assert.ok(validateDraft({ ...ok, name }, PROCESS).name, name);
-
-assert.equal(buildModelName("DieCasting", "XGB", "2026-11-14"), "DieCasting_XGB_20261114_01");
-
-// 배포 전환: 공정 내 1개만 deployed, applyCount 증가
-{
-  const deployed = MODELS.find((m) => m.deployed)!;
-  const other = MODELS.find((m) => m.process === deployed.process && !m.deployed)!;
-  const next = applyDeploy(MODELS, other.id);
-  assert.equal(next.filter((m) => m.deployed && m.process === other.process).length, 1);
-  assert.ok(next.find((m) => m.id === other.id)?.deployed);
-  assert.equal(next.find((m) => m.id === other.id)?.applyCount, other.applyCount + 1);
-  assert.equal(applyDeploy(next, other.id), next, "이미 배포면 동일 참조");
-  const synced = syncDeployedFlags(MODELS, other.id);
-  assert.equal(synced.filter((m) => m.deployed).length, 1);
-  assert.ok(synced.find((m) => m.id === other.id)?.deployed);
-}
-
-// 생성일 자동 기록: 로컬 날짜 YYYY-MM-DD
-assert.equal(createdAtNow(new Date(2026, 0, 5, 23, 59)), "2026-01-05");
+assert.deepEqual(validateDraft({ ...ok, name: "CatB" }, PROCESS, PROCESS_METRICS), {});
+for (const name of ["-xgb", "x gb", "casting/defect"]) assert.ok(validateDraft({ ...ok, name }, PROCESS, PROCESS_METRICS).name, name);
 
 console.log("model_management logic: OK");

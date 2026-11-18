@@ -1,18 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getActiveModelId, setActiveModelId } from "../../common/casting/activeModel";
 import styles from "./ModelManagement.module.css";
 import ModelForm from "./ModelForm";
-import { MODELS, PROCESS, type Model, type Process } from "./data";
-import { applyDeploy, sortModels, syncDeployedFlags, type SortKey } from "./logic";
+import { METRIC_LABEL, PROCESS, PROCESS_METRICS, fetchModels, type Model, type Process } from "./data";
+import { sortModels, type SortKey } from "./logic";
 
 type Tab = "all" | Process;
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "전체" },
-  { key: "optimization", label: PROCESS.optimization.label },
-  { key: "quality", label: PROCESS.quality.label },
-  { key: "safety", label: PROCESS.safety.label },
+  { key: "qc1", label: PROCESS.qc1.label },
+  { key: "qc2", label: PROCESS.qc2.label },
+  { key: "ppe", label: PROCESS.ppe.label },
 ];
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "id", label: "Idx" },
@@ -22,31 +21,35 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "version", label: "버전" },
 ];
 
-// 성과지표 0~1 값을 소수점 둘째 자리로 (% 표기 안 함)
-const num2 = (n: number) => n.toFixed(2);
+// 성과지표 0~1 값을 소수점 둘째 자리로 (% 표기 안 함). 값 없으면 —
+const num2 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2));
+const DB_WRITE_PENDING = "DB 쓰기 계정 연결 전";
 
-const defaultDeployedId = MODELS.find((m) => m.deployed)?.id ?? MODELS[0]?.id ?? 1;
-
-/** Model Management — 공정별 모델 목록·성과지표 조회 + 신규 모델 등록·배포 */
+/**
+ * Model Management — 공정별 모델 목록·성과지표 조회 (서버 DB, 읽기 전용)
+ * 공정별 배포 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차 → 품질 검사 1차 판정 등). 등록·배포 저장은 쓰기 계정 연결 후
+ */
 export default function ModelManagement() {
-  // ponytail: 등록 모델은 화면 메모리. 배포 id 는 localStorage (대시보드 fetchActiveModel 과 공유)
-  const [models, setModels] = useState<Model[]>(() => syncDeployedFlags(MODELS, defaultDeployedId));
+  const [models, setModels] = useState<Model[] | null>(null); // null = 불러오는 중
+  const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState<Tab>("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "id", asc: true });
   const [formOpen, setFormOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
 
-  // 클라이언트에서 localStorage 배포 id 반영
   useEffect(() => {
-    const id = getActiveModelId(defaultDeployedId);
-    setModels(syncDeployedFlags(MODELS, id));
-    setHydrated(true);
+    fetchModels()
+      .then(setModels)
+      .catch((e: unknown) => {
+        console.error("[model_management] 모델 목록 조회 실패", e);
+        setLoadError("모델 목록을 불러오지 못했습니다. JH API 서버(127.0.0.1:8000)를 확인해 주세요.");
+        setModels([]);
+      });
   }, []);
 
   const visible = sortModels(
     // 전체 탭 = 현재 대시보드에 배포(적용)된 모델만 / 공정 탭 = 해당 공정 전 버전
-    models.filter((m) => (tab === "all" ? m.deployed : m.process === tab)),
+    (models ?? []).filter((m) => (tab === "all" ? m.deployed : m.process === tab)),
     sort.key,
     sort.asc,
     PROCESS,
@@ -61,25 +64,6 @@ export default function ModelManagement() {
 
   function toggleSort(key: SortKey) {
     setSort((s) => ({ key, asc: s.key === key ? !s.asc : true }));
-  }
-
-  function addModel(m: Omit<Model, "id">) {
-    const id = Math.max(0, ...models.map((x) => x.id)) + 1;
-    setModels((list) => [...list, { ...m, id }]);
-    setSelectedId(id);
-    // 새 모델은 미배포라 전체 탭에 안 보임 → 해당 공정 탭으로 이동
-    if (tab === "all" ? !m.deployed : tab !== m.process) setTab(m.process);
-    setFormOpen(false);
-  }
-
-  function deploySelected() {
-    if (!selected || selected.deployed) return;
-    const next = applyDeploy(models, selected.id);
-    // 전역 활성 1개로 플래그 맞춤 (대시보드 fetchActiveModel 과 동일)
-    const synced = syncDeployedFlags(next, selected.id);
-    setActiveModelId(selected.id);
-    setModels(synced);
-    if (tab === "all") setSelectedId(selected.id);
   }
 
   return (
@@ -119,16 +103,14 @@ export default function ModelManagement() {
                   <span className={`${styles.badge} ${selected.deployed ? styles.badgeOn : ""}`}>
                     {selected.deployed ? "Y · 배포" : "N · 미배포"}
                   </span>
-                  {hydrated && !selected.deployed && (
-                    <button
-                      type="button"
-                      className={`${styles.btn} ${styles.btnPrimary} ${styles.deployBtn}`}
-                      onClick={(e) => (e.stopPropagation(), deploySelected())}
-                    >
-                      이 모델 배포
-                    </button>
-                  )}
+                  {!selected.deployed && <span className={styles.muted}> 배포 변경: {DB_WRITE_PENDING}</span>}
                 </dd>
+                {selected.deployed && (
+                  <>
+                    <dt>사용 화면</dt>
+                    <dd>{PROCESS[selected.process].usedBy}</dd>
+                  </>
+                )}
                 {selected.fileName && (
                   <>
                     <dt>모델 파일</dt>
@@ -140,21 +122,31 @@ export default function ModelManagement() {
                 <dt>성과지표</dt>
                 <dd>
                   <div className={styles.metrics}>
-                    <span><small>Accuracy</small><b>{num2(selected.metrics.accuracy)}</b></span>
-                    <span><small>Recall</small><b>{num2(selected.metrics.recall)}</b></span>
-                    <span><small>Precision</small><b>{num2(selected.metrics.precision)}</b></span>
-                    <span><small>F1-Score</small><b>{num2(selected.metrics.f1)}</b></span>
+                    {/* 공정마다 지표 4개가 다름 — 품질 1차: PR-AUC·Recall·Precision·F1 */}
+                    {PROCESS_METRICS[selected.process].map((k) => (
+                      <span key={k}><small>{METRIC_LABEL[k]}</small><b>{num2(selected.metrics[k])}</b></span>
+                    ))}
                   </div>
                 </dd>
               </dl>
             </div>
           ) : (
-            <p className={styles.muted}>등록된 모델이 없습니다.</p>
+            <p className={styles.muted}>
+              {models === null ? "불러오는 중…" : loadError || "등록된 모델이 없습니다. (서버 DB 모델 레지스트리)"}
+              {models !== null && !loadError && tab === "qc1" && " — 품질 검사 1차는 등록 전까지 기본 모델(DieCasting_XGB_20261114_09)을 씁니다."}
+            </p>
           )}
         </section>
 
         <div className={styles.addRow}>
-          <button type="button" className={styles.addBtn} aria-label="모델 등록" title="모델 등록" onClick={() => setFormOpen(true)}>
+          {/* 등록 폼은 입력 검사까지 — DB 저장은 쓰기 계정 연결 후 */}
+          <button
+            type="button"
+            className={styles.addBtn}
+            aria-label="모델 등록"
+            title={`모델 등록 (저장: ${DB_WRITE_PENDING})`}
+            onClick={() => setFormOpen(true)}
+          >
             +
           </button>
         </div>
@@ -202,7 +194,7 @@ export default function ModelManagement() {
         </table>
       </div>
 
-      {formOpen && <ModelForm onClose={() => setFormOpen(false)} onSubmit={addModel} />}
+      {formOpen && <ModelForm onClose={() => setFormOpen(false)} />}
     </div>
   );
 }
