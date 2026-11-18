@@ -1,7 +1,7 @@
 """공정(주조) 데이터 API — mes.investment_casting 원본·lake 정제본·ai 라벨을 읽기 전용 계정(app_lake)으로 조회
 
 응답 형식은 프런트 JH/frontend/common/casting/types.ts 의 Shot 과 같음.
-ponytail: 모델 연결 전이라 prob = 실제 판정(passorfail 0/1). 모델 API가 생기면 prob 만 모델 출력으로 교체.
+prob = 1차(ML) 불량 점수 (TM 배포 모델 DieCasting_XGB_20261114_09, casting/model.py), actual = 실제 판정(passorfail).
 """
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from datetime import date as Date
 
 from fastapi import APIRouter, HTTPException, Query
 
+from casting import model
 from common.db import connect
 
 router = APIRouter(prefix="/api/casting")
@@ -29,12 +30,12 @@ FEATURES = {
 LINE = Query(pattern=r"^line_no\d{1,2}$")
 
 
-def to_shot(r: dict) -> dict:
+def to_shot(r: dict, score: float) -> dict:
     t = r["date"]
     return {
         "shotId": r["production_count"],
         "time": f"{t.hour}:{t.minute:02d}:{t.second:02d}",
-        "prob": float(r["passorfail"] or 0),
+        "prob": score,   # 1차(ML) 불량 점수 0~1 — casting/model.py
         "actual": r["passorfail"],
         "features": {k: r[col] for k, col in FEATURES.items()},
         "castingId": r["casting_id"],
@@ -70,7 +71,22 @@ def predictions(date: Date, line: str = LINE) -> list[dict]:
     except Exception:
         log.exception("공정 샷 조회 실패 line=%s date=%s", line, date)
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
-    return [to_shot(r) for r in rows]
+    try:
+        sc = model.scores(rows)
+    except Exception:
+        log.exception("1차 검사 모델 점수 계산 실패 line=%s date=%s", line, date)
+        raise HTTPException(503, "1차 검사 모델을 실행하지 못했습니다.")
+    return [to_shot(r, s) for r, s in zip(rows, sc)]
+
+
+@router.get("/model")
+def model_info() -> dict:
+    """1차(ML) 검사 모델 정보 — 이름·기준값·검증 성적"""
+    try:
+        return model.info()
+    except Exception:
+        log.exception("1차 검사 모델 로드 실패")
+        raise HTTPException(503, "1차 검사 모델을 불러오지 못했습니다.")
 
 
 # ---- 불량 유형 라벨링 (lake 정제본 + ai 라벨) ----

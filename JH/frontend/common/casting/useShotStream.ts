@@ -79,6 +79,8 @@ export function useShotStream(line: string, date: string, playing: boolean, real
 
   return {
     shots,
+    /** 받아 온 하루치 전체 (재생과 무관) — 품질 검사의 하루 전체 기준 집계용 */
+    all,
     loading,
     error,
     retry: load,
