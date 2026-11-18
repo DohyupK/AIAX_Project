@@ -29,7 +29,7 @@ LAKE_IMAGE_TABLE = "lake.lake_casting_image"
 # 로컬 Docker Kafka (postgres 는 서버)
 KAFKA_BOOTSTRAP = os.environ.get("AIAX_KAFKA_BOOTSTRAP", "localhost:9094")
 
-CONSUMER_GROUP_FLINK = os.environ.get("AIAX_IMAGE_CG_FLINK", "dh.image.flink_role_a")
+# ingest 소비(모드 A)는 Flink job MS/db/flink/jobs/image_ingest.py 로 이전 (그룹 dh.image.flink_role_a 는 그쪽에서 사용)
 CONSUMER_GROUP_LAKE = os.environ.get("AIAX_IMAGE_CG_LAKE", "dh.image.lake_sync")
 
 

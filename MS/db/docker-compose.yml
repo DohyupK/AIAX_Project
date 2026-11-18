@@ -5,7 +5,8 @@ name: aiax-db
 services:
   postgres:
     image: postgres:18.6
-    container_name: aiax-postgres
+    # 서버(NCP)는 docker run 단독 컨테이너 aiax-postgres 를 씀 → 이름이 겹치지 않게 compose 쪽은 -local (2026-11-19)
+    container_name: aiax-postgres-local
     restart: unless-stopped
     # Postgres 비밀·bind는 프로젝트 루트 .env 단일 관리 (MS/db/.env 미사용)
     env_file: ../../.env
@@ -102,11 +103,19 @@ services:
     command: jobmanager
     ports:
       - "8081:8081"
+    # 이미지 수집 job(jobs/image_ingest.py) 의 DB 비밀번호(APP_MES_PASSWORD 등)는 루트 .env 에서
+    env_file: ../../.env
     environment:
+      # job 이 붙을 Postgres — 기본값 postgres(같은 compose). 서버(docker run 단독 Postgres)는 host.docker.internal,
+      # 내 PC 에서 서버 DB 로 붙을 땐 서버 도메인을 실행 시 AIAX_DB_HOST 로 지정
+      AIAX_DB_HOST: ${AIAX_DB_HOST:-postgres}
+      AIAX_KAFKA_BOOTSTRAP: kafka:9092
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         python.executable: /opt/pyflink/bin/python
         python.client.executable: /opt/pyflink/bin/python
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # 리눅스 서버에서 호스트(단독 Postgres) 접속용
     volumes:
       - ./flink/jobs:/opt/flink/jobs
 
@@ -115,11 +124,16 @@ services:
     container_name: aiax-flink-taskmanager
     restart: unless-stopped
     command: taskmanager
+    env_file: ../../.env
     environment:
+      AIAX_DB_HOST: ${AIAX_DB_HOST:-postgres}
+      AIAX_KAFKA_BOOTSTRAP: kafka:9092
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: 2
         python.executable: /opt/pyflink/bin/python
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./flink/jobs:/opt/flink/jobs
     depends_on:
