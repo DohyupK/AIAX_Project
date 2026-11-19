@@ -1,4 +1,4 @@
-"""줄바꿈 우선 + 최대 300자 청크 (짧은 overlap)."""
+"""줄바꿈 우선 + 최대 800자 청크 (overlap 80)."""
 from __future__ import annotations
 
 from documents.paths import CHUNK_CHARS, CHUNK_OVERLAP

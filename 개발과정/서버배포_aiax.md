@@ -155,6 +155,7 @@ curl -sk -o /dev/null -w "via-nginx:%{http_code}\n" \
 | `direct:000` | uvicorn 미기동·기동 중 | `tmux capture-pane -t myapp:api -p`, 수초 후 재시도 |
 | `via-nginx:404` | `location /api/` 없음 | gknushift conf에 추가 후 reload |
 | `via-nginx:503` | DB URL 호스트가 공인 IP | 서버 `.env`를 `127.0.0.1`로 바꾼 뒤 restart |
+| 문서 업로드 `ConnectionTimeout` / `/api/documents` 500(~10s) | `DOCS_DATABASE_URL` 호스트가 공인 IP (`49.50…`). HR 등 `127.0.0.1`은 정상 | 서버 `.env`만 `DOCS`→`127.0.0.1`, `DOCUMENT_ROOT=/document` 후 `systemctl restart myapp`. 원커맨드: `bash scripts/fix-docs-db-host.sh` |
 | 원격 화면 API 실패 | `NEXT_PUBLIC_*=127.0.0.1` | 도메인 또는 빈 값 (브라우저의 127.0.0.1은 PC) |
 
 ```bash
