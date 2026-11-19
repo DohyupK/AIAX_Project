@@ -1,9 +1,11 @@
 """경영 관리자 리포트 API — 서버 실제 값 (읽기 전용 계정 app_lake)
 
 생산량·최종 불량 = mes.investment_casting (세 라인 합계, 불량 = 실제 판정 passorfail = 1)
+고정값(단가·재활용 회수액·재활용률·MTTR·MTBF·리콜) = org.fixed_value (적용 시작일 이력 그대로 — 화면이 리포트 기간 마지막 날 기준으로 고름)
 안전 = ai.ppe_check — 판정·위반 기준은 보호구 착용 위반 API(ppe/router.py CHECKS·VIOLATION) 그대로 (두 화면 숫자 일치)
+SPC 경고 알람 = mes.investment_casting × mes.spc_limit — 「샷 × 변수」 한 점이 I 관리선 밖이면 1건 (관리도 ▲ 규칙 1 과 같은 기준)
+근태 = org.employee_record — 총 인원 = 그날 근무 기록이 있는 사람(근무 예정자), 출근 = 결근 아님 (org.attendance 와 1:1 일치)
 화면: JH/frontend/pages/management_report — 날짜별 값을 받아 일일·주간·월간 리포트 기간으로 합산
-근태·SPC·1차 불량·재활용·불량 유형은 아직 화면 목업.
 """
 from __future__ import annotations
 
@@ -12,6 +14,8 @@ from datetime import date as Date
 
 from fastapi import APIRouter, HTTPException, Query
 
+from casting.router import FEATURES
+from casting.spc import _TABLE as SPC_TABLE
 from common.db import connect
 from ppe.router import CHECKS, GEARS, VIOLATION
 
@@ -71,3 +75,66 @@ def safety(start: Date = Query(alias="from"), end: Date = Query(alias="to")) -> 
             for r in violations
         ],
     }
+
+
+@router.get("/fixed")
+def fixed() -> list[dict]:
+    """고정값 전체 (이름·값·단위·적용 시작일, 적용 시작일 오름차순)"""
+    try:
+        with connect(DB) as conn:
+            rows = conn.execute(
+                "SELECT value_name, value, unit, effective_date FROM org.fixed_value ORDER BY effective_date, fixed_value_idx"
+            ).fetchall()
+    except Exception:
+        log.exception("리포트 고정값 조회 실패")
+        raise HTTPException(503, "고정값 조회에 실패했습니다.")
+    return [{"name": r["value_name"], "value": float(r["value"]), "unit": r["unit"], "effectiveDate": r["effective_date"].isoformat()}
+            for r in rows]
+
+
+# SPC 대상 변수 = 기준선 표의 13개 (DB 칼럼 이름 — mes.spc_limit.variable 과 같음)
+_SPC_COLS = [FEATURES[k] for k in SPC_TABLE["line_no1"]]
+SPC_SQL = f"""
+WITH lim AS (   -- 기준선 이력: 적용 시작일 ~ 다음 적용 시작일 전까지
+  SELECT line_unit, variable, i_lcl, i_ucl, effective_date,
+         lead(effective_date) OVER (PARTITION BY line_unit, variable ORDER BY effective_date) AS until
+  FROM mes.spc_limit
+)
+SELECT m."timestamp" AS d, count(*) FILTER (WHERE v.val > l.i_ucl) AS ucl, count(*) FILTER (WHERE v.val < l.i_lcl) AS lcl
+FROM mes.investment_casting m
+CROSS JOIN LATERAL (VALUES {", ".join(f"('{c}', m.{c})" for c in _SPC_COLS)}) AS v(variable, val)
+JOIN lim l ON l.line_unit = m.line_unit AND l.variable = v.variable
+          AND m."timestamp" >= l.effective_date AND (l.until IS NULL OR m."timestamp" < l.until)
+WHERE m."timestamp" BETWEEN %s AND %s AND v.val IS NOT NULL
+GROUP BY 1 ORDER BY 1
+"""
+
+
+@router.get("/spc")
+def spc_alarms(start: Date = Query(alias="from"), end: Date = Query(alias="to")) -> list[dict]:
+    """날짜별 SPC 경고 알람 — I 관리선 밖 「샷 × 변수」 수 (UCL 초과 / LCL 미만, 세 라인 합계, 생산 없는 날은 빠짐)"""
+    _check_range(start, end)
+    try:
+        with connect(DB) as conn:
+            rows = conn.execute(SPC_SQL, (start, end)).fetchall()
+    except Exception:
+        log.exception("리포트 SPC 알람 집계 실패 from=%s to=%s", start, end)
+        raise HTTPException(503, "SPC 알람 집계에 실패했습니다.")
+    return [{"date": r["d"].isoformat(), "ucl": r["ucl"], "lcl": r["lcl"]} for r in rows]
+
+
+@router.get("/attendance")
+def attendance(start: Date = Query(alias="from"), end: Date = Query(alias="to")) -> list[dict]:
+    """날짜별 근태 — scheduled = 그날 근무 기록이 있는 사람(근무 예정자), present = 그중 결근 아님"""
+    _check_range(start, end)
+    try:
+        with connect(DB) as conn:
+            rows = conn.execute(
+                """SELECT work_date AS d, count(*) AS scheduled, count(*) FILTER (WHERE NOT absent) AS present
+                   FROM org.employee_record WHERE work_date BETWEEN %s AND %s GROUP BY 1 ORDER BY 1""",
+                (start, end),
+            ).fetchall()
+    except Exception:
+        log.exception("리포트 근태 집계 실패 from=%s to=%s", start, end)
+        raise HTTPException(503, "근태 집계에 실패했습니다.")
+    return [{"date": r["d"].isoformat(), "scheduled": r["scheduled"], "present": r["present"]} for r in rows]

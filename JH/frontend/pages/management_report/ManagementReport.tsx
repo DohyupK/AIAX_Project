@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { REPORTS, fetchDailyProduction, fetchSafety, type DailyProduction, type Period, type SafetyData } from './data';
-import { LIST_COUNT, listReports, mockReport, ratio, withActual, withSafety, type ReportItem } from './logic';
+import { fetchReportSource, type Period, type ReportSource } from './data';
+import { LIST_COUNT, buildReport, listReports, ratio, type ReportItem } from './logic';
 import ReportDialog from './ReportDialog';
 import { pct } from './ReportView';
 import po from '../process_optimization/ProcessOptimization.module.css';
@@ -20,37 +20,34 @@ export default function ManagementReport() {
   // 오늘 날짜는 브라우저에서만 계산 (서버 렌더 시각과 어긋나지 않게)
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => setNow(new Date()), []);
-  const [data, setData] = useState<{ daily: DailyProduction[]; safety: SafetyData } | null>(null); // null = 불러오는 중
+  const [data, setData] = useState<ReportSource | null>(null); // null = 불러오는 중
   const [error, setError] = useState('');
 
   // 목록보다 1건 더 만들어 마지막 행도 직전 기간(prev)과 비교
   const items = useMemo(() => (now ? listReports(period, now, LIST_COUNT[period] + 1) : []), [period, now]);
 
-  // 목록 전체 기간의 생산·안전을 한 번에 조회 (탭을 바꿀 때마다)
+  // 목록 전체 기간의 원자료(생산·안전·SPC·근태·고정값)를 한 번에 조회 (탭을 바꿀 때마다)
   useEffect(() => {
     if (!items.length) return;
     let alive = true; // 탭을 빨리 바꿀 때 늦게 온 이전 탭 응답은 버림
     const from = items[items.length - 1].from, to = items[0].to;
     setData(null);
     setError('');
-    Promise.all([fetchDailyProduction(from, to), fetchSafety(from, to)])
-      .then(([daily, safety]) => alive && setData({ daily, safety }))
+    fetchReportSource(from, to)
+      .then(src => alive && setData(src))
       .catch((e: unknown) => {
-        console.error('[management_report] 생산·안전 집계 조회 실패', e);
-        if (alive) setError('생산·안전 데이터를 불러오지 못했습니다. JH API 서버를 확인해 주세요.');
+        console.error('[management_report] 리포트 원자료 조회 실패', e);
+        if (alive) setError('리포트 데이터를 불러오지 못했습니다. JH API 서버를 확인해 주세요.');
       });
     return () => { alive = false; };
   }, [items]);
 
-  // 리포트 값 = 목업 + 실제 생산량·불량·안전
+  // 리포트 값 = 기간 원자료 합산 + 기간 마지막 날 기준 고정값
   const rows = useMemo(() => {
     if (!data) return [];
-    const all = items.map(item => ({
-      item,
-      report: withSafety(withActual(mockReport(REPORTS[period], item.id), data.daily, item.from, item.to), data.safety, item.from, item.to),
-    }));
+    const all = items.map(item => ({ item, report: buildReport(data, item.from, item.to) }));
     return all.slice(0, -1).map((x, i) => ({ ...x, prev: all[i + 1].report }));
-  }, [items, data, period]);
+  }, [items, data]);
   const opened = open && rows.find(x => x.item.id === open.id);
 
   return (
@@ -70,7 +67,7 @@ export default function ManagementReport() {
         </div>
       </header>
 
-      <div className={po.banner}>생산량·불량(mes, 세 라인 합계)과 안전(보호구 판정)은 서버 실제 값입니다. 「목업」 표시 항목(근태·SPC·1차 불량·재활용·불량 유형)은 집계 연동 전 예시 값입니다.</div>
+      <div className={po.banner}>모든 항목이 서버 데이터입니다 — 생산·불량·SPC(mes, 세 라인 합계), 안전(보호구 판정), 근태(근무 예정자 기준), 단가·재활용률·MTTR·MTBF·리콜(고정값 DB).</div>
 
       <section className={po.panel}>
         <div className={po.panelHead}>
@@ -80,7 +77,7 @@ export default function ManagementReport() {
         <div className={s.listWrap}>
           <table className={`${s.table} ${s.listTable}`}>
             <thead>
-              <tr><th>리포트</th><th>대상 기간</th><th>생산량</th><th>불량률</th><th>출근율 <small>(목업)</small></th><th>안전 위반</th></tr>
+              <tr><th>리포트</th><th>대상 기간</th><th>생산량</th><th>불량률</th><th>출근율</th><th>안전 위반</th></tr>
             </thead>
             <tbody>
               {rows.map(({ item, report: r }) => (
