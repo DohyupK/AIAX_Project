@@ -1,6 +1,6 @@
 // 경영 리포트 계산 (화면·CSS import 없음) — 자체 점검: logic.check.ts
 // 타입만 import → node 단독 실행 가능. 단가는 인자로 받음
-import type { Period, PeriodReport } from "./data";
+import type { DailyProduction, Period, PeriodReport, SafetyData } from "./data";
 
 /** 분모 0이면 null */
 export const ratio = (n: number, d: number) => (d ? n / d : null);
@@ -80,6 +80,57 @@ export function mockReport(base: PeriodReport, seed: string): PeriodReport {
       violations,
       repeatViolators: Math.min(violations, v(base.safety.repeatViolators, "rv", 0.5)),
       byCompany,
+      byGear,
+    },
+  };
+}
+
+/**
+ * 목업 리포트에 실제 생산량·불량(기간 합산)을 넣음. 기간에 생산 데이터가 없으면 0 + noData
+ * 목업 항목은 실제 값과 모순되지 않게 맞춤: 1차 불량 ≥ 최종 불량, 재활용 ≤ 1차 불량, 불량 유형 합계 = 불량
+ */
+export function withActual(mock: PeriodReport, daily: DailyProduction[], from: string, to: string): PeriodReport {
+  const days = daily.filter((d) => d.date >= from && d.date <= to);
+  const production = days.reduce((a, d) => a + d.production, 0);
+  const defects = days.reduce((a, d) => a + d.defects, 0);
+  // 목업 1차 불량 비율(1차 ÷ 최종)을 실제 불량에 적용
+  const firstDefects = Math.min(production, Math.max(defects, Math.round(defects * (mock.firstDefects / Math.max(1, mock.defects)))));
+  return {
+    ...mock,
+    noData: days.length === 0,
+    production,
+    defects,
+    defectTypes: scaleTo(mock.defectTypes, defects),
+    firstDefects,
+    recycled: Math.min(firstDefects, Math.round(firstDefects * (mock.recycled / Math.max(1, mock.firstDefects)))),
+  };
+}
+
+/**
+ * 리포트 안전 값을 실제 원자료(기간 합산)로 교체 — 재위반 = 그 기간 안 2회 이상 위반한 사람
+ * 업체: 본사 사원 = 부서 이름, 하청 = 업체 이름. 장구별 = 위반 건의 미착용 판정 수
+ */
+export function withSafety(r: PeriodReport, data: SafetyData, from: string, to: string): PeriodReport {
+  const inRange = (d: string) => d >= from && d <= to;
+  const v = data.violations.filter((x) => inRange(x.date));
+  const perUser = new Map<string, number>();
+  const perCompany = new Map<string, { company: string; type: "본사" | "하청업체"; count: number }>();
+  const byGear = { helmet: 0, shoes: 0, vest: 0, gloves: 0, goggles: 0 };
+  for (const x of v) {
+    perUser.set(x.userId, (perUser.get(x.userId) ?? 0) + 1);
+    const key = `${x.vendor}|${x.company}`;
+    const c = perCompany.get(key) ?? { company: x.company, type: x.vendor ? "하청업체" : "본사", count: 0 };
+    c.count++;
+    perCompany.set(key, c);
+    for (const g of x.missing) byGear[g]++;
+  }
+  return {
+    ...r,
+    safety: {
+      scans: data.scans.filter((x) => inRange(x.date)).reduce((a, x) => a + x.count, 0),
+      violations: v.length,
+      repeatViolators: [...perUser.values()].filter((n) => n >= 2).length,
+      byCompany: [...perCompany.values()],
       byGear,
     },
   };
