@@ -73,6 +73,20 @@ export function fetchLive(line: string, after?: string): Promise<LiveShots> {
   return get<LiveShots>(`/api/casting/live?${q}`);
 }
 
+/** 관리도 기준선 (라인별·변수별 고정 표, 서버 casting/spc.py) */
+export interface SpcBaseline { cl: number; sigma: number; iLcl: number; iUcl: number; mrCl: number; mrUcl: number; ewmaLcl: number; ewmaUcl: number }
+/** 관리도 점 1개 — flow = 생산 흐름(0 = A), marks: n1 = 규칙 1(I 관리선 밖), n2·n3 = 규칙 2·3, mr·ewma = 관리선 밖 */
+export interface SpcPoint {
+  castingId: string; shotId: number; time: string; flow: number; runStart: boolean; approx: boolean;
+  value: number; mr: number | null; ewma: number; marks: ('n1' | 'n2' | 'n3' | 'mr' | 'ewma')[];
+}
+export interface SpcData { baseline: SpcBaseline; lambda: number; shots: SpcPoint[] }
+
+/** 관리도 — 보이는 구간(first~last castingId). EWMA·MR·넬슨 2·3 은 서버가 생산 흐름·런 첫 샷부터 계산 */
+export function fetchSpc(line: string, key: string, first: string, last: string): Promise<SpcData> {
+  return get<SpcData>(`/api/casting/spc?${new URLSearchParams({ line, key, first, last })}`);
+}
+
 /** 오늘 날짜 (KST, 'YYYY-MM-DD') — 공정 최적화: 오늘이면 실시간, 지난 날짜면 재생 */
 export const todayKst = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 

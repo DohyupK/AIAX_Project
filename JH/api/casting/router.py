@@ -2,6 +2,7 @@
 
 응답 형식은 프런트 JH/frontend/common/casting/types.ts 의 Shot 과 같음.
 prob = 1차(ML) 불량 점수 (Model Management 「품질 1차 검사」 배포 모델, 없으면 기본 모델 — casting/model.py), actual = 실제 판정(passorfail).
+/spc = 관리도 — 생산 흐름·생산 런 기준 EWMA·MR·넬슨 (casting/spc.py).
 /live = 실시간 따라가기 (오늘 KST, 현재 시각 이전 샷만 — 증분 조회).
 /second = 2차(DL) 판정 (「품질 2차 검사」 배포 모델, 없으면 기본 모델 — casting/dl_model.py, 이미지 mes.casting_image).
 """
@@ -12,7 +13,7 @@ from datetime import date as Date
 
 from fastapi import APIRouter, HTTPException, Query
 
-from casting import dl_model, model
+from casting import dl_model, model, spc
 from common.db import connect
 
 router = APIRouter(prefix="/api/casting")
@@ -125,6 +126,46 @@ def _scored(rows: list[dict], ctx: str) -> list[dict]:
         log.exception("1차 검사 모델 점수 계산 실패 %s", ctx)
         raise HTTPException(503, "1차 검사 모델을 실행하지 못했습니다.")
     return [to_shot(r, s) for r, s in zip(rows, sc)]
+
+
+SPC_CONTEXT = 6000   # 보이는 구간 앞쪽에서 런 시작을 찾을 때 조회하는 최대 샷 수 (런 최대 약 1,900샷 × 흐름 여러 개)
+SPC_WINDOW_MAX = 2100  # 보이는 구간 최대 샷 수 (실시간 화면 최대 2,000샷)
+SPC_KEYS = Query(pattern=r"^[A-Za-z0-9_]+$")
+
+
+@router.get("/spc")
+def spc_chart(line: str = LINE, key: str = SPC_KEYS,
+              first: str = Query(pattern=CASTING_ID), last: str = Query(pattern=CASTING_ID)) -> dict:
+    """관리도 — 보이는 구간(first~last, 시각 순)의 I·MR·EWMA 값과 표시.
+    EWMA·MR·넬슨 2·3 은 생산 흐름별로 그 런의 첫 샷부터 계산 (앞쪽 샷은 서버가 조회, 보이는 구간만 돌려줌)"""
+    base = spc.baseline(line, key)
+    col = FEATURES.get(key)
+    if not base or not col:
+        raise HTTPException(404, f"{line} · {key} 는 관리도 기준선이 없습니다.")
+    order = '"timestamp", date, production_count'
+    try:
+        with connect(DB) as conn:
+            ends = {r["casting_id"]: r for r in conn.execute(
+                'SELECT casting_id, "timestamp" AS d, date AS t, production_count AS p FROM mes.investment_casting '
+                "WHERE line_unit = %s AND casting_id = ANY(%s)", (line, [first, last])).fetchall()}
+            if first not in ends or last not in ends:
+                raise HTTPException(404, "관리도 구간의 샷을 찾을 수 없습니다.")
+            e = ends[last]
+            rows = conn.execute(
+                f'SELECT casting_id, "timestamp", date, production_count, {col} AS v FROM mes.investment_casting '
+                f'WHERE line_unit = %s AND ({order}) <= (%s, %s, %s) '
+                f'ORDER BY "timestamp" DESC, date DESC, production_count DESC LIMIT %s',
+                (line, e["d"], e["t"], e["p"], SPC_CONTEXT + SPC_WINDOW_MAX),
+            ).fetchall()[::-1]
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("관리도 조회 실패 line=%s key=%s first=%s last=%s", line, key, first, last)
+        raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
+    start = next((i for i, r in enumerate(rows) if r["casting_id"] == first), None)
+    if start is None:
+        raise HTTPException(400, f"관리도 구간이 너무 깁니다 (최대 {SPC_WINDOW_MAX}샷).")
+    return {"baseline": base, "lambda": spc.LAMBDA, "shots": spc.compute(rows, start, base)}
 
 
 @router.get("/model")
