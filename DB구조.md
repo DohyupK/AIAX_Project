@@ -50,7 +50,7 @@
 | 고정값·사내 문서 | `org.fixed_value`, `org.company_document`, `org.document_chunk` | 복사본 없음 |
 | 모델·판정·라벨 | `ai.*` | 복사본 없음 |
 
-> **복사본 갱신 상태 (2026-11-19):** `lake` 의 `org` 복사본·주조 수치는 Spark(`lake_sync`)가 매일 00:00 KST 갱신하도록 만들어져 있으나, **서버에 Spark 미설치로 2026-11-18 첫 전체 복사 이후 갱신된 적 없음** (`lake.etl_watermark` 참고). `mart` 는 첫 적재(57,295행) 이후 갱신 작업 자체가 없음. 이미지 복사본(`lake_casting_image`)은 DH 이미지 파이프라인이 별도로 갱신.
+> **복사본 갱신 상태 (2026-11-19):** Kafka·Flink·Spark·`lake_runner` 는 **MS PC(Docker)** 에서 실행 (서버는 Postgres·웹만). `lake` 의 `org` 복사본·주조 수치는 `lake_runner` 가 매일 00:00 KST 갱신 — MS PC 가 꺼져 있으면 다음에 켤 때 따라잡음 (`lake.etl_watermark` 의 `last_run_at` 으로 확인). `mart` 는 갱신 작업 자체가 없음 (line_no1 2026-08-04~10-11, 57,295행 고정). 이미지 복사본(`lake_casting_image`)은 DH 이미지 파이프라인이 별도로 갱신.
 
 ---
 
@@ -134,7 +134,7 @@
 
 | 컬럼 | 타입 | 제약·비고 |
 |------|------|-----------|
-| `casting_id` | `text` | PK. `GENERATED ALWAYS` (일자+시각+생산번호). 적재 시 입력 금지 |
+| `casting_id` | `text` | PK. `GENERATED ALWAYS` = `L라인번호_yymmdd_hhmmss_생산번호` (예: `L1_260804_070411_1`). 적재 시 입력 금지. 2026-11-19 라인 번호 추가 (전에는 라인 없이 날짜_시각_생산번호 → 라인 간 번호 겹침) |
 | `line_unit` | `text` | |
 | `production` | `text` | |
 | `timestamp` | `date` | 원본 일자 컬럼명 |
@@ -253,7 +253,7 @@ lake에서 제외: `timestamp`, `date`.
 | `13_casting_image.sql` | `mes.casting_image`, `lake.lake_casting_image` (DH 이미지 파이프라인) |
 | `14_품질_ai_추가.sql` | `org.fixed_value`, `ai.quality_prediction`·`model_robustness`·`quality_image_pool`·`llm_feedback` |
 | `15_사내문서함.sql` | `org.company_document`, `org.document_chunk` |
-| `16_모델관리_권한_시스템개발부만.sql` | `org.model_management_page` 를 시스템개발부만으로 교체 (read 전원, edit 과장 이상). **개발부 인원·직급이 바뀌면 다시 실행** (트리거 아님) |
+| `16_모델관리_권한_시스템개발부만.sql` | `org.model_management_page` 를 시스템개발부만으로 교체 (read 전원, edit 과장 이상, 소장·부서장 공통 규칙 제외). **개발부 인원·직급이 바뀌면 다시 실행** (트리거 아님) |
 | `17_app_ai_계정.sql` | 계정 `app_ai` 생성 + 모델·라벨 테이블 권한. 실행: `psql -v ai_pw=…` |
 | `18_app_ai_권한추가.sql` | `app_ai` 에 `model_robustness`·`quality_prediction` 권한 추가 |
 
@@ -263,6 +263,9 @@ lake에서 제외: `timestamp`, `date`.
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-11-19 | **주조 데이터 전체 교체** (새 CSV 3개, 요청 반영): mes 134,007 → **118,901** (line_no1 96,256 / line_no2 11,316 / line_no3 11,329, 세 라인 모두 ~2026-11-20). lake 동일하게 재생성, mart 57,295 (같은 범위) 재생성. 테스트 이미지 5장 삭제. 백업: MS PC `D:\AIAX_data\backup\*_20261119_213719.csv`. 실행: `MS/db/apps/src/apps/reload_casting.py` |
+| 2026-11-19 | **`casting_id` 규칙 변경**: `L라인번호_` 추가 (`init/03`, `08_data.sql.gz` 의 lake·mart 번호도 `L1_` 로). Flink `image_ingest.py` 형식 검사 수정. DH `payload.py` 형식 검사 수정 요청 |
+| 2026-11-19 | `lake_sync.py` 접속 버그 수정 (`--packages` 드라이버를 DriverManager 가 못 찾음 → 드라이버 직접 사용). MS PC 에서 첫 실행 성공 (org 1.46만 건 반영) |
 | 2026-11-19 | 문서 정리: 「어디에 무엇이 있나」·복사본 갱신 상태 추가, 계정 표에 `ai` 열·`app_ai` 추가, `ai`·이미지·변경 기록 테이블 절 추가, init 13~18 반영 |
 | 2026-11-19 | `18`: `app_ai` 에 `model_robustness`(SELECT·INSERT·DELETE)·`quality_prediction`(SELECT·INSERT·UPDATE) 권한 (JH 요청). 서버 적용 |
 | 2026-11-19 | `17`: 계정 `app_ai` (JH 요청, 모델 등록·라벨 저장용). `16`: 모델 관리 페이지 권한 시스템개발부 전용 |

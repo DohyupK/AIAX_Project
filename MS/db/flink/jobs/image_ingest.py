@@ -54,7 +54,7 @@ def mes_database_url() -> str:
 
 
 # ---- E1a 계약 (DH payload.py 그대로) ----
-_CASTING_ID_RE = re.compile(r"^\d{6}_\d{6}_\d+$")
+_CASTING_ID_RE = re.compile(r"^L\d+_\d{6}_\d{6}_\d+$")   # L라인번호_날짜_시각_생산번호 (2026-11-19 라인 추가, MS)
 
 
 @dataclass

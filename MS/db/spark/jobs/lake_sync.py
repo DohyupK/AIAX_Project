@@ -44,7 +44,13 @@ class Db:
 
     def __init__(self, spark: SparkSession, url: str, user: str, password: str):
         jvm = spark._jvm
-        self.conn = jvm.java.sql.DriverManager.getConnection(url, user, password)
+        # DriverManager 는 --packages 로 받은 드라이버를 못 찾음 → 드라이버를 직접 불러 접속 (2026-11-19)
+        props = jvm.java.util.Properties()
+        props.setProperty("user", user)
+        props.setProperty("password", password)
+        self.conn = jvm.org.postgresql.Driver().connect(url, props)
+        if self.conn is None:  # 주소 형식이 PostgreSQL 이 아니면 None
+            raise RuntimeError(f"[lake_sync] JDBC 주소를 인식하지 못함: {url}")
         self.conn.setAutoCommit(False)
 
     def rows(self, sql: str, params: list | None = None) -> list[list]:
