@@ -96,10 +96,14 @@ tmux list-windows -t myapp
 
 - `location /` → `proxy_pass http://127.0.0.1:3000;` (기존 Next, Upgrade 헤더 유지)
 - `location /api/` → `proxy_pass http://127.0.0.1:8000/api/;` (JH FastAPI)
+- **`client_max_body_size 25m;`** — `location /api/` 안 (사내 문서함 업로드. 없으면 nginx 기본 ~1m → **413**)
 
 Certbot이 관리하는 `listen 80` 블록은 건드리지 않음.
 
 ```bash
+# 한 번에 적용 (서버)
+bash /root/AIAX_Project/scripts/fix-nginx-upload-limit.sh
+# 또는 수동 후:
 nginx -t && systemctl reload nginx
 ```
 
