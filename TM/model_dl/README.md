@@ -39,7 +39,9 @@ DieCasting_{Algo}_{YYYYMMDD}_{NN}
 
 ```text
 TM/model_dl/
-  DieCasting_*/          # 폴더 = 모델명
-    DieCasting_*.onnx
+  DieCasting_*/                      # 폴더 = 모델명
+    DieCasting_*.onnx                # 모델 (Git LFS)
+    DieCasting_*_METRICS.md          # 평가지표·강건성·입력 해상도 영향
+    DieCasting_*_robustness.csv      # 강건성 조건별 지표 (Model Management 등록용)
   README.md
 ```
