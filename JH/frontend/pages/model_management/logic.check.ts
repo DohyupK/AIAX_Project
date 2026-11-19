@@ -1,7 +1,7 @@
 // 정렬·입력 검사 자체 점검 — 실행: node JH/frontend/pages/model_management/logic.check.ts (Node 23.6+)
 import assert from "node:assert/strict";
 import { PROCESS, PROCESS_METRICS, type Model } from "./data.ts";
-import { sortModels, validateDraft, type Draft } from "./logic.ts";
+import { averageRobustness, orderRobustness, sortModels, validateDraft, type Draft } from "./logic.ts";
 
 const model = (id: number, over: Partial<Model> = {}): Model => ({
   id, name: "DieCasting_XGB", version: String(id), createdAt: `2026-11-${String(10 + id).padStart(2, "0")}`,
@@ -46,3 +46,12 @@ assert.deepEqual(validateDraft({ ...ok, name: "CatB" }, PROCESS, PROCESS_METRICS
 for (const name of ["-xgb", "x gb", "casting/defect"]) assert.ok(validateDraft({ ...ok, name }, PROCESS, PROCESS_METRICS).name, name);
 
 console.log("model_management logic: OK");
+
+// 강건성: 캡처 순서로 정렬, 모르는 조건은 뒤 / 평균은 조건만 (원본 제외)
+const rb = (condition: string, v: number) => ({ condition, accuracy: v, recall: v, precision: v, f1: v });
+assert.deepEqual(
+  orderRobustness([rb("새 조건", 1), rb("0.85배 축소", 1), rb("어두운 조명", 1)]).map((r) => r.condition),
+  ["어두운 조명", "0.85배 축소", "새 조건"],
+);
+assert.deepEqual(averageRobustness([rb("a", 0.9), rb("b", 1)]), { accuracy: 0.95, recall: 0.95, precision: 0.95, f1: 0.95 });
+assert.equal(averageRobustness([]), null);

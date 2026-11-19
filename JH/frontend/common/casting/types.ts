@@ -35,6 +35,22 @@ export interface MlModel {
   test: { Recall?: number; Precision?: number; F1?: number }; // TM 검증 성적
 }
 
+/** 2차(DL) 판정 1건 — 칼럼은 DB ai.quality_prediction 과 같음 (지금은 저장 없이 API 응답만) */
+export interface SecondResult {
+  castingId: string;
+  modelName: string;
+  version: string;          // 기본 모델이면 ''
+  result: 'pass' | 'fail';
+  confidenceScore: number;  // 불량 확률 0~1 (TM: 0.5 이상 불량)
+  predictedAt: string;      // ISO 시각
+}
+
+/** 2차(DL) 검사 — JH API /api/casting/second (이미지 mes.casting_image 가 있는 샷만) */
+export interface SecondCheck {
+  model: { name: string; version: string; source: 'registry' | 'default'; threshold: number };
+  results: SecondResult[];
+}
+
 /** 현재 배포된 모델 정보 (Model Management와 공유) */
 export interface ModelInfo {
   name: string;

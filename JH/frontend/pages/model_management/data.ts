@@ -55,6 +55,22 @@ export async function fetchModels(): Promise<Model[]> {
   return rows.flatMap(({ processCode, ...r }) => (BY_CODE[processCode] ? [{ ...r, process: BY_CODE[processCode] }] : []));
 }
 
+/** 강건성 1줄 — 손상 조건별 지표 (DB ai.model_robustness) */
+export interface RobustnessRow {
+  condition: string;
+  accuracy: number;
+  recall: number;
+  precision: number;
+  f1: number;
+}
+
+/** 모델 1개의 조건별 강건성 (품질 2차 「강건성」 팝업). 데이터가 없으면 빈 배열 */
+export async function fetchRobustness(modelId: number): Promise<RobustnessRow[]> {
+  const res = await fetch(`${BASE}/api/models/${modelId}/robustness`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`/api/models/${modelId}/robustness 요청 실패 (HTTP ${res.status})`);
+  return (await res.json()) as RobustnessRow[];
+}
+
 /** 공정의 배포 모델 (없으면 null) — 품질 검사·보호구 화면 표시용 */
 export async function fetchDeployedModel(p: Process): Promise<Model | null> {
   return (await fetchModels()).find((m) => m.process === p && m.deployed) ?? null;

@@ -16,10 +16,11 @@
 
 | 테이블명 | 주요 컬럼 | 읽기/쓰기 | 연동 화면·API | 비고 |
 |----------|-----------|-----------|---------------|------|
-| `ai.model_registry` | `model_registry_idx`, `model_name`+`version`(PK), `process_code`, `description`, `file_name`, `deployed`, `created_at` | 읽기 | `GET /api/models` (전체), `api/casting/model.py` (CAST-QC1 배포 행 → 품질 검사 1차 모델 파일) | 배포 시 같은 공정 기존 배포 해제 = DB 트리거 `trg_model_registry_deploy` |
+| `ai.model_registry` | `model_registry_idx`, `model_name`+`version`(PK), `process_code`, `description`, `file_name`, `file_path`(서버 저장 경로, 화면 미사용), `deployed`, `created_at` | 읽기 | `GET /api/models` (전체), `api/casting/model.py` (CAST-QC1 배포 행 → 품질 검사 1차 모델 파일) | 배포 시 같은 공정 기존 배포 해제 = DB 트리거 `trg_model_registry_deploy` |
 | `ai.model_metric_cast_qc1` | `pr_auc_score`, `recall_score`, `precision_score`, `f1_score` | 읽기 | `GET /api/models` (CAST-QC1 행에 LEFT JOIN) | 화면 「품질 1차 검사」 |
 | `ai.model_metric_cast_qc2` | `accuracy_score`, `recall_score`, `precision_score`, `f1_score` | 읽기 | 위 (CAST-QC2) | 화면 「품질 2차 검사」 |
 | `ai.model_metric_safe_ppe` | `accuracy_score`, `recall_score`, `precision_score`, `f1_score` | 읽기 | 위 (SAFE-PPE) | 화면 「보호구 착용 위반」 |
+| `ai.model_robustness` | `model_name`+`version`+`condition_name`(PK, FK → model_registry ON DELETE CASCADE), `accuracy_score`, `recall_score`, `precision_score`, `f1_score` (0~1) | 읽기 | `GET /api/models/{idx}/robustness` | 2026-11-19 추가. 화면 품질 2차 「강건성」 팝업 — 원본 줄은 `model_metric_cast_qc2` 값 |
 
 ## 메모
 

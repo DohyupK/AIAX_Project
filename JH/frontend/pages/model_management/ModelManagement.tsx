@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import styles from "./ModelManagement.module.css";
 import ModelForm from "./ModelForm";
+import RobustnessDialog from "./RobustnessDialog";
 import { METRIC_LABEL, PROCESS, PROCESS_METRICS, fetchModels, type Model, type Process } from "./data";
 import { sortModels, type SortKey } from "./logic";
 
@@ -36,6 +37,9 @@ export default function ModelManagement() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "id", asc: true });
   const [formOpen, setFormOpen] = useState(false);
+  const [robustOpen, setRobustOpen] = useState(false);
+  // 팝업 Esc 리스너가 매 렌더 다시 붙지 않도록 같은 함수 유지
+  const closeRobust = useCallback(() => setRobustOpen(false), []);
 
   useEffect(() => {
     fetchModels()
@@ -121,6 +125,12 @@ export default function ModelManagement() {
               <dl className={styles.dl}>
                 <dt>성과지표</dt>
                 <dd>
+                  {/* 강건성(손상 조건별 성능)은 품질 2차 모델만 */}
+                  {selected.process === "qc2" && (
+                    <div className={styles.metricsHead}>
+                      <button type="button" className={styles.btn} onClick={() => setRobustOpen(true)}>강건성</button>
+                    </div>
+                  )}
                   <div className={styles.metrics}>
                     {/* 공정마다 지표 4개가 다름 — 품질 1차: PR-AUC·Recall·Precision·F1 */}
                     {PROCESS_METRICS[selected.process].map((k) => (
@@ -195,6 +205,7 @@ export default function ModelManagement() {
       </div>
 
       {formOpen && <ModelForm onClose={() => setFormOpen(false)} />}
+      {robustOpen && selected && <RobustnessDialog model={selected} onClose={closeRobust} />}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { MlModel, ModelInfo, Shot } from './types';
+import type { MlModel, ModelInfo, SecondCheck, Shot } from './types';
 import mockModel from './mock/model.json';
 
 /**
@@ -63,6 +63,14 @@ export async function fetchShots(line: string, date: string, real = false): Prom
   }
   // ponytail: 매번 하루치 전체 조회. 샷이 많아지면 &since=<마지막 shotId>로 증분 조회로 바꾸세요
   return get<Shot[]>(`/api/casting/predictions?line=${encodeURIComponent(line)}&date=${date}`);
+}
+
+/**
+ * 2차(DL) 판정 — 그날 그 라인의 이미지가 있는 샷만 (1차 양품 거르기는 화면에서)
+ * ponytail: 처음 조회 시 이미지마다 추론(장당 ~0.5초). 이미지가 수십 장 넘게 쌓이면 10초 제한에 걸리므로 추론 결과 DB 저장(ai.quality_prediction) 후 조회만 하도록 바꿀 것
+ */
+export function fetchSecond(line: string, date: string): Promise<SecondCheck> {
+  return get<SecondCheck>(`/api/casting/second?line=${encodeURIComponent(line)}&date=${date}`);
 }
 
 /** 실데이터가 있는 날짜 (최근 날짜가 먼저) */
