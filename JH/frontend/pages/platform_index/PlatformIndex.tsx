@@ -88,11 +88,16 @@ export function PlatformIndex() {
           ))}
         </nav>
       )}
-      {/* 사내 문서함 — 사이드바 하단 고정 (설정 아이콘 위) */}
+      {/* 사내 문서함·혜진봇 — 사이드바 하단 고정 (설정 아이콘 위). 혜진봇은 DH 페이지, JH API 검색만 호출 */}
       {!collapsed && (
-        <Link className={`${styles.link} ${styles.docs}`} href="/documents">
-          사내 문서함
-        </Link>
+        <>
+          <Link className={`${styles.link} ${styles.docs}`} href="/documents">
+            사내 문서함
+          </Link>
+          <Link className={`${styles.link} ${styles.docs}`} href="/hyejin-bot">
+            혜진봇
+          </Link>
+        </>
       )}
       {/* 설정 아이콘 — 표시만 (클릭 동작은 이후 기능) */}
       {!collapsed && (

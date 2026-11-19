@@ -15,7 +15,7 @@ export type Features = Record<FeatureKey, number | null>; // null = 결측 (molt
 /** 샷 1건의 예측 결과 */
 export interface Shot {
   shotId: number;          // production_count — 하루 안에서 중복될 수 있음 (카운터 재시작). 화면 키로 쓰지 말 것
-  castingId?: string;      // 샷 고유키 'YYMMDD_HHMMSS_생산번호' (실데이터 API 만, 목업엔 없음)
+  castingId?: string;      // 샷 고유키 'L<라인번호>_YYMMDD_HHMMSS_생산번호' (예: L2_261101_000336_1) (실데이터 API 만, 목업엔 없음)
   time: string;            // 'H:mm:ss'
   prob: number;            // 1차(ML) 불량 점수 0~1 (모델 출력, 실제 확률보다 높게 나옴 — 확률 %로 표시 금지)
   actual: 0 | 1 | null;    // 실제 라벨(PassOrFail). 아직 모르면 null

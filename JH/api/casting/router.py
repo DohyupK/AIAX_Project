@@ -35,6 +35,7 @@ SHOT_COLS = ", ".join(sorted({"casting_id", "date", "production_count", "passorf
 KST_NOW = "(now() AT TIME ZONE 'Asia/Seoul')"
 LIVE_FIRST = 200     # 실시간 첫 조회 = 최근 샷 수 (관리도·알람 맥락)
 LIVE_BATCH = 500     # 증분 1회 최대 샷 수
+CASTING_ID = r"^L\d+_\d{6}_\d{6}_\d+$"   # casting_id = L<라인번호>_YYMMDD_HHMMSS_생산번호 (예: L2_261101_000336_1, 2026-11-19 MS 변경)
 
 
 def to_shot(r: dict, score: float) -> dict:
@@ -82,7 +83,7 @@ def predictions(date: Date, line: str = LINE) -> list[dict]:
 
 
 @router.get("/live")
-def live(line: str = LINE, after: str | None = Query(None, pattern=r"^\d{6}_\d{6}_\d+$")) -> dict:
+def live(line: str = LINE, after: str | None = Query(None, pattern=CASTING_ID)) -> dict:
     """실시간 따라가기 — 오늘(KST) 샷 중 현재 시각 이전만 (시간순).
     after(마지막으로 받은 casting_id) 없음·오늘 샷이 아님 → 최근 LIVE_FIRST 샷 + reset=true (화면이 목록 교체)
     after 있음 → 그 샷 이후만 + reset=false (화면이 뒤에 붙임)"""
@@ -183,27 +184,29 @@ def second(date: Date, line: str = LINE) -> dict:
 
 # ---- 불량 유형 라벨링 (lake 정제본 + ai 라벨) ----
 # ponytail: DL 모델 연결 전이라 「불량 샷」 = 실제 판정 passorfail = 1. 모델이 생기면 모델 판정으로 교체.
-# lake 에는 라인 칼럼이 없음 (원본이 전부 line_no1) → 라인 구분 없이 조회
+# 라인별 조회 (2026-11-19 lake 재생성으로 line_no1~3 이 모두 들어옴 — 화면 라인 선택, 기본 line_no1)
 DEFECT_TYPES = ("blowhole", "edge_burr", "surface_rough")   # ai.defect_label 칼럼 = 화면 코드 소문자
 
 
 @router.get("/defect-dates")
-def defect_dates() -> list[str]:
-    """불량 샷이 있는 날짜 (최근 날짜가 먼저)"""
+def defect_dates(line: str = LINE) -> list[str]:
+    """그 라인의 불량 샷이 있는 날짜 (최근 날짜가 먼저)"""
     try:
         with connect(DB) as conn:
             rows = conn.execute(
-                'SELECT DISTINCT "timestamp" AS d FROM lake.lake_investment_casting WHERE passorfail = 1 ORDER BY 1 DESC'
+                'SELECT DISTINCT "timestamp" AS d FROM lake.lake_investment_casting '
+                "WHERE passorfail = 1 AND line_unit = %s ORDER BY 1 DESC",
+                (line,),
             ).fetchall()
     except Exception:
-        log.exception("불량 날짜 조회 실패")
+        log.exception("불량 날짜 조회 실패 line=%s", line)
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
     return [r["d"].isoformat() for r in rows]
 
 
 @router.get("/defects")
-def defects(date: Date) -> list[dict]:
-    """그날 불량 샷 + 라벨 상태 (최신순). status: unlabeled / labeled / discarded"""
+def defects(date: Date, line: str = LINE) -> list[dict]:
+    """그 라인·그날 불량 샷 + 라벨 상태 (최신순). status: unlabeled / labeled / discarded"""
     try:
         with connect(DB) as conn:
             rows = conn.execute(
@@ -212,12 +215,12 @@ def defects(date: Date) -> list[dict]:
                    FROM lake.lake_investment_casting l
                    LEFT JOIN ai.defect_label dl USING (casting_id)
                    LEFT JOIN ai.defect_discard dd USING (casting_id)
-                   WHERE l."timestamp" = %s AND l.passorfail = 1
+                   WHERE l."timestamp" = %s AND l.passorfail = 1 AND l.line_unit = %s
                    ORDER BY l.date DESC, l.casting_id DESC""",
-                (date,),
+                (date, line),
             ).fetchall()
     except Exception:
-        log.exception("불량 샷 조회 실패 date=%s", date)
+        log.exception("불량 샷 조회 실패 line=%s date=%s", line, date)
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
     out = []
     for r in rows:
@@ -226,7 +229,7 @@ def defects(date: Date) -> list[dict]:
         status = "discarded" if r["discarded_at"] else "labeled" if r["labeled_at"] else "unlabeled"
         out.append({
             "castingId": r["casting_id"],
-            "shotId": int(r["casting_id"].rsplit("_", 1)[-1]),   # casting_id = YYMMDD_HHMMSS_생산번호
+            "shotId": int(r["casting_id"].rsplit("_", 1)[-1]),   # casting_id 끝 = 생산번호 (L1_YYMMDD_HHMMSS_생산번호)
             "time": f"{t.hour}:{t.minute:02d}:{t.second:02d}",
             "status": status,
             "types": [k.upper() for k in DEFECT_TYPES if r[k]] if status == "labeled" else [],
