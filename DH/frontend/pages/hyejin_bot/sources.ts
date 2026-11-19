@@ -1,4 +1,4 @@
-// 혜진봇 검색 소스 종류 — Phase A는 company_document만. casting은 이후 RAG
+// 혜진봇 검색 소스 — company_document. casting은 이후 RAG
 export type SourceKind = "company_document" | "casting";
 
 /** 챗봇 출처 1건 (UI·답변에 항상 포함) */
@@ -22,7 +22,7 @@ export interface ChatTurn {
   sources: ChatSource[];
 }
 
-/** JH /api/documents/search 응답 한 줄 */
+/** JH /api/documents/ask · /search 응답 sources 한 줄 */
 export interface DocSearchHit {
   score: number;
   company_document_idx: number;
@@ -53,27 +53,6 @@ export function hitToSource(hit: DocSearchHit): ChatSource {
     snippet: (hit.content ?? "").slice(0, 400),
     file_url: fileUrlFor(hit.company_document_idx),
   };
-}
-
-/**
- * Phase A: 청크를 묶어 답 텍스트 생성 (LLM 없음).
- * ponytail Phase B: generateAnswerWithLlm(query, sources) — OpenAI Chat + 동일 sources
- */
-export function buildAnswerFromChunks(query: string, hits: DocSearchHit[]): string {
-  if (!hits.length) {
-    return "사내 문서에서 근거를 찾지 못했습니다. 문서함 업로드·청킹(ok) 상태를 확인해 주세요.";
-  }
-  const lines = [
-    `「${query}」에 대해 사내 문서에서 찾은 근거입니다.`,
-    "",
-    ...hits.map((h, i) => {
-      const body = (h.content ?? "").trim().slice(0, 500);
-      return `${i + 1}. [${h.doc_no}] ${h.title} (chunk ${h.chunk_no}, score ${h.score})\n${body}`;
-    }),
-    "",
-    "아래 출처에서 원문을 열람할 수 있습니다.",
-  ];
-  return lines.join("\n");
 }
 
 /** ponytail: casting 분석 자료 RAG — 이후 SourceKind 'casting' 구현 */
