@@ -5,7 +5,7 @@
 | DB 이름 | `aiax` |
 | 근거 코드 | [`MS/db/init/`](MS/db/init/) |
 | 명명·연동 문서 | [`DB연동_내역/`](DB연동_내역/) · [`MS/db/명명규칙.md`](MS/db/명명규칙.md)(포인터) |
-| 최종 반영일 | 2026-11-17 |
+| 최종 반영일 | 2026-11-19 |
 
 ---
 
@@ -32,28 +32,51 @@
 
 | 스키마 | 역할 |
 |--------|------|
-| `mes` | 원본 보관 (가공하지 않음) |
-| `lake` | 정제 데이터 (Spark) |
+| `mes` | 공정 원본 보관 (가공하지 않음): 주조 수치, 주조 이미지, 변경 기록 |
+| `lake` | 정제 데이터 (Spark) + `org` 복사본 26개 (`lake_<테이블>`) |
 | `mart` | 학습·분석용 (Spark → AI) |
-| `org` | 조직·권한·하청·게이트·근태. init `09`·`10` (2026-11-17 새 구조, MS) |
-| `ai` | 사람·AI가 만드는 판정·라벨·모델 정보. init `11` (2026-11-18, MS) |
+| `org` | 조직·권한·하청·게이트·근태 + 고정값·사내 문서. init `09`·`10`·`14`·`15` |
+| `ai` | 사람·AI가 만드는 판정·라벨·모델 정보. init `11`·`14` |
 
-관계: `mes` →(FK)·`lake` →(FK)·`mart` (`casting_id`). `org`는 독립.
+관계: `mes` →(FK)·`lake` →(FK)·`mart` (`casting_id`). `org`는 독립. `ai`는 `mes`(casting_id)·`org`(출입 로그·사원)를 FK로 참조.
+
+### 어디에 무엇이 있나 (빠른 찾기)
+
+| 찾는 것 | 원본 (쓰기) | 복사본·가공본 (읽기) |
+|---------|-------------|----------------------|
+| 주조 수치 | `mes.investment_casting` | `lake.lake_investment_casting` → `mart.mart_investment_casting` |
+| 주조 이미지 | `mes.casting_image` | `lake.lake_casting_image` |
+| 사원·조직·출입·근태·페이지 권한 | `org.*` | `lake.lake_*` (같은 이름, 26개) |
+| 고정값·사내 문서 | `org.fixed_value`, `org.company_document`, `org.document_chunk` | 복사본 없음 |
+| 모델·판정·라벨 | `ai.*` | 복사본 없음 |
+
+> **복사본 갱신 상태 (2026-11-19):** `lake` 의 `org` 복사본·주조 수치는 Spark(`lake_sync`)가 매일 00:00 KST 갱신하도록 만들어져 있으나, **서버에 Spark 미설치로 2026-11-18 첫 전체 복사 이후 갱신된 적 없음** (`lake.etl_watermark` 참고). `mart` 는 첫 적재(57,295행) 이후 갱신 작업 자체가 없음. 이미지 복사본(`lake_casting_image`)은 DH 이미지 파이프라인이 별도로 갱신.
 
 ---
 
 ## 계정 (로그인)
 
-| 계정 | 용도 | mes | lake | mart | org |
-|------|------|-----|------|------|-----|
-| `shift` | 관리 (`POSTGRES_USER`) | 전체 | 전체 | 전체 | 전체 |
-| `app_mes` | 원본 적재 | 읽기·쓰기(삭제 불가) | - | - | - |
-| `app_spark` | 배치 | 읽기 | 읽기·쓰기 | 읽기·쓰기 | 읽기 (`employee_info`·`hr_access_log` 제외) |
-| `app_mart` | 학습 읽기 | - | - | 읽기 | - |
-| `app_lake` | 조회 (DH 등) | 읽기 | 읽기 | 읽기 | 읽기 |
-| `app_hr` | 인사 관리 API (JH/api/hr) | - | - | - | 인사 테이블 읽기·쓰기, `hr_access_log` 추가만 |
+| 계정 | 용도 | mes | lake | mart | org | ai |
+|------|------|-----|------|------|-----|----|
+| `shift` | 관리 (`POSTGRES_USER`) | 전체 | 전체 | 전체 | 전체 | 전체 |
+| `app_mes` | 원본 적재 (Flink 이미지 포함) | 읽기·쓰기(삭제 불가) | - | - | - | - |
+| `app_spark` | 배치 | 읽기 | 읽기·쓰기 | 읽기·쓰기 | 읽기 (`employee_info`·`hr_access_log` 제외) | 읽기 |
+| `app_mart` | 학습 읽기 | - | - | 읽기 | - | - |
+| `app_lake` | 조회 (DH·JH API 등) | 읽기 | 읽기 | 읽기 | 읽기 | 읽기 |
+| `app_hr` | 인사 관리 API (JH/api/hr) | - | - | - | 인사 테이블 읽기·쓰기, `hr_access_log` 추가만 | - |
+| `app_ai` | 모델 관리·라벨링·품질 2차 저장 API (JH) | - | - | - | - | 아래 표 |
 
-권한 그룹: `role_mes`, `role_spark`, `role_mart`, `role_lake`. `app_hr`은 그룹 없이 org 테이블별 GRANT (`09`). 비밀번호는 루트 `.env`의 `APP_HR_PASSWORD`.
+권한 그룹: `role_mes`, `role_spark`, `role_mart`, `role_lake`. `app_hr`·`app_ai`는 그룹 없이 테이블별 GRANT (`09`, `17`·`18`). 비밀번호는 루트 `.env`의 `APP_HR_PASSWORD`, `APP_AI_PASSWORD`.
+
+`app_ai` 권한 (`17`·`18`):
+
+| 테이블 | 권한 |
+|--------|------|
+| `model_registry`, `model_metric_cast_qc1`·`_cast_qc2`·`_safe_ppe` | SELECT, INSERT, UPDATE |
+| `model_robustness` | SELECT, INSERT, DELETE |
+| `quality_prediction` | SELECT, INSERT, UPDATE |
+| `defect_label`, `defect_discard` | SELECT, INSERT, DELETE |
+| 그 밖 (`ppe_check` 등) | 없음 |
 
 ### 이름 혼동 주의 (`app_lake` ≠ 스키마 `lake`만)
 
@@ -63,7 +86,7 @@
 | **계정 `app_lake`** | DH 등 **조회 전용 로그인** (구 readonly) | “lake 스키마만 다룬다” |
 
 `app_lake`는 스키마 `lake` 전용 계정이 **아니다**.  
-권한은 **`mes` / `lake` / `mart` / `org` SELECT** 이다. (쓰기·DDL은 `shift` 등)
+권한은 **`mes` / `lake` / `mart` / `org` / `ai` SELECT** 이다. (쓰기·DDL은 `shift` 등)
 
 ### `org` (조직·권한·하청·게이트·근태)
 
@@ -79,6 +102,10 @@
 | 근태 | `attendance`, `employee_record` |
 | 페이지 권한 9 | `main_page`, `process_optimization_page`, `quality_inspection_page`, `defect_labeling_page`, `ppe_violation_page`, `hr_management_page`, `management_report_page`, `model_management_page`, `company_documents_page` |
 | 앱 기록 | `change_log` (모든 org 변경, lake 복제용), `hr_access_log` (개인정보 조회 기록) |
+| 고정값 | `fixed_value` (단가 등 이름-값, 날짜별 이력. PK `value_name`+`effective_date`) — `14` |
+| 사내 문서 | `company_document` (문서 메타, 파일은 `file_path`), `document_chunk` (LLM 참조용 텍스트 조각) — `15` |
+
+`fixed_value`·`company_document`·`document_chunk` 는 **`change_log` 트리거 없음, lake 복사 대상 아님** (2026-11-19 기준).
 
 | 코드 | 값 |
 |------|----|
@@ -97,7 +124,7 @@
 | `employee_gate_log` OUT | `employee_record`(근무시간·지각·조퇴·초과), `attendance_status` = absent, `employee_status.last_logout_at` |
 | `employee_record.absent` = true | `employee_status.annual_leave_used` +1 |
 | `employee.employment_status` = resigned (퇴사일 필수, 부서장·팀장 불가) | 사원증 `gate_card` a·b 차단 (재직으로 돌리면 다시 열림) |
-| org 테이블 전부 (앱 기록 2개 제외) | `change_log` |
+| org 테이블 (앱 기록 2개, `14`·`15` 테이블 제외) | `change_log` |
 
 ---
 
@@ -171,6 +198,40 @@ lake에서 제외: `timestamp`, `date`.
 | `cooling_water_temp` | `double precision` | |
 | `passorfail` | `smallint` | **NOT NULL** |
 
+### `mes.casting_image` / `lake.lake_casting_image` (주조 이미지) — `13`
+
+| 컬럼 | 타입 | 제약·비고 |
+|------|------|-----------|
+| `casting_id` | `text` | PK. mes 쪽은 FK → `mes.investment_casting` (lake 쪽 FK 없음) |
+| `original_uri` | `text` | 원본 위치 이력만. **다시 불러오지 않음** |
+| `content_type` | `text` | 기본 `image/jpeg` |
+| `image_base64` | `text` | 이미지 본문 |
+| `updated_at` / `created_at` | `timestamptz` | |
+| `lake_synced_at` | `timestamptz` | lake 쪽만. 복사 시각 |
+
+흐름: 카메라 → Kafka → Flink(`MS/db/flink/jobs/image_ingest.py`) → `mes.casting_image` → `aiax.image.spark_sync` 신호 → lake 복사.
+
+### 변경 기록·처리 위치 — `12`
+
+| 테이블 | 용도 |
+|--------|------|
+| `mes.investment_casting_change_log` | mes 추가·수정·삭제 기록 (트리거) |
+| `org.change_log` | org 추가·수정·삭제 기록 (트리거) |
+| `lake.etl_watermark` | 작업별 처리 위치 (`mes_to_lake`, `org_to_lake`) |
+
+### `ai` (판정·라벨·모델) — `11`·`14`
+
+| 구분 | 테이블 | 핵심 |
+|------|--------|------|
+| 모델 | `model_registry` | PK (`model_name`, `version`). `process_code` = `CAST-QC1`(품질 1차 ML) / `CAST-QC2`(품질 2차 DL) / `SAFE-PPE`(보호구). 공정당 배포 1개 (트리거로 기존 배포 해제). `model_registry_idx` 자동 증가 없음 |
+| 성과지표 | `model_metric_cast_qc1` (PR-AUC·recall·precision·f1), `model_metric_cast_qc2`·`model_metric_safe_ppe` (accuracy·recall·precision·f1) | FK → `model_registry`, ON DELETE CASCADE |
+| 강건성 | `model_robustness` | PK (`model_name`, `version`, `condition_name`). 조건별 accuracy·recall·precision·f1 |
+| 품질 2차 판정 | `quality_prediction` | PK `casting_id`. `result` pass/fail, `confidence_score` 0~1. FK → `model_registry` |
+| 이미지 후보 | `quality_image_pool` | 2차 검사 랜덤 매칭용. 매칭되면 `matched_casting_id` |
+| 라벨 | `defect_label` (유형별 boolean, 1개 이상), `defect_discard` (판정 불가) | PK `casting_id`. 한 샷은 둘 중 한 곳만 |
+| 보호구 | `ppe_gate_rule` (게이트별 필수 보호구), `ppe_check` (검사 기록) | `ppe_check` 는 `org.employee_gate_log` 또는 `org.vendor_gate_log` 중 하나만 참조 |
+| LLM | `llm_feedback` | LLM 분석 결과 저장 (용도 협의 중) |
+
 ---
 
 ## init 파일 대응
@@ -186,9 +247,15 @@ lake에서 제외: `timestamp`, `date`.
 | `07_comments.sql` | COMMENT |
 | `08_data.sql.gz` | 샘플 데이터 |
 | `09_org_permission.sql` | schema `org` 구조 + 트리거 + GRANT (app_hr 포함) |
-| `12_lake_sync.sql` | lake 자동 갱신 준비: `mes` 변경 기록, `lake.etl_watermark`, lake 의 org 복사본 26개(`employee_info`·`hr_access_log`·`change_log` 제외) + 첫 전체 복사. 매일 갱신은 `MS/db/spark/jobs/lake_sync.py` + `MS/db/apps/src/apps/lake_runner.py` |
-| `11_ai.sql` | schema `ai`: `defect_label`(불량 유형 라벨, 유형별 boolean), `defect_discard`(판정 불가 샷). 한 샷은 둘 중 한 곳만 (트리거) / `model_registry`(모델 목록·성과지표·파일 경로·배포, 공정당 배포 1개, 배포 시 기존 배포 자동 해제) / `ppe_gate_rule`(게이트별 필수 보호구) · `ppe_check`(보호구 검사 기록, 출입 로그 IN 참조. 주조팀·하청만 검사) |
 | `10_org_permission_seed.sql` | `org` 목업 (사원 54, 2026-08-04~10-11 출입·근무) |
+| `11_ai.sql` | schema `ai`: `defect_label`·`defect_discard` / `model_registry` + 공정별 지표 `model_metric_cast_qc1`·`_cast_qc2`·`_safe_ppe` / `ppe_gate_rule`·`ppe_check` |
+| `12_lake_sync.sql` | lake 자동 갱신 준비: `mes` 변경 기록, `lake.etl_watermark`, lake 의 org 복사본 26개(`employee_info`·`hr_access_log`·`change_log` 제외) + 첫 전체 복사. 매일 갱신은 `MS/db/spark/jobs/lake_sync.py` + `MS/db/apps/src/apps/lake_runner.py` |
+| `13_casting_image.sql` | `mes.casting_image`, `lake.lake_casting_image` (DH 이미지 파이프라인) |
+| `14_품질_ai_추가.sql` | `org.fixed_value`, `ai.quality_prediction`·`model_robustness`·`quality_image_pool`·`llm_feedback` |
+| `15_사내문서함.sql` | `org.company_document`, `org.document_chunk` |
+| `16_모델관리_권한_시스템개발부만.sql` | `org.model_management_page` 를 시스템개발부만으로 교체 (read 전원, edit 과장 이상). **개발부 인원·직급이 바뀌면 다시 실행** (트리거 아님) |
+| `17_app_ai_계정.sql` | 계정 `app_ai` 생성 + 모델·라벨 테이블 권한. 실행: `psql -v ai_pw=…` |
+| `18_app_ai_권한추가.sql` | `app_ai` 에 `model_robustness`·`quality_prediction` 권한 추가 |
 
 ---
 
@@ -196,6 +263,12 @@ lake에서 제외: `timestamp`, `date`.
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-11-19 | 문서 정리: 「어디에 무엇이 있나」·복사본 갱신 상태 추가, 계정 표에 `ai` 열·`app_ai` 추가, `ai`·이미지·변경 기록 테이블 절 추가, init 13~18 반영 |
+| 2026-11-19 | `18`: `app_ai` 에 `model_robustness`(SELECT·INSERT·DELETE)·`quality_prediction`(SELECT·INSERT·UPDATE) 권한 (JH 요청). 서버 적용 |
+| 2026-11-19 | `17`: 계정 `app_ai` (JH 요청, 모델 등록·라벨 저장용). `16`: 모델 관리 페이지 권한 시스템개발부 전용 |
+| 2026-11-19 | `15`: `org.company_document`·`document_chunk` (사내 문서함). `14`: `org.fixed_value`, `ai.quality_prediction`·`model_robustness`·`quality_image_pool`·`llm_feedback` |
+| 2026-11-19 | `13`: `mes.casting_image`·`lake.lake_casting_image` (DH 요청, 이미지 파이프라인). `11`: 공정 코드 `CAST-QC1`·`CAST-QC2`·`SAFE-PPE`, 지표를 공정별 테이블로 분리 (서버는 11-18 적용) |
+| 2026-11-19 | 품질 2차 모델 `DieCasting_CNXV2T_20261117_01`/`v1` 등록·배포 + 지표 + 강건성 14행 (JH SQL, 관리자 실행) |
 | 2026-11-18 | lake 의 org 복사본을 새 구조 26개로 재생성 (옛 23개 삭제), `etl_watermark` 재설정. Spark 작업·00:00 KST 실행기 코드 추가 (서버 Spark 설치 전) |
 | 2026-11-18 | `ai.ppe_gate_rule`·`ai.ppe_check` (보호구 착용 위반 대시보드). 목업 2,756건 |
 | 2026-11-18 | `ai.model_registry` (모델 레지스트리, DH 요청). 파일 저장 경로는 서버 관리자가 정함 |
