@@ -96,10 +96,14 @@ tmux list-windows -t myapp
 
 - `location /` → `proxy_pass http://127.0.0.1:3000;` (기존 Next, Upgrade 헤더 유지)
 - `location /api/` → `proxy_pass http://127.0.0.1:8000/api/;` (JH FastAPI)
+- **`client_max_body_size 25m;`** — `location /api/` 안 (사내 문서함 업로드. 없으면 nginx 기본 ~1m → **413**)
 
 Certbot이 관리하는 `listen 80` 블록은 건드리지 않음.
 
 ```bash
+# 한 번에 적용 (서버)
+bash /root/AIAX_Project/scripts/fix-nginx-upload-limit.sh
+# 또는 수동 후:
 nginx -t && systemctl reload nginx
 ```
 
@@ -117,7 +121,8 @@ nginx -t && systemctl reload nginx
 | `NEXT_PUBLIC_HR_API_BASE_URL` | 위와 동일 |
 | `DOCUMENT_ROOT` | **`/root/document`** (사내 문서함 파일, 프로젝트·git 밖) |
 | `DOCS_DATABASE_URL` | `app_docs@127.0.0.1` (org 문서·청크·임베딩 쓰기) |
-| `OPENAI_API_KEY` | Embeddings용 `sk-...` ([platform.openai.com](https://platform.openai.com/api-keys)). 비우면 업로드만 되고 청크 임베딩·검색 실패 |
+| `NVIDIA_API_KEY` | **우선** — NIM 임베딩·혜진봇 Chat ([build.nvidia.com](https://build.nvidia.com)). 있으면 OpenAI 대신 사용 |
+| `OPENAI_API_KEY` | NIM 키 없을 때만 — Embeddings+Chat (`sk-...`). 비우면(둘 다 없으면) 임베딩·검색·혜진봇 실패 |
 
 스니펫: [`scripts/server-env.snippet.env`](../scripts/server-env.snippet.env) (문서함 키 주석 포함)
 
@@ -156,6 +161,10 @@ curl -sk -o /dev/null -w "via-nginx:%{http_code}\n" \
 | `via-nginx:404` | `location /api/` 없음 | gknushift conf에 추가 후 reload |
 | `via-nginx:503` | DB URL 호스트가 공인 IP | 서버 `.env`를 `127.0.0.1`로 바꾼 뒤 restart |
 | 문서 업로드 `ConnectionTimeout` / `/api/documents` 500(~10s) | `DOCS_DATABASE_URL` 호스트가 공인 IP (`49.50…`). HR 등 `127.0.0.1`은 정상 | 서버 `.env`만 `DOCS`→`127.0.0.1`, `DOCUMENT_ROOT=/root/document` 후 `systemctl restart myapp`. 원커맨드: `bash scripts/fix-docs-db-host.sh` |
+| 혜진봇/검색 `429` credits / 임베딩 실패 | OpenAI 크레딧 소진 | `.env`에 `NVIDIA_API_KEY` 넣고 restart. `bash scripts/apply-embedding-dim-nim.sh` 후 `cd JH/api && uv run python -m documents.requeue_all` |
+| 재임베딩 `CheckViolation` document_chunk_embedding_dim | DB가 1536만 허용, NIM은 2048 | `bash scripts/apply-embedding-dim-nim.sh` (DDL=`POSTGRES_USER`/shift) → `requeue_all` |
+| 마이그레이션 `must be owner of table` | `app_docs`로 ALTER 시도 | 스크립트가 shift로 돌도록 최신 pull 후 재실행. `.env`에 `POSTGRES_USER`/`POSTGRES_PASSWORD` 필요 |
+| 문서 업로드 `413 Request Entity Too Large` | nginx `client_max_body_size` 기본(~1m) | `gknushift` server에 `client_max_body_size 25m;` 후 `nginx -t && systemctl reload nginx` |
 | 원격 화면 API 실패 | `NEXT_PUBLIC_*=127.0.0.1` | 도메인 또는 빈 값 (브라우저의 127.0.0.1은 PC) |
 
 ```bash

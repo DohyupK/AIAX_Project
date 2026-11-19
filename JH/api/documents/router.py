@@ -187,15 +187,18 @@ class SearchBody(BaseModel):
 
 def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
     """의미검색 top-k. 임베딩 실패는 HTTPException."""
+    from documents.llm_client import embed_dim
+
     try:
-        qvec = embed_texts([query])[0]
+        qvec = embed_texts([query], input_type="query")[0]
     except Exception as e:
         log.exception("검색 임베딩 실패")
         msg = str(e)
-        if "OPENAI_API_KEY" in msg:
+        if "API_KEY" in msg:
             raise HTTPException(503, msg) from e
         raise HTTPException(502, f"임베딩 실패: {e}") from e
 
+    want_dim = embed_dim()
     with connect(DB) as conn:
         rows = conn.execute(
             """
@@ -210,6 +213,9 @@ def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
     scored: list[tuple[float, dict]] = []
     for r in rows:
         emb = list(r["embedding"]) if r["embedding"] is not None else []
+        # 이전 공급자 차원(1536↔2048) 벡터는 검색에서 제외
+        if len(emb) != want_dim:
+            continue
         score = cosine(qvec, emb)
         scored.append(
             (
@@ -240,7 +246,7 @@ def search_documents(body: SearchBody):
 
 @router.post("/ask")
 def ask_documents(body: SearchBody):
-    """혜진봇: 문서 검색 + OpenAI Chat 답변. sources는 search hit와 동일 형태."""
+    """혜진봇: 문서 검색 + Chat 답변 (NIM 우선). sources는 search hit와 동일 형태."""
     q = body.query.strip()
     if not q:
         raise HTTPException(400, "검색어를 입력하세요.")
@@ -255,7 +261,7 @@ def ask_documents(body: SearchBody):
     except Exception as e:
         log.exception("혜진봇 Chat 실패")
         msg = str(e)
-        if "OPENAI_API_KEY" in msg:
+        if "API_KEY" in msg:
             raise HTTPException(503, msg) from e
         raise HTTPException(502, f"Chat 실패: {e}") from e
     return {"answer": answer, "sources": hits}
