@@ -8,7 +8,8 @@ DB 공정 코드 → 화면 이름 (MS 가 2026-11-18 코드·테이블 이름 �
 각 공정의 배포(deployed) 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차는 casting/model.py 가 파일을 불러 씀).
 ponytail: 등록·배포(쓰기)는 ai 쓰기 계정이 생긴 뒤 — 배포 시 같은 공정 기존 배포 해제는 DB 트리거가 처리.
 현재 사용자: 로그인 전이라 헤더 X-Employee-No(화면의 목업 계정, 인사 관리와 같음) → 페이지 권한 none/read/edit.
-권한 = org 권한 표의 lake 사본(lake_access_code + lake_model_management_page, 복제 주기만큼 늦게 반영).
+권한 = org 원본 권한 표(access_code + model_management_page) 실시간 — 인사 변경이 바로 반영.
+ponytail: lake 복제(Spark)가 아직 없어 org 원본을 직접 읽음. lake 연결 시 ACCESS_SQL 두 테이블만 lake 사본으로.
 ponytail: 로그인 도입 시 access_level() 의 사번을 세션에서 꺼내도록 교체. 그 전까지는 127.0.0.1 에서만 실행.
 """
 from __future__ import annotations
@@ -21,7 +22,7 @@ from common.db import connect
 
 router = APIRouter(prefix="/api/models")
 log = logging.getLogger("jh.models")
-DB = "DATABASE_URL"   # app_lake — ai 읽기만
+DB = "DATABASE_URL"   # app_lake — ai·org 읽기만
 
 # 공정별 지표 테이블은 행이 그 공정 모델에만 있으므로 공정 조건으로 붙이고 칼럼은 COALESCE 로 한 줄에 모음
 SQL = """
@@ -46,8 +47,8 @@ ORDER BY r.model_registry_idx
 # 사번 → 접근 코드 → Model Management 권한 (행 없으면 접근 불가)
 ACCESS_SQL = """
 SELECT p.access_level
-FROM lake.lake_access_code a
-JOIN lake.lake_model_management_page p ON p.access_code = a.access_code
+FROM org.access_code a
+JOIN org.model_management_page p ON p.access_code = a.access_code
 WHERE a.employee_no = %s
 """
 
