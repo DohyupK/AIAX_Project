@@ -98,14 +98,15 @@ def run_chunk_once(doc_idx: int) -> None:
 
     with connect(DB) as conn:
         ids = _next_ids(conn, "org.document_chunk", "document_chunk_idx", len(parts))
-        # 청크 N건 → INSERT 1회(테이블당) — 행마다 execute 왕복 제거
-        conn.executemany(
-            """
-            INSERT INTO org.document_chunk (document_chunk_idx, company_document_idx, chunk_no, content)
-            VALUES (%s, %s, %s, %s)
-            """,
-            [(cid, doc_idx, i, content) for i, (cid, content) in enumerate(zip(ids, parts), start=1)],
-        )
+        # Connection.executemany 미지원 환경 대비 — execute 루프
+        for i, (cid, content) in enumerate(zip(ids, parts), start=1):
+            conn.execute(
+                """
+                INSERT INTO org.document_chunk (document_chunk_idx, company_document_idx, chunk_no, content)
+                VALUES (%s, %s, %s, %s)
+                """,
+                [cid, doc_idx, i, content],
+            )
 
     vectors = embed_texts(embed_inputs, input_type="passage")
     if time.monotonic() - t0 > JOB_TIMEOUT_SEC:
@@ -114,14 +115,15 @@ def run_chunk_once(doc_idx: int) -> None:
     model_name = embed_model()
     with connect(DB) as conn:
         eids = _next_ids(conn, "org.document_chunk_embedding", "document_chunk_embedding_idx", len(ids))
-        conn.executemany(
-            """
-            INSERT INTO org.document_chunk_embedding
-              (document_chunk_embedding_idx, document_chunk_idx, embedding, model_name)
-            VALUES (%s, %s, %s::real[], %s)
-            """,
-            [(eid, cid, vec, model_name) for eid, cid, vec in zip(eids, ids, vectors)],
-        )
+        for eid, cid, vec in zip(eids, ids, vectors):
+            conn.execute(
+                """
+                INSERT INTO org.document_chunk_embedding
+                  (document_chunk_embedding_idx, document_chunk_idx, embedding, model_name)
+                VALUES (%s, %s, %s::real[], %s)
+                """,
+                [eid, cid, vec, model_name],
+            )
 
     set_job_status(doc_idx, "ok", 0, None)
     log.info("문서 %s 청크 %d건·임베딩 완료 (제목 메타 접두)", doc_idx, len(parts))
