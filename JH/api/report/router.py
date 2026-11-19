@@ -17,7 +17,7 @@ from ppe.router import CHECKS, GEARS, VIOLATION
 
 router = APIRouter(prefix="/api/report")
 log = logging.getLogger("jh.report")
-DB = "DATABASE_URL"   # app_lake — mes·ai·lake 읽기만
+DB = "DATABASE_URL"   # app_lake — mes·ai·org 읽기만
 MAX_RANGE_DAYS = 220  # 월간 목록(7개월) 한 번에 조회
 
 

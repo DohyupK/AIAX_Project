@@ -6,7 +6,8 @@ export interface CurrentUser {
   department: string;
 }
 
-const MOCK_USER: CurrentUser = { user_id: 'E2001', name: '홍길동', department: '생산팀' };
+// 서버 org.employee 실제 사번 (E2001 없음 → e0001 김지환)
+const MOCK_USER: CurrentUser = { user_id: 'e0001', name: '김지환', department: '경영' };
 
 /** 로그인 안 된 상태면 null */
 export function getCurrentUser(): CurrentUser | null {

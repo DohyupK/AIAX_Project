@@ -1,8 +1,9 @@
-"""보호구 착용 위반 API — 판정은 ai.ppe_check, 출입·사람·소속은 lake 사본 (읽기 전용 계정 app_lake)
+"""보호구 착용 위반 API — 판정은 ai.ppe_check, 출입·사람·소속은 org 원본 실시간 (읽기 전용 계정 app_lake)
 
 화면: JH/frontend/pages/ppe_violation (검사 기록 표 · 월간 보고서)
-ponytail: lake 는 전날 00:00 KST 기준 사본 → 오늘 들어온 판정은 출입 로그가 lake 에 반영된 다음 날부터 보임.
-          실시간이 필요해지면 FROM 의 lake.lake_* 를 org.* 로 바꾸면 됨 (칼럼 동일).
+판정(ai.ppe_check)은 게이트에서 바로 들어오므로 출입·소속도 원본을 읽어야 방금 판정된 건이 바로 보임
+(lake 사본은 하루 1회 복제라 다음 날에야 이어 붙음). 경영 리포트 안전(report/router.py)도 이 CHECKS 를 그대로 씀.
+ponytail: 분석용으로 lake 를 다시 쓰려면 org.* 를 lake.lake_* 로 (칼럼 동일).
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from common.db import connect
 
 router = APIRouter(prefix="/api/ppe")
 log = logging.getLogger("jh.ppe")
-DB = "DATABASE_URL"   # app_lake — ai·lake 읽기만
+DB = "DATABASE_URL"   # app_lake — ai·org 읽기만
 GEARS = ("helmet", "shoes", "vest", "gloves", "goggles")
 
 # 판정 1건 = 1행. 사원은 출입 로그의 게이트, 하청은 카드에 열린 게이트(a 또는 b 하나)
@@ -25,20 +26,20 @@ WITH checks AS (
          c.employee_no AS user_id, d.dept_name AS company, false AS vendor,
          p.helmet, p.shoes, p.vest, p.gloves, p.goggles, p.result, p.manual_result, p.manual_by
   FROM ai.ppe_check p
-  JOIN lake.lake_employee_gate_log l USING (employee_gate_log_idx)
-  JOIN lake.lake_employee_card c ON c.card_id = l.employee_card_id
-  JOIN lake.lake_employee e ON e.employee_no = c.employee_no
-  JOIN lake.lake_department d ON d.dept_code = e.dept_code
+  JOIN org.employee_gate_log l USING (employee_gate_log_idx)
+  JOIN org.employee_card c ON c.card_id = l.employee_card_id
+  JOIN org.employee e ON e.employee_no = c.employee_no
+  JOIN org.department d ON d.dept_code = e.dept_code
   UNION ALL
   SELECT p.ppe_check_idx, l.work_date, l.clock_in_at AT TIME ZONE 'Asia/Seoul',
          CASE WHEN g.gate_a THEN 'a' ELSE 'b' END,
          l.vendor_card_id, v.vendor_name, true,
          p.helmet, p.shoes, p.vest, p.gloves, p.goggles, p.result, p.manual_result, p.manual_by
   FROM ai.ppe_check p
-  JOIN lake.lake_vendor_gate_log l USING (vendor_gate_log_idx)
-  JOIN lake.lake_vendor_worker w ON w.card_id = l.vendor_card_id
-  JOIN lake.lake_vendor_company v ON v.vendor_code = w.vendor_code
-  JOIN lake.lake_gate_card g ON g.vendor_card_id = l.vendor_card_id
+  JOIN org.vendor_gate_log l USING (vendor_gate_log_idx)
+  JOIN org.vendor_worker w ON w.card_id = l.vendor_card_id
+  JOIN org.vendor_company v ON v.vendor_code = w.vendor_code
+  JOIN org.gate_card g ON g.vendor_card_id = l.vendor_card_id
 )
 """
 # 위반 = 카메라 판정 위반 또는 판정 불가 건을 안전관리자가 위반으로 확인
@@ -112,10 +113,10 @@ def monthly() -> list[dict]:
     # 카메라 대상 등록 인원 = 주조팀(casting*) 재직 사원 + 그 달에 쓰던 하청 카드
     registered = _query("""
       SELECT m.month,
-             (SELECT count(*) FROM lake.lake_employee e JOIN lake.lake_team t USING (team_code)
+             (SELECT count(*) FROM org.employee e JOIN org.team t USING (team_code)
                WHERE t.team_name LIKE 'casting%%'
                  AND (e.employment_status = 'active' OR e.resigned_at >= m.d_start)) +
-             (SELECT count(*) FROM lake.lake_vendor_worker w
+             (SELECT count(*) FROM org.vendor_worker w
                WHERE w.card_issued_at < m.d_start + interval '1 month'
                  AND (w.card_returned_at IS NULL OR w.card_returned_at >= m.d_start)) AS registered
       FROM (SELECT to_char(d, 'YYYY-MM') AS month, d::date AS d_start

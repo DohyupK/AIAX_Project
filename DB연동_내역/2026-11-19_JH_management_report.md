@@ -17,7 +17,7 @@
 | 테이블명 | 주요 컬럼 | 읽기/쓰기 | 연동 화면·API | 비고 |
 |----------|-----------|-----------|---------------|------|
 | `mes.investment_casting` | `timestamp`(생산일), `passorfail` | 읽기 | `GET /api/report/daily?from=&to=` (날짜별 샷 수·불량 수, 최대 220일) | 세 라인(line_no1~3) 합계. 불량 = 실제 판정 `passorfail = 1` |
-| `ai.ppe_check` + `lake.lake_employee_gate_log`·`lake_employee_card`·`lake_employee`·`lake_department`·`lake_vendor_gate_log`·`lake_vendor_worker`·`lake_vendor_company`·`lake_gate_card` | 장구 5종, `result`, `manual_result`, 출입 `work_date` | 읽기 | `GET /api/report/safety?from=&to=` (날짜별 판정 수 + 위반 건) | 2026-11-19 추가. 보호구 API(`ppe/router.py` `CHECKS`·`VIOLATION`)와 같은 SQL — 기록 [2026-11-18_JH_ppe_violation.md](2026-11-18_JH_ppe_violation.md) |
+| `ai.ppe_check` + `org.employee_gate_log`·`employee_card`·`employee`·`department`·`vendor_gate_log`·`vendor_worker`·`vendor_company`·`gate_card` | 장구 5종, `result`, `manual_result`, 출입 `work_date` | 읽기 | `GET /api/report/safety?from=&to=` (날짜별 판정 수 + 위반 건) | 2026-11-19 추가. 보호구 API(`ppe/router.py` `CHECKS`·`VIOLATION`)와 같은 SQL — 같은 날 보호구가 lake 사본 → **org 원본**으로 바뀌어 함께 원본 기준. 기록 [2026-11-18_JH_ppe_violation.md](2026-11-18_JH_ppe_violation.md) |
 
 ## 메모
 

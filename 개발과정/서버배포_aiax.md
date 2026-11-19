@@ -115,8 +115,11 @@ nginx -t && systemctl reload nginx
 | `HR_DATABASE_URL` | 동일하게 호스트 **`127.0.0.1`** |
 | `NEXT_PUBLIC_API_BASE_URL` | `https://gknushift.freemyip.com` (또는 비워서 same-origin) |
 | `NEXT_PUBLIC_HR_API_BASE_URL` | 위와 동일 |
+| `DOCUMENT_ROOT` | **`/document`** (사내 문서함 파일, 프로젝트 밖) |
+| `DOCS_DATABASE_URL` | `app_docs@127.0.0.1` (org 문서·청크·임베딩 쓰기) |
+| `OPENAI_API_KEY` | Embeddings용 `sk-...` ([platform.openai.com](https://platform.openai.com/api-keys)). 비우면 업로드만 되고 청크 임베딩·검색 실패 |
 
-스니펫: [`scripts/server-env.snippet.env`](../scripts/server-env.snippet.env)
+스니펫: [`scripts/server-env.snippet.env`](../scripts/server-env.snippet.env) (문서함 키 주석 포함)
 
 `.env` 변경 후 반드시:
 
