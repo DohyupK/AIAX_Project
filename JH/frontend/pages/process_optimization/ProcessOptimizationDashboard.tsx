@@ -167,7 +167,7 @@ export default function ProcessOptimizationDashboard() {
             </div>
           </section>
           <SensorMonitor shots={shots} model={model} selected={spcKey} onSelect={setSpcKey} activeGroup={activeGroup} />
-          <SpcChart shots={shots} k={spcKey} />
+          <SpcChart shots={shots} k={spcKey} line={line} />
         </>
       )}
     </div>

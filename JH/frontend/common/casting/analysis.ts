@@ -82,53 +82,13 @@ export function buildAlerts(shots: Shot[], model: ModelInfo, keys: FeatureKey[])
   return out.reverse();
 }
 
-/** 관리도(SPC) 기준 구간: 그날 처음 이 샷 수로 관리 한계를 계산해 고정 (AIAG Phase I) */
-export const SPC_BASELINE = 100;
-// ponytail: 실제 API 연결 후에는 과거 정상 기간 데이터를 기준 구간으로 쓰는 것이 정석
+/** 관리 한계 (Nelson 규칙 판정용). 기준선 값은 라인별 고정 표 — spcLimits.ts */
+export interface SpcLimits { cl: number; ucl: number; lcl: number }
 
-export interface SpcLimits { cl: number; ucl: number; lcl: number; n: number }
-
-function imr(v: number[]): SpcLimits | null {
-  if (v.length < 2) return null;
-  const cl = v.reduce((a, b) => a + b, 0) / v.length;
-  let mr = 0;
-  for (let i = 1; i < v.length; i++) mr += Math.abs(v[i] - v[i - 1]);
-  mr /= v.length - 1;
-  return { cl, ucl: cl + 2.66 * mr, lcl: cl - 2.66 * mr, n: v.length }; // 2.66 = 3 / d2(1.128)
-}
-
-/** 개별값 관리도(I-MR) 한계: CL = 평균, UCL/LCL = CL ± 2.66·MR̄. 기준 구간에서 한계 밖 점을 빼고 1회 재계산 */
-export function spcLimits(baseline: number[]): SpcLimits | null {
-  const first = imr(baseline);
-  if (!first) return null;
-  return imr(baseline.filter(v => v >= first.lcl && v <= first.ucl)) ?? first;
-}
-
-// EWMA 표준 파라미터 (λ 0.05~0.25, L≈3 권장 범위)
+/** EWMA 가중치 λ (기준선 표의 EWMA 한계 = CL ± 3σ·√(λ/(2-λ)) = CL ± 1σ 와 같은 값) */
 export const EWMA_LAMBDA = 0.2;
-export const EWMA_L = 3;
 
-function ewmaCalc(v: number[]): SpcLimits | null {
-  if (v.length < 2) return null;
-  const cl = v.reduce((a, b) => a + b, 0) / v.length;
-  const sd = Math.sqrt(v.reduce((a, b) => a + (b - cl) ** 2, 0) / (v.length - 1)); // 전체 표본표준편차
-  const w = EWMA_L * sd * Math.sqrt(EWMA_LAMBDA / (2 - EWMA_LAMBDA));
-  return { cl, ucl: cl + w, lcl: cl - w, n: v.length };
-}
-
-/**
- * EWMA 관리 한계: CL = 평균, UCL/LCL = CL ± L·σ·√(λ/(2-λ)), σ = 기준 구간 전체 표준편차.
- * 기준 구간에서 평균 ± 3σ 밖 샷을 빼고 1회 재계산
- */
-// ponytail: 정상 상태(점근) 한계만 사용 — 하루 첫 몇 샷은 실제 한계보다 넓게 잡힘. 엄밀히 하려면 시점별 한계 (1-(1-λ)^2i) 항 추가
-export function ewmaLimits(baseline: number[]): SpcLimits | null {
-  const first = ewmaCalc(baseline);
-  if (!first) return null;
-  const sd3 = (first.ucl - first.cl) / Math.sqrt(EWMA_LAMBDA / (2 - EWMA_LAMBDA)); // = 3σ
-  return ewmaCalc(baseline.filter(v => Math.abs(v - first.cl) <= sd3)) ?? first;
-}
-
-/** EWMA 통계량 z_i = λ·x_i + (1-λ)·z_(i-1), z_0 = CL */
+/** EWMA 통계량 z_i = λ·x_i + (1-λ)·z_(i-1), z_0 = CL (조회 구간마다 CL 에서 시작) */
 export function ewmaSeries(v: number[], cl: number): number[] {
   let z = cl;
   return v.map(x => (z = EWMA_LAMBDA * x + (1 - EWMA_LAMBDA) * z));
