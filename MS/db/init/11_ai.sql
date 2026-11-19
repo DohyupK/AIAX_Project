@@ -62,19 +62,56 @@ CREATE TABLE ai.model_registry (
     model_name          text        NOT NULL,                     -- 예: DieCasting_XGB
     version             text        NOT NULL,                     -- 예: 3.2, v1.0
     process_code        text        NOT NULL
-                        CHECK (process_code IN ('CAST-OPT', 'CAST-QC', 'SAFE-GATE')),  -- 공정 최적화 / 품질 검사 / 안전 관리
+                        CHECK (process_code IN ('CAST-QC1', 'CAST-QC2', 'SAFE-PPE')),  -- 공정 1차 검사 / 공정 2차 검사 / 안전구 착용 위반
     description         text,
-    accuracy_score      numeric(5,4) NOT NULL CHECK (accuracy_score  BETWEEN 0 AND 1),
-    recall_score        numeric(5,4) NOT NULL CHECK (recall_score    BETWEEN 0 AND 1),
-    precision_score     numeric(5,4) NOT NULL CHECK (precision_score BETWEEN 0 AND 1),
-    f1_score            numeric(5,4) NOT NULL CHECK (f1_score        BETWEEN 0 AND 1),
     file_name           text,                                     -- 모델 파일 이름 (업로드는 선택)
     file_path           text,                                     -- 서버 저장 경로
     deployed            boolean     NOT NULL DEFAULT false,       -- 공정당 1개만 true
     created_at          timestamptz NOT NULL DEFAULT now(),       -- 등록일
     PRIMARY KEY (model_name, version)
 );
-COMMENT ON TABLE ai.model_registry IS '모델 목록. 배포하면 같은 공정의 기존 배포는 트리거가 자동으로 해제';
+COMMENT ON TABLE ai.model_registry IS '모델 목록. 배포하면 같은 공정의 기존 배포는 트리거가 자동으로 해제. 성과지표는 공정별 ai.model_metric_* 테이블 참고';
+
+-- 공정 1차 검사(CAST-QC1) 성과지표 — PR AUC
+CREATE TABLE ai.model_metric_cast_qc1 (
+    model_name       text        NOT NULL,
+    version          text        NOT NULL,
+    pr_auc_score     numeric(5,4) NOT NULL CHECK (pr_auc_score   BETWEEN 0 AND 1),
+    recall_score     numeric(5,4) NOT NULL CHECK (recall_score   BETWEEN 0 AND 1),
+    precision_score  numeric(5,4) NOT NULL CHECK (precision_score BETWEEN 0 AND 1),
+    f1_score         numeric(5,4) NOT NULL CHECK (f1_score       BETWEEN 0 AND 1),
+    PRIMARY KEY (model_name, version),
+    FOREIGN KEY (model_name, version) REFERENCES ai.model_registry (model_name, version) ON DELETE CASCADE
+);
+COMMENT ON TABLE ai.model_metric_cast_qc1 IS '공정 1차 검사(CAST-QC1) 모델 성과지표';
+
+-- 공정 2차 검사(CAST-QC2) 성과지표
+CREATE TABLE ai.model_metric_cast_qc2 (
+    model_name       text        NOT NULL,
+    version          text        NOT NULL,
+    accuracy_score   numeric(5,4) NOT NULL CHECK (accuracy_score  BETWEEN 0 AND 1),
+    recall_score     numeric(5,4) NOT NULL CHECK (recall_score    BETWEEN 0 AND 1),
+    precision_score  numeric(5,4) NOT NULL CHECK (precision_score BETWEEN 0 AND 1),
+    f1_score         numeric(5,4) NOT NULL CHECK (f1_score        BETWEEN 0 AND 1),
+    PRIMARY KEY (model_name, version),
+    FOREIGN KEY (model_name, version) REFERENCES ai.model_registry (model_name, version) ON DELETE CASCADE
+);
+COMMENT ON TABLE ai.model_metric_cast_qc2 IS '공정 2차 검사(CAST-QC2) 모델 성과지표';
+
+-- 안전구 착용 위반(SAFE-PPE) 성과지표
+CREATE TABLE ai.model_metric_safe_ppe (
+    model_name       text        NOT NULL,
+    version          text        NOT NULL,
+    accuracy_score   numeric(5,4) NOT NULL CHECK (accuracy_score  BETWEEN 0 AND 1),
+    recall_score     numeric(5,4) NOT NULL CHECK (recall_score    BETWEEN 0 AND 1),
+    precision_score  numeric(5,4) NOT NULL CHECK (precision_score BETWEEN 0 AND 1),
+    f1_score         numeric(5,4) NOT NULL CHECK (f1_score        BETWEEN 0 AND 1),
+    PRIMARY KEY (model_name, version),
+    FOREIGN KEY (model_name, version) REFERENCES ai.model_registry (model_name, version) ON DELETE CASCADE
+);
+COMMENT ON TABLE ai.model_metric_safe_ppe IS '안전구 착용 위반(SAFE-PPE) 모델 성과지표';
+
+GRANT SELECT ON ai.model_metric_cast_qc1, ai.model_metric_cast_qc2, ai.model_metric_safe_ppe TO role_lake, role_spark;
 
 -- 공정당 배포 1개
 CREATE UNIQUE INDEX model_registry_one_deployed
