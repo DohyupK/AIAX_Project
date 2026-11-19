@@ -379,7 +379,8 @@ function ShotAnalysis({ shot, model, th, results }: {
       <div className={s.slot}>
         {st === 'first' ? `#${shot.shotId} · 1차 불량 확정 — 2차 검사 대상 아님`
           : st === 'noImage' ? '2차(DL) 검사 대상 · 샷 이미지 없음 (이미지 수집 전)'
-          : <>2차(DL) <b>{st.result === 'fail' ? '불량' : '양품'}</b> · 불량 확률 <span className={po.num}>{st.confidenceScore.toFixed(3)}</span> · {st.modelName}</>}
+          // slot 이 flex 라 조각 사이 공백이 사라짐 → 한 span 으로 묶음
+          : <span>2차(DL) <b>{st.result === 'fail' ? '불량' : '양품'}</b> · 불량 확률 <span className={po.num}>{st.confidenceScore.toFixed(3)}</span> · {st.modelName}</span>}
       </div>
       <KeyVariables shot={shot} model={model} />
     </>
