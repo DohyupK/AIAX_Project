@@ -33,7 +33,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     from openai import OpenAI
 
     client = OpenAI(api_key=_api_key())
-    # API 입력 길이 제한 대비 — 청크는 300자라 배치만 나눔
+    # API 입력 길이 제한 대비 — 청크는 800자라 배치만 나눔
     out: list[list[float]] = []
     batch = 64
     for i in range(0, len(texts), batch):

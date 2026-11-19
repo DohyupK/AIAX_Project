@@ -13,8 +13,8 @@ ALLOWED_EXT = frozenset(
 # 텍스트 추출 대상 (이미지·zip·미지원 hwp는 빈 문자열 → 청크 0)
 EXTRACT_EXT = frozenset({"txt", "pdf", "docx", "xlsx", "pptx", "hwp", "hwpx"})
 MAX_FILE_BYTES = 20 * 1024 * 1024
-CHUNK_CHARS = 300
-CHUNK_OVERLAP = 40
+CHUNK_CHARS = 800
+CHUNK_OVERLAP = 80
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_DIM = 1536
 JOB_TIMEOUT_SEC = 120  # 백그라운드 청킹 상한 2분
