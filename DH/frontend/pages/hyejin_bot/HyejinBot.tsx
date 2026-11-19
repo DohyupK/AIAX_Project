@@ -6,8 +6,8 @@ import type { ChatTurn } from "./sources";
 import s from "./HyejinBot.module.css";
 
 /**
- * 혜진봇 Phase B — 우하단 FAB + 패널. JH /api/documents/ask (OpenAI Chat + 출처)
- * casting 소스는 sources.ts stub
+ * 혜진봇 Phase B — 전역 우하단 FAB + 패널 (app/layout 마운트).
+ * JH /api/documents/ask (OpenAI Chat + 출처). casting은 sources.ts stub
  */
 export default function HyejinBot() {
   const [open, setOpen] = useState(false);
