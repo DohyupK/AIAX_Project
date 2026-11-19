@@ -1,14 +1,12 @@
-// 사내 문서함 저장소 — JH API /api/documents (DOCUMENT_ROOT + org.company_document)
+// 사내 문서함 저장소 — JH API /api/documents
+import { getCurrentUser } from '../../common/currentUser';
 import { isCategory, type DocMeta } from './docs';
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
 function employeeHeader(): HeadersInit {
-  // 로그인 전: currentUser 사번을 헤더로 (서버 FK = org.employee)
-  try {
-    // 동적 import 순환 피함 — 호출측에서 헤더를 넘기지 않고 기본 e0001
-  } catch { /* ignore */ }
-  return { 'X-Employee-No': 'e0001' };
+  const id = getCurrentUser()?.user_id ?? 'e0001';
+  return { 'X-Employee-No': id };
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -33,10 +31,7 @@ function mapMeta(row: Record<string, unknown>): DocMeta {
     company_document_idx: Number(row.company_document_idx),
     doc_no: String(row.doc_no ?? `DOC-${row.company_document_idx}`),
     title: String(row.title ?? ''),
-    description: String(row.description ?? ''),
     category: isCategory(String(row.category ?? '')) ? (row.category as DocMeta['category']) : 'regulation',
-    grade: (row.grade as DocMeta['grade']) || 'internal',
-    department: String(row.department ?? ''),
     uploader_id: String(row.uploader_id ?? ''),
     uploader: String(row.uploader ?? ''),
     created_at: String(row.created_at ?? ''),
@@ -46,13 +41,11 @@ function mapMeta(row: Record<string, unknown>): DocMeta {
   };
 }
 
-/** 업로드된 문서 정보 목록 (파일 본문 제외) */
 export async function listDocs(): Promise<DocMeta[]> {
   const rows = await api<Record<string, unknown>[]>('/api/documents');
   return (rows ?? []).map(mapMeta);
 }
 
-/** 문서 등록 — multipart → 서버 DOCUMENT_ROOT + org */
 export async function addDoc(meta: DocMeta, blob: Blob): Promise<DocMeta> {
   const fd = new FormData();
   fd.append('file', blob, meta.file_name);
@@ -70,7 +63,6 @@ export async function addDoc(meta: DocMeta, blob: Blob): Promise<DocMeta> {
   return mapMeta(await res.json());
 }
 
-/** 문서 삭제 (정보 + 파일 본문) — company_document_idx 기준 */
 export async function deleteDoc(docNoOrIdx: string | number): Promise<void> {
   const idx = typeof docNoOrIdx === 'number'
     ? docNoOrIdx
@@ -79,7 +71,6 @@ export async function deleteDoc(docNoOrIdx: string | number): Promise<void> {
   await api<void>(`/api/documents/${idx}`, { method: 'DELETE' });
 }
 
-/** 다운로드용 파일 본문 */
 export async function getDocBlob(docNoOrIdx: string | number): Promise<Blob | null> {
   const idx = typeof docNoOrIdx === 'number'
     ? docNoOrIdx
@@ -105,7 +96,6 @@ export interface SearchHit {
   content: string;
 }
 
-/** 의미 검색 (OpenAI 임베딩 + 청크 유사도) */
 export async function searchDocs(query: string, limit = 10): Promise<SearchHit[]> {
   return api<SearchHit[]>('/api/documents/search', {
     method: 'POST',
