@@ -1,30 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import styles from "./ModelManagement.module.css";
-import { fetchRobustness, type Model, type RobustnessRow } from "./data";
-import { averageRobustness, orderRobustness } from "./logic";
+import type { Model, RobustnessRow } from "./data";
+import { averageRobustness } from "./logic";
 
 const KEYS = ["accuracy", "recall", "precision", "f1"] as const;
 const num4 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(4));
 
-/** 강건성 팝업 (품질 2차) — 원본 = 모델 성과지표(ai.model_metric_cast_qc2), 조건별 = ai.model_robustness */
-export default function RobustnessDialog({ who, model, onClose }: { who: string; model: Model; onClose: () => void }) {
-  const [rows, setRows] = useState<RobustnessRow[] | null>(null); // null = 불러오는 중
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let alive = true; // 닫힌 뒤 늦게 온 응답은 버림
-    fetchRobustness(who, model.id)
-      .then((r) => alive && setRows(orderRobustness(r)))
-      .catch((e: unknown) => {
-        console.error("[model_management] 강건성 조회 실패", e);
-        if (!alive) return;
-        setError("강건성 데이터를 불러오지 못했습니다. JH API 서버를 확인해 주세요.");
-        setRows([]);
-      });
-    return () => { alive = false; };
-  }, [who, model.id]);
-
+/**
+ * 강건성 팝업 (품질 2차) — 원본 = 모델 성과지표(ai.model_metric_cast_qc2), 조건별 = ai.model_robustness
+ * 조회는 화면(ModelManagement)이 모델 선택 때 한 번 — Overview 괄호 평균과 같은 데이터. rows null = 불러오는 중
+ */
+export default function RobustnessDialog({ model, rows, error, onClose }: {
+  model: Model; rows: RobustnessRow[] | null; error: string; onClose: () => void;
+}) {
   // Esc로 닫기
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

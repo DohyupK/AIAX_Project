@@ -351,3 +351,6 @@
 /* 목업 계정 선택 (로그인 전) — 탭 위 오른쪽 */
 .accountRow { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .denied { padding: 24px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--bad); }
+
+/* 성과지표 옆 괄호 = 강건성 조건 평균 (주 값보다 작고 흐리게) */
+.robustAvg { font-style: normal; font-size: 14px; color: var(--muted); margin-left: -6px; }

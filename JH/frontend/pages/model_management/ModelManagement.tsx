@@ -3,11 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "./ModelManagement.module.css";
 import ModelForm from "./ModelForm";
 import RobustnessDialog from "./RobustnessDialog";
-import { METRIC_LABEL, PROCESS, PROCESS_METRICS, fetchAccess, fetchModels, type AccessLevel, type Model, type Process } from "./data";
+import { METRIC_LABEL, PROCESS, PROCESS_METRICS, fetchAccess, fetchModels, fetchRobustness, type AccessLevel, type Model, type Process, type RobustnessRow } from "./data";
 import { ACCOUNT_KEY, DEFAULT_ACCOUNT, hrApi, type MockAccount } from "../hr_management/hrApi";
 import po from "../process_optimization/ProcessOptimization.module.css";
 import hr from "../hr_management/HrManagement.module.css";
-import { sortModels, type SortKey } from "./logic";
+import { averageRobustness, orderRobustness, sortModels, type SortKey } from "./logic";
 
 type Tab = "all" | Process;
 
@@ -46,6 +46,8 @@ export default function ModelManagement() {
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "id", asc: true });
   const [formOpen, setFormOpen] = useState(false);
   const [robustOpen, setRobustOpen] = useState(false);
+  // 선택한 품질 2차 모델의 강건성 (카드 괄호 평균 + 팝업 표가 같이 씀). rows null = 불러오는 중
+  const [robust, setRobust] = useState<{ id: number; rows: RobustnessRow[] | null; error: string } | null>(null);
   // 팝업 Esc 리스너가 매 렌더 다시 붙지 않도록 같은 함수 유지
   const closeRobust = useCallback(() => setRobustOpen(false), []);
 
@@ -97,6 +99,22 @@ export default function ModelManagement() {
   );
   // 선택한 모델이 현재 탭에 없으면 첫 배포 모델 → 없으면 첫 모델
   const selected = visible.find((m) => m.id === selectedId) ?? visible.find((m) => m.deployed) ?? visible[0];
+
+  // 품질 2차 모델을 고르면 강건성 1회 조회 (다른 공정은 데이터 없음)
+  const robustId = selected?.process === "qc2" ? selected.id : null;
+  useEffect(() => {
+    if (robustId == null || !who) return setRobust(null);
+    let alive = true; // 모델을 빨리 바꿀 때 늦게 온 이전 모델 응답은 버림
+    setRobust({ id: robustId, rows: null, error: "" });
+    fetchRobustness(who, robustId)
+      .then((r) => alive && setRobust({ id: robustId, rows: orderRobustness(r), error: "" }))
+      .catch((e: unknown) => {
+        console.error("[model_management] 강건성 조회 실패", e);
+        if (alive) setRobust({ id: robustId, rows: [], error: "강건성 데이터를 불러오지 못했습니다. JH API 서버를 확인해 주세요." });
+      });
+    return () => { alive = false; };
+  }, [robustId, who]);
+  const robustAvg = robust?.id === robustId && robust.rows ? averageRobustness(robust.rows) : null;
 
   function changeTab(t: Tab) {
     setTab(t);
@@ -190,7 +208,14 @@ export default function ModelManagement() {
                   <div className={styles.metrics}>
                     {/* 공정마다 지표 4개가 다름 — 품질 1차: PR-AUC·Recall·Precision·F1 */}
                     {PROCESS_METRICS[selected.process].map((k) => (
-                      <span key={k}><small>{METRIC_LABEL[k]}</small><b>{num2(selected.metrics[k])}</b></span>
+                      <span key={k}>
+                        <small>{METRIC_LABEL[k]}</small>
+                        <b>{num2(selected.metrics[k])}</b>
+                        {/* 괄호 = 강건성 조건 평균 (팝업 「조건 평균」과 같은 값) */}
+                        {robustAvg && k !== "prAuc" && (
+                          <em className={styles.robustAvg} title={`강건성 평균 (손상 조건 ${robust!.rows!.length}개)`}>({num2(robustAvg[k])})</em>
+                        )}
+                      </span>
                     ))}
                   </div>
                 </dd>
@@ -266,7 +291,9 @@ export default function ModelManagement() {
       )}
 
       {formOpen && canEdit && <ModelForm onClose={() => setFormOpen(false)} />}
-      {robustOpen && selected && <RobustnessDialog who={who} model={selected} onClose={closeRobust} />}
+      {robustOpen && selected && robust?.id === selected.id && (
+        <RobustnessDialog model={selected} rows={robust.rows} error={robust.error} onClose={closeRobust} />
+      )}
     </div>
   );
 }
