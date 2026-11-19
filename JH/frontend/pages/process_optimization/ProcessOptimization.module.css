@@ -62,13 +62,18 @@
 .lgDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); opacity: 0.8; }
 .lgWarn { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid #e8743b; }
 .lgWatch { width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); }
-.lgCl { width: 18px; border-top: 1.5px solid var(--ink); opacity: 0.6; }
-.lgLimit { width: 18px; border-top: 1.5px dashed var(--muted); }
+.lgCl { width: 18px; border-top: 1.5px dashed var(--muted); }
+.lgLimit { width: 18px; border-top: 1.5px solid var(--bad); }
 .lgFlow { width: 12px; height: 3px; border-radius: 2px; }
+/* 관리도 툴팁 — HTML 상자라 그래프 크기와 무관하게 같은 글자 크기 */
+.spcPlot { position: relative; }
+.spcTip { position: absolute; z-index: 2; pointer-events: none; white-space: nowrap; background: rgba(15, 27, 45, 0.92); color: #fff;
+  border-radius: 5px; padding: 6px 10px; font-family: var(--mono); font-size: 12px; line-height: 1.55; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.spcTipRule { color: #ffb4b4; font-weight: 600; }
+.spcTipTrend { color: #ffd38a; font-weight: 600; }
 .spcBox { margin: 0; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 10px 10px 4px; }
 .spcCaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
 .spcTrend { color: var(--warn); }
-.page svg text.tipTrend { fill: #ffd38a; font-size: 11px; font-weight: 600; }
 @media (max-width: 1180px) { .spcGrid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "i" "mr" "ew"; } }
 
 /* pills */
@@ -109,8 +114,7 @@ div.sensor { cursor: default; }
 .sensorSelected { box-shadow: 0 0 0 2px var(--accent); }
 
 /* SPC */
-.page svg text.tipText { fill: #fff; font-size: 11px; }
-.page svg text.tipRule { fill: #ffb4b4; font-size: 11px; font-weight: 600; }
+.page svg text.limitText { fill: var(--bad); font-size: 11px; font-weight: 600; }
 .page svg text.clText { fill: var(--muted); font-size: 11px; }
 
 /* alert log */
