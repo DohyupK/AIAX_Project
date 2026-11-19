@@ -99,11 +99,18 @@ export interface DailyProduction { date: string; production: number; defects: nu
 /** 기간(from~to, 'YYYY-MM-DD', 양 끝 포함) 날짜별 생산 — 최대 220일 */
 export async function fetchDailyProduction(from: string, to: string): Promise<DailyProduction[]> {
   // 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지
-  const res = await fetch(`${BASE}/api/report/daily?${new URLSearchParams({ from, to })}`, {
-    cache: "no-store", signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`/api/report/daily 요청 실패 (HTTP ${res.status})`);
-  return (await res.json()) as DailyProduction[];
+  try {
+    const res = await fetch(`${BASE}/api/report/daily?${new URLSearchParams({ from, to })}`, {
+      cache: "no-store", signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) throw new Error(`/api/report/daily 요청 실패 (HTTP ${res.status})`);
+    return (await res.json()) as DailyProduction[];
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw new Error(`/api/report/daily 요청 시간 초과 (10초) — 서버 DB(.env DATABASE_URL) 확인`);
+    }
+    throw e;
+  }
 }
 
 /** 안전 원자료 (서버 ai.ppe_check, 보호구 착용 위반 대시보드와 같은 판정·위반 기준) */
@@ -114,9 +121,16 @@ export interface SafetyData {
 
 /** 기간(from~to) 안전 원자료 — 최대 220일 */
 export async function fetchSafety(from: string, to: string): Promise<SafetyData> {
-  const res = await fetch(`${BASE}/api/report/safety?${new URLSearchParams({ from, to })}`, {
-    cache: "no-store", signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`/api/report/safety 요청 실패 (HTTP ${res.status})`);
-  return (await res.json()) as SafetyData;
+  try {
+    const res = await fetch(`${BASE}/api/report/safety?${new URLSearchParams({ from, to })}`, {
+      cache: "no-store", signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) throw new Error(`/api/report/safety 요청 실패 (HTTP ${res.status})`);
+    return (await res.json()) as SafetyData;
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw new Error(`/api/report/safety 요청 시간 초과 (10초) — 서버 DB(.env DATABASE_URL) 확인`);
+    }
+    throw e;
+  }
 }

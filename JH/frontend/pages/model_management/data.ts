@@ -48,11 +48,18 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 async function get<T>(path: string, who?: string): Promise<T> {
   // 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지
-  const res = await fetch(`${BASE}/api/models${path}`, {
-    cache: "no-store", signal: AbortSignal.timeout(10_000), headers: who ? { "X-Employee-No": who } : undefined,
-  });
-  if (!res.ok) throw new Error(`/api/models${path} 요청 실패 (HTTP ${res.status})`);
-  return (await res.json()) as T;
+  try {
+    const res = await fetch(`${BASE}/api/models${path}`, {
+      cache: "no-store", signal: AbortSignal.timeout(10_000), headers: who ? { "X-Employee-No": who } : undefined,
+    });
+    if (!res.ok) throw new Error(`/api/models${path} 요청 실패 (HTTP ${res.status})`);
+    return (await res.json()) as T;
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw new Error(`/api/models${path} 요청 시간 초과 (10초) — 서버 DB(.env DATABASE_URL) 확인`);
+    }
+    throw e;
+  }
 }
 
 /** Model Management 권한 — none: 접근 불가 / read: 보기 / edit: 보기 + 등록·배포 */

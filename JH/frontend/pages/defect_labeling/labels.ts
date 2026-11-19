@@ -47,9 +47,16 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
 async function get<T>(path: string): Promise<T> {
   // 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지
-  const res = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
-  return res.json() as Promise<T>;
+  try {
+    const res = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
+    return res.json() as Promise<T>;
+  } catch (e) {
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      throw new Error(`${path} 요청 시간 초과 (10초) — 서버 DB(.env DATABASE_URL) 확인`);
+    }
+    throw e;
+  }
 }
 
 /** 불량 샷이 있는 날짜 (최근 날짜가 먼저) */
