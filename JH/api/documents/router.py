@@ -1,4 +1,5 @@
-"""사내 문서함 API — 파일 DOCUMENT_ROOT, 메타 org.company_document, 청크/임베딩 BG."""
+"""사내 문서함 API — 파일 DOCUMENT_ROOT, 메타 org.company_document, 청크/임베딩 BG.
+문서 내용 보기: pdf·이미지 = /file 원본, docx·xlsx·pptx = /preview (LibreOffice PDF 변환), hwpx·hwp·txt = /text (본문 텍스트)."""
 from __future__ import annotations
 
 import logging
@@ -10,10 +11,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from common.db import connect
+from documents import preview
 from documents.chat import generate_answer
 from documents.embed import cosine, embed_texts
+from documents.extract import extract_text
 from documents.jobs import schedule_chunk_job
-from documents.paths import ALLOWED_EXT, MAX_FILE_BYTES, ext_of, file_path_for, safe_file_name
+from documents.paths import ALLOWED_EXT, EXTRACT_EXT, MAX_FILE_BYTES, ext_of, file_path_for, safe_file_name
 
 log = logging.getLogger("jh.documents")
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -137,8 +140,8 @@ async def upload_document(
         raise
 
 
-@router.get("/{doc_idx}/file")
-def download_file(doc_idx: int):
+def _stored_file(doc_idx: int) -> tuple[Path, str]:
+    """문서 번호 → (저장된 파일 경로, 원래 파일 이름). 없으면 404"""
     with connect(DB) as conn:
         row = conn.execute(
             "SELECT file_path, file_name FROM org.company_document WHERE company_document_idx = %s",
@@ -152,7 +155,45 @@ def download_file(doc_idx: int):
         path = alt if alt.is_file() else path
     if not path.is_file():
         raise HTTPException(404, "파일이 없습니다.")
-    return FileResponse(path, filename=row["file_name"])
+    return path, row["file_name"]
+
+
+@router.get("/{doc_idx}/file")
+def download_file(doc_idx: int):
+    path, name = _stored_file(doc_idx)
+    return FileResponse(path, filename=name)
+
+
+@router.get("/{doc_idx}/preview")
+def preview_pdf(doc_idx: int):
+    """docx·xlsx·pptx 원본 모양 보기 (PDF 변환본). LibreOffice 미설치면 501 → 화면이 /text 로 대신"""
+    path, name = _stored_file(doc_idx)
+    if ext_of(name) not in preview.CONVERT_EXT:
+        raise HTTPException(415, "PDF 변환 대상이 아닌 형식입니다.")
+    try:
+        pdf = preview.converted_pdf(doc_idx, path, name)
+    except Exception:
+        log.exception("문서 PDF 변환 실패 doc=%s", doc_idx)
+        raise HTTPException(500, "문서를 PDF로 변환하지 못했습니다.")
+    if pdf is None:
+        raise HTTPException(501, "서버에 문서 변환 도구(LibreOffice)가 설치되지 않았습니다.")
+    return FileResponse(pdf, media_type="application/pdf", content_disposition_type="inline")
+
+
+TEXT_LIMIT = 20_000   # 내용 보기 최대 글자 수 (넘으면 잘라서 truncated)
+
+
+@router.get("/{doc_idx}/text")
+def document_text(doc_idx: int):
+    """본문 텍스트 (hwpx·txt, LibreOffice 없을 때 docx·xlsx·pptx). hwp(바이너리)는 추출기 승인 전이라 빈 텍스트"""
+    path, name = _stored_file(doc_idx)
+    if ext_of(name) not in EXTRACT_EXT:
+        raise HTTPException(415, "본문 텍스트를 뽑을 수 없는 형식입니다.")
+    try:
+        text = extract_text(path, name)
+    except Exception:
+        raise HTTPException(500, "본문 텍스트를 읽지 못했습니다.")   # 원인은 extract_text 가 로그에 남김
+    return {"text": text[:TEXT_LIMIT], "truncated": len(text) > TEXT_LIMIT, "chars": len(text)}
 
 
 @router.delete("/{doc_idx}", status_code=204)
@@ -172,6 +213,7 @@ def delete_document(
             raise HTTPException(403, "본인이 올린 문서만 삭제할 수 있습니다.")
         path = Path(row["file_path"])
         conn.execute("DELETE FROM org.company_document WHERE company_document_idx = %s", [doc_idx])
+    preview.remove_cache(doc_idx)
     if path.is_file():
         try:
             path.unlink()

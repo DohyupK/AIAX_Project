@@ -37,6 +37,9 @@ export function useShotStream(line: string, date: string, playing: boolean, real
       return Promise.resolve();
     }
     setLoading(true);
+    // 이전 라인·날짜 샷을 바로 비움 — 남겨 두면 새 응답 전까지 관리도·KPI 가 이전 라인 샷으로 새 라인을 조회(404)·표시함
+    setAll([]);
+    setCount(0);
     const req = live ? fetchLive(line).then(r => r.shots) : fetchShots(line, date, real);
     return req
       .then(s => {
