@@ -121,7 +121,8 @@ nginx -t && systemctl reload nginx
 | `NEXT_PUBLIC_HR_API_BASE_URL` | 위와 동일 |
 | `DOCUMENT_ROOT` | **`/root/document`** (사내 문서함 파일, 프로젝트·git 밖) |
 | `DOCS_DATABASE_URL` | `app_docs@127.0.0.1` (org 문서·청크·임베딩 쓰기) |
-| `NVIDIA_API_KEY` | **우선** — NIM 임베딩·혜진봇 Chat ([build.nvidia.com](https://build.nvidia.com)). 있으면 OpenAI 대신 사용 |
+| `NVIDIA_API_KEY` | **키 1개** — NIM 임베딩+Chat 공용 ([build.nvidia.com](https://build.nvidia.com)). 모델 ID만 embed/chat 각각 다름 |
+| `NIM_CHAT_MODEL` | (선택) 챗 모델 오버라이드. 기본 `nvidia/nemotron-3.5-bolt-e4b`. 410=모델 폐기 시 여기만 바꿔도 됨 |
 | `OPENAI_API_KEY` | NIM 키 없을 때만 — Embeddings+Chat (`sk-...`). 비우면(둘 다 없으면) 임베딩·검색·혜진봇 실패 |
 
 스니펫: [`scripts/server-env.snippet.env`](../scripts/server-env.snippet.env) (문서함 키 주석 포함)
@@ -162,6 +163,7 @@ curl -sk -o /dev/null -w "via-nginx:%{http_code}\n" \
 | `via-nginx:503` | DB URL 호스트가 공인 IP | 서버 `.env`를 `127.0.0.1`로 바꾼 뒤 restart |
 | 문서 업로드 `ConnectionTimeout` / `/api/documents` 500(~10s) | `DOCS_DATABASE_URL` 호스트가 공인 IP (`49.50…`). HR 등 `127.0.0.1`은 정상 | 서버 `.env`만 `DOCS`→`127.0.0.1`, `DOCUMENT_ROOT=/root/document` 후 `systemctl restart myapp`. 원커맨드: `bash scripts/fix-docs-db-host.sh` |
 | 혜진봇/검색 `429` credits / 임베딩 실패 | OpenAI 크레딧 소진 | `.env`에 `NVIDIA_API_KEY` 넣고 restart. `bash scripts/apply-embedding-dim-nim.sh` 후 `cd JH/api && uv run python -m documents.requeue_all` |
+| 혜진봇 `Chat 실패: 410` | 챗 **모델 ID** Free Endpoint 폐기 (키 문제 아님) | `NIM_CHAT_MODEL`을 build.nvidia.com 의 현재 Free 챗 모델로 / 코드 기본 `nemotron-3.5-bolt-e4b` pull 후 `systemctl restart myapp` |
 | 재임베딩 `CheckViolation` document_chunk_embedding_dim | DB가 1536만 허용, NIM은 2048 | `bash scripts/apply-embedding-dim-nim.sh` (DDL=`POSTGRES_USER`/shift) → `requeue_all` |
 | 마이그레이션 `must be owner of table` | `app_docs`로 ALTER 시도 | 스크립트가 shift로 돌도록 최신 pull 후 재실행. `.env`에 `POSTGRES_USER`/`POSTGRES_PASSWORD` 필요 |
 | 문서 업로드 `413 Request Entity Too Large` | nginx `client_max_body_size` 기본(~1m) | `gknushift` server에 `client_max_body_size 25m;` 후 `nginx -t && systemctl reload nginx` |
