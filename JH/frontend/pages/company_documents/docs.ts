@@ -36,6 +36,20 @@ export const extOf = (fileName: string) => {
   return i > 0 ? fileName.slice(i + 1).toLowerCase() : '';
 };
 
+/**
+ * 문서 내용 보기 방식 — pdf: 원본(브라우저 PDF 보기) / image: 이미지 / convert: 서버 PDF 변환본(LibreOffice, 없으면 본문 텍스트)
+ * / text: 본문 텍스트 / none: 미리보기 없음(다운로드)
+ */
+export type ViewMode = 'pdf' | 'image' | 'convert' | 'text' | 'none';
+export function viewModeOf(fileName: string): ViewMode {
+  const ext = extOf(fileName);
+  if (ext === 'pdf') return 'pdf';
+  if (['png', 'jpg', 'jpeg'].includes(ext)) return 'image';
+  if (['docx', 'xlsx', 'pptx'].includes(ext)) return 'convert';
+  if (['hwp', 'hwpx', 'txt'].includes(ext)) return 'text';
+  return 'none';
+}
+
 export const formatSize = (b: number) =>
   b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`;
 

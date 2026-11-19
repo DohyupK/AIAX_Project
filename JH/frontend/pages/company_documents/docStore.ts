@@ -85,6 +85,22 @@ export async function getDocBlob(docNoOrIdx: string | number): Promise<Blob | nu
   return res.blob();
 }
 
+/** 문서 번호(DOC-3 또는 3) → 숫자 */
+const idxOf = (docNoOrIdx: string | number) =>
+  typeof docNoOrIdx === 'number' ? docNoOrIdx : Number(String(docNoOrIdx).replace(/^DOC-/i, ''));
+
+/** docx·xlsx·pptx 의 PDF 변환본. 서버에 변환 도구(LibreOffice)가 없으면 null → 본문 텍스트로 대신 */
+export async function getDocPreview(docNoOrIdx: string | number): Promise<Blob | null> {
+  const res = await fetch(`${BASE}/api/documents/${idxOf(docNoOrIdx)}/preview`, { headers: employeeHeader(), cache: 'no-store' });
+  if (res.status === 501) return null;
+  if (!res.ok) throw new Error(`PDF 변환 실패 (HTTP ${res.status})`);
+  return res.blob();
+}
+
+/** 본문 텍스트 (최대 2만 자, 넘으면 truncated) */
+export const getDocText = (docNoOrIdx: string | number) =>
+  api<{ text: string; truncated: boolean; chars: number }>(`/api/documents/${idxOf(docNoOrIdx)}/text`);
+
 export interface SearchHit {
   score: number;
   company_document_idx: number;
