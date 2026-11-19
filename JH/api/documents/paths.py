@@ -15,8 +15,7 @@ EXTRACT_EXT = frozenset({"txt", "pdf", "docx", "xlsx", "pptx", "hwp", "hwpx"})
 MAX_FILE_BYTES = 20 * 1024 * 1024
 CHUNK_CHARS = 800
 CHUNK_OVERLAP = 80
-EMBED_MODEL = "text-embedding-3-small"
-EMBED_DIM = 1536
+# 임베딩 모델·차원: documents.llm_client.embed_model() / embed_dim()
 JOB_TIMEOUT_SEC = 120  # 백그라운드 청킹 상한 2분
 
 

@@ -1,50 +1,39 @@
-"""OpenAI Embeddings API. 키는 루트 .env OPENAI_API_KEY (혜진봇 Chat과 공용)."""
+"""임베딩 API — NIM(nvidia/nemotron-3-embed-1b) 우선, 없으면 OpenAI text-embedding-3-small."""
 from __future__ import annotations
 
 import logging
 import math
-import os
+from typing import Literal
 
-from common.db import _env
-from documents.paths import EMBED_DIM, EMBED_MODEL
+from documents.llm_client import embed_dim, embed_model, get_openai_client, provider
 
 log = logging.getLogger("jh.documents.embed")
 
-
-def _api_key() -> str:
-    try:
-        key = os.environ.get("OPENAI_API_KEY") or _env("OPENAI_API_KEY")
-    except RuntimeError:
-        key = ""
-    key = (key or "").strip()
-    if not key:
-        raise RuntimeError(
-            "OPENAI_API_KEY 미설정 — 프로젝트 루트 .env 에 "
-            "OPENAI_API_KEY=sk-... 를 넣고 API를 재시작하세요. "
-            "(https://platform.openai.com/api-keys , Embeddings·혜진봇 Chat 공용)"
-        )
-    return key
+InputType = Literal["passage", "query"]
 
 
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    """여러 청크를 배치 임베딩. 빈 리스트면 []."""
+def embed_texts(texts: list[str], *, input_type: InputType = "passage") -> list[list[float]]:
+    """여러 청크 배치 임베딩. NIM은 input_type(passage/query) 필수. 빈 리스트면 []."""
     if not texts:
         return []
-    from openai import OpenAI
-
-    client = OpenAI(api_key=_api_key())
-    # API 입력 길이 제한 대비 — 청크는 800자라 배치만 나눔
+    client = get_openai_client()
+    model = embed_model()
+    dim = embed_dim()
+    p = provider()
     out: list[list[float]] = []
     batch = 64
     for i in range(0, len(texts), batch):
         part = texts[i : i + batch]
-        resp = client.embeddings.create(model=EMBED_MODEL, input=part)
-        # index 순으로 정렬
+        kwargs: dict = {"model": model, "input": part}
+        # NIM 임베딩은 passage/query 모드 구분
+        if p == "nim":
+            kwargs["extra_body"] = {"input_type": input_type, "encoding_format": "float"}
+        resp = client.embeddings.create(**kwargs)
         by_idx = sorted(resp.data, key=lambda d: d.index)
         for d in by_idx:
             vec = list(d.embedding)
-            if len(vec) != EMBED_DIM:
-                raise RuntimeError(f"임베딩 차원 불일치: {len(vec)} != {EMBED_DIM}")
+            if len(vec) != dim:
+                raise RuntimeError(f"임베딩 차원 불일치: {len(vec)} != {dim} (model={model})")
             out.append(vec)
     return out
 

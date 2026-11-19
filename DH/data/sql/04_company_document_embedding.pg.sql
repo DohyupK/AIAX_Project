@@ -1,6 +1,7 @@
 -- 사내 문서함 임베딩·청킹 잡 (org). DH 2026-11-19
--- 서버 반영됨. NCP에 pgvector 시스템 패키지 없어 embedding=real[1536].
--- pgvector 설치 후: ALTER … TYPE vector(1536) USING embedding::vector 검토.
+-- 서버 반영됨. NCP에 pgvector 시스템 패키지 없어 embedding=real[].
+-- 차원 CHECK: 초기 1536 → 05_document_embedding_dim_nim.pg.sql 에서 1536|2048.
+-- pgvector 설치 후: ALTER … TYPE vector(…) USING embedding::vector 검토.
 
 CREATE TABLE IF NOT EXISTS org.document_chunk_embedding (
     document_chunk_embedding_idx integer PRIMARY KEY,
@@ -9,9 +10,9 @@ CREATE TABLE IF NOT EXISTS org.document_chunk_embedding (
     embedding real[] NOT NULL,
     model_name text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT document_chunk_embedding_dim CHECK (cardinality(embedding) = 1536)
+    CONSTRAINT document_chunk_embedding_dim CHECK (cardinality(embedding) IN (1536, 2048))
 );
-COMMENT ON TABLE org.document_chunk_embedding IS '사내 문서 청크 OpenAI 임베딩 (text-embedding-3-small, 1536)';
+COMMENT ON TABLE org.document_chunk_embedding IS '사내 문서 청크 임베딩 (OpenAI 1536 / NIM 2048 — 05 마이그레이션 참고)';
 
 CREATE TABLE IF NOT EXISTS org.document_chunk_job (
     company_document_idx integer PRIMARY KEY
