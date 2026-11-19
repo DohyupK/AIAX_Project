@@ -8,13 +8,13 @@ const KEYS = ["accuracy", "recall", "precision", "f1"] as const;
 const num4 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(4));
 
 /** 강건성 팝업 (품질 2차) — 원본 = 모델 성과지표(ai.model_metric_cast_qc2), 조건별 = ai.model_robustness */
-export default function RobustnessDialog({ model, onClose }: { model: Model; onClose: () => void }) {
+export default function RobustnessDialog({ who, model, onClose }: { who: string; model: Model; onClose: () => void }) {
   const [rows, setRows] = useState<RobustnessRow[] | null>(null); // null = 불러오는 중
   const [error, setError] = useState("");
 
   useEffect(() => {
     let alive = true; // 닫힌 뒤 늦게 온 응답은 버림
-    fetchRobustness(model.id)
+    fetchRobustness(who, model.id)
       .then((r) => alive && setRows(orderRobustness(r)))
       .catch((e: unknown) => {
         console.error("[model_management] 강건성 조회 실패", e);
@@ -23,7 +23,7 @@ export default function RobustnessDialog({ model, onClose }: { model: Model; onC
         setRows([]);
       });
     return () => { alive = false; };
-  }, [model.id]);
+  }, [who, model.id]);
 
   // Esc로 닫기
   useEffect(() => {

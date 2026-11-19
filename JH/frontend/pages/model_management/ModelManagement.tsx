@@ -3,7 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "./ModelManagement.module.css";
 import ModelForm from "./ModelForm";
 import RobustnessDialog from "./RobustnessDialog";
-import { METRIC_LABEL, PROCESS, PROCESS_METRICS, fetchModels, type Model, type Process } from "./data";
+import { METRIC_LABEL, PROCESS, PROCESS_METRICS, fetchAccess, fetchModels, type AccessLevel, type Model, type Process } from "./data";
+import { ACCOUNT_KEY, DEFAULT_ACCOUNT, hrApi, type MockAccount } from "../hr_management/hrApi";
+import po from "../process_optimization/ProcessOptimization.module.css";
+import hr from "../hr_management/HrManagement.module.css";
 import { sortModels, type SortKey } from "./logic";
 
 type Tab = "all" | Process;
@@ -25,12 +28,17 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 // 성과지표 0~1 값을 소수점 둘째 자리로 (% 표기 안 함). 값 없으면 —
 const num2 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2));
 const DB_WRITE_PENDING = "DB 쓰기 계정 연결 전";
+const ACCESS_LABEL: Record<AccessLevel, string> = { none: "접근 불가", read: "보기", edit: "보기 + 등록·배포" };
 
 /**
  * Model Management — 공정별 모델 목록·성과지표 조회 (서버 DB, 읽기 전용)
  * 공정별 배포 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차 → 품질 검사 1차 판정 등). 등록·배포 저장은 쓰기 계정 연결 후
+ * 목업 계정(인사 관리와 같은 선택값) → 서버 페이지 권한: none 화면 차단 / read 보기만 / edit 등록(+)·배포 안내 보임
  */
 export default function ModelManagement() {
+  const [accounts, setAccounts] = useState<MockAccount[]>([]);
+  const [who, setWho] = useState("");
+  const [access, setAccess] = useState<AccessLevel | null>(null); // null = 확인 중
   const [models, setModels] = useState<Model[] | null>(null); // null = 불러오는 중
   const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState<Tab>("all");
@@ -42,14 +50,43 @@ export default function ModelManagement() {
   const closeRobust = useCallback(() => setRobustOpen(false), []);
 
   useEffect(() => {
-    fetchModels()
-      .then(setModels)
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(ACCOUNT_KEY); } catch { /* 저장소 막힘 → 기본 계정 */ }
+    setWho(saved && /^e\d{4}$/.test(saved) ? saved : DEFAULT_ACCOUNT);
+    hrApi.mockAccounts().then(setAccounts).catch((e: Error) => console.error("[model_management] 목업 계정 목록 조회 실패", e));
+  }, []);
+
+  // 계정이 바뀌면 권한 → (보기 권한이면) 모델 목록
+  useEffect(() => {
+    if (!who) return;
+    let alive = true; // 계정을 빨리 바꿀 때 늦게 온 이전 계정 응답은 버림
+    setAccess(null);
+    setModels(null);
+    setLoadError("");
+    setFormOpen(false);
+    setRobustOpen(false);
+    fetchAccess(who)
+      .then((level) => {
+        if (!alive) return;
+        setAccess(level);
+        if (level === "none") return setModels([]);
+        return fetchModels(who).then((m) => alive && setModels(m));
+      })
       .catch((e: unknown) => {
-        console.error("[model_management] 모델 목록 조회 실패", e);
+        console.error("[model_management] 권한·모델 목록 조회 실패", e);
+        if (!alive) return;
         setLoadError("모델 목록을 불러오지 못했습니다. JH API 서버(127.0.0.1:8000)를 확인해 주세요.");
         setModels([]);
       });
-  }, []);
+    return () => { alive = false; };
+  }, [who]);
+
+  function changeAccount(no: string) {
+    setWho(no);
+    setSelectedId(null);
+    try { localStorage.setItem(ACCOUNT_KEY, no); } catch { /* 무시 */ }
+  }
+  const canEdit = access === "edit";
 
   const visible = sortModels(
     // 전체 탭 = 현재 대시보드에 배포(적용)된 모델만 / 공정 탭 = 해당 공정 전 버전
@@ -72,6 +109,25 @@ export default function ModelManagement() {
 
   return (
     <div className={styles.page}>
+      <div className={styles.accountRow}>
+        {access && <span className={styles.muted}>권한: {ACCESS_LABEL[access]}</span>}
+        <label className={po.chip}>
+          <span>목업 계정</span>
+          <select className={hr.account} value={who} onChange={(e) => changeAccount(e.target.value)} aria-label="목업 로그인 계정">
+            {!accounts.some((a) => a.employee_no === who) && who && <option value={who}>{who}</option>}
+            {accounts.map((a) => (
+              <option key={a.employee_no} value={a.employee_no}>
+                {a.employee_no} · {a.dept_name} {a.position_name} · {a.team_name ?? "팀 없음"}{a.is_team_rep ? " (팀 대표)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {access === "none" ? (
+        <p className={styles.denied}>Model Management 접근 권한이 없습니다. (보기: 품질부·R&amp;D부·부서장·시스템개발부 / 수정: R&amp;D부 대리 이상·시스템개발부 과장 이상)</p>
+      ) : (
+      <>
       <div className={styles.tabs} role="tablist" aria-label="관리 공정 필터">
         {TABS.map((t) => (
           <button
@@ -107,7 +163,7 @@ export default function ModelManagement() {
                   <span className={`${styles.badge} ${selected.deployed ? styles.badgeOn : ""}`}>
                     {selected.deployed ? "Y · 배포" : "N · 미배포"}
                   </span>
-                  {!selected.deployed && <span className={styles.muted}> 배포 변경: {DB_WRITE_PENDING}</span>}
+                  {canEdit && !selected.deployed && <span className={styles.muted}> 배포 변경: {DB_WRITE_PENDING}</span>}
                 </dd>
                 {selected.deployed && (
                   <>
@@ -148,6 +204,7 @@ export default function ModelManagement() {
           )}
         </section>
 
+        {canEdit && (
         <div className={styles.addRow}>
           {/* 등록 폼은 입력 검사까지 — DB 저장은 쓰기 계정 연결 후 */}
           <button
@@ -160,6 +217,7 @@ export default function ModelManagement() {
             +
           </button>
         </div>
+        )}
 
         <table className={styles.table}>
           <thead>
@@ -204,8 +262,11 @@ export default function ModelManagement() {
         </table>
       </div>
 
-      {formOpen && <ModelForm onClose={() => setFormOpen(false)} />}
-      {robustOpen && selected && <RobustnessDialog model={selected} onClose={closeRobust} />}
+      </>
+      )}
+
+      {formOpen && canEdit && <ModelForm onClose={() => setFormOpen(false)} />}
+      {robustOpen && selected && <RobustnessDialog who={who} model={selected} onClose={closeRobust} />}
     </div>
   );
 }

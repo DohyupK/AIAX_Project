@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ApiError, FIELD_LABEL, GENDER_LABEL, TIER_LABEL, hrApi,
+  ACCOUNT_KEY, DEFAULT_ACCOUNT, ApiError, FIELD_LABEL, GENDER_LABEL, TIER_LABEL, hrApi,
   type DeptSummary, type Employee, type EmployeeInput, type Me, type MockAccount, type Summary, type TeamSummary,
 } from './hrApi';
 import po from '../process_optimization/ProcessOptimization.module.css';
@@ -11,8 +11,6 @@ import s from './HrManagement.module.css';
 type By = 'dept' | 'team';
 const ALL = 'all';   // 「전체」 버튼 선택값 = 부서(또는 팀) 카드 전부 표시 — 인사팀(is_hr)만 보임
 type Item = DeptSummary | TeamSummary;
-const ACCOUNT_KEY = 'jh.hr.mock_employee_no';   // 목업 계정 선택 기억 (로그인 전 전용)
-const DEFAULT_ACCOUNT = 'e0002';                // 경영부 부장 (org 2026-11-17 개편 사번)
 const DETAIL_FIELDS = ['employee_no', 'employee_name', 'dept_name', 'position_name', 'team_name', 'email', 'phone',
   'years_of_service', 'annual_leave_used', 'monthly_overtime_hour', 'age', 'gender', 'address', 'created_at'];
 

@@ -46,13 +46,29 @@ export interface Model {
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
-/** 전체 모델 목록 (DB). 화면이 모르는 공정 코드 행은 뺌 */
-export async function fetchModels(): Promise<Model[]> {
+async function get<T>(path: string, who?: string): Promise<T> {
   // 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지
-  const res = await fetch(`${BASE}/api/models`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`/api/models 요청 실패 (HTTP ${res.status})`);
-  const rows = (await res.json()) as (Omit<Model, "process"> & { processCode: string })[];
-  return rows.flatMap(({ processCode, ...r }) => (BY_CODE[processCode] ? [{ ...r, process: BY_CODE[processCode] }] : []));
+  const res = await fetch(`${BASE}/api/models${path}`, {
+    cache: "no-store", signal: AbortSignal.timeout(10_000), headers: who ? { "X-Employee-No": who } : undefined,
+  });
+  if (!res.ok) throw new Error(`/api/models${path} 요청 실패 (HTTP ${res.status})`);
+  return (await res.json()) as T;
+}
+
+/** Model Management 권한 — none: 접근 불가 / read: 보기 / edit: 보기 + 등록·배포 */
+export type AccessLevel = "none" | "read" | "edit";
+export async function fetchAccess(who: string): Promise<AccessLevel> {
+  return (await get<{ accessLevel: AccessLevel }>("/me", who)).accessLevel;
+}
+
+type ModelRow = Omit<Model, "process"> & { processCode: string };
+/** 화면이 모르는 공정 코드 행은 뺌 */
+const toModels = (rows: ModelRow[]): Model[] =>
+  rows.flatMap(({ processCode, ...r }) => (BY_CODE[processCode] ? [{ ...r, process: BY_CODE[processCode] }] : []));
+
+/** 전체 모델 목록 (DB, read 권한 필요) */
+export async function fetchModels(who: string): Promise<Model[]> {
+  return toModels(await get<ModelRow[]>("", who));
 }
 
 /** 강건성 1줄 — 손상 조건별 지표 (DB ai.model_robustness) */
@@ -65,13 +81,11 @@ export interface RobustnessRow {
 }
 
 /** 모델 1개의 조건별 강건성 (품질 2차 「강건성」 팝업). 데이터가 없으면 빈 배열 */
-export async function fetchRobustness(modelId: number): Promise<RobustnessRow[]> {
-  const res = await fetch(`${BASE}/api/models/${modelId}/robustness`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`/api/models/${modelId}/robustness 요청 실패 (HTTP ${res.status})`);
-  return (await res.json()) as RobustnessRow[];
+export async function fetchRobustness(who: string, modelId: number): Promise<RobustnessRow[]> {
+  return get<RobustnessRow[]>(`/${modelId}/robustness`, who);
 }
 
-/** 공정의 배포 모델 (없으면 null) — 품질 검사·보호구 화면 표시용 */
+/** 공정의 배포 모델 (없으면 null) — 보호구 화면 표시용, 계정 불필요 */
 export async function fetchDeployedModel(p: Process): Promise<Model | null> {
-  return (await fetchModels()).find((m) => m.process === p && m.deployed) ?? null;
+  return toModels(await get<ModelRow[]>("/deployed")).find((m) => m.process === p) ?? null;
 }
