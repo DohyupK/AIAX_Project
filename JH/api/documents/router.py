@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from common.db import connect
+from documents.chat import generate_answer
 from documents.embed import cosine, embed_texts
 from documents.jobs import schedule_chunk_job
 from documents.paths import ALLOWED_EXT, MAX_FILE_BYTES, ext_of, file_path_for, safe_file_name
@@ -184,13 +185,10 @@ class SearchBody(BaseModel):
     limit: int = Field(10, ge=1, le=50)
 
 
-@router.post("/search")
-def search_documents(body: SearchBody):
-    q = body.query.strip()
-    if not q:
-        raise HTTPException(400, "검색어를 입력하세요.")
+def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
+    """의미검색 top-k. 임베딩 실패는 HTTPException."""
     try:
-        qvec = embed_texts([q])[0]
+        qvec = embed_texts([query])[0]
     except Exception as e:
         log.exception("검색 임베딩 실패")
         msg = str(e)
@@ -229,4 +227,35 @@ def search_documents(body: SearchBody):
             )
         )
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [item for _, item in scored[: body.limit]]
+    return [item for _, item in scored[:limit]]
+
+
+@router.post("/search")
+def search_documents(body: SearchBody):
+    q = body.query.strip()
+    if not q:
+        raise HTTPException(400, "검색어를 입력하세요.")
+    return _retrieve_hits(q, body.limit)
+
+
+@router.post("/ask")
+def ask_documents(body: SearchBody):
+    """혜진봇: 문서 검색 + OpenAI Chat 답변. sources는 search hit와 동일 형태."""
+    q = body.query.strip()
+    if not q:
+        raise HTTPException(400, "검색어를 입력하세요.")
+    hits = _retrieve_hits(q, body.limit)
+    if not hits:
+        return {
+            "answer": "사내 문서에서 근거를 찾지 못했습니다. 문서함 업로드·청킹(ok) 상태를 확인해 주세요.",
+            "sources": [],
+        }
+    try:
+        answer = generate_answer(q, hits)
+    except Exception as e:
+        log.exception("혜진봇 Chat 실패")
+        msg = str(e)
+        if "OPENAI_API_KEY" in msg:
+            raise HTTPException(503, msg) from e
+        raise HTTPException(502, f"Chat 실패: {e}") from e
+    return {"answer": answer, "sources": hits}

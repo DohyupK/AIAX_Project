@@ -1,4 +1,4 @@
-"""OpenAI Embeddings API — 채팅 아님. 키는 루트 .env OPENAI_API_KEY."""
+"""OpenAI Embeddings API. 키는 루트 .env OPENAI_API_KEY (혜진봇 Chat과 공용)."""
 from __future__ import annotations
 
 import logging
@@ -21,7 +21,7 @@ def _api_key() -> str:
         raise RuntimeError(
             "OPENAI_API_KEY 미설정 — 프로젝트 루트 .env 에 "
             "OPENAI_API_KEY=sk-... 를 넣고 API를 재시작하세요. "
-            "(https://platform.openai.com/api-keys , Embeddings 전용)"
+            "(https://platform.openai.com/api-keys , Embeddings·혜진봇 Chat 공용)"
         )
     return key
 
