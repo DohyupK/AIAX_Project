@@ -10,7 +10,7 @@ assert.deepEqual(toggleType(["BLOWHOLE", "EDGE_BURR"], "UNDECIDABLE"), ["UNDECID
 assert.deepEqual(toggleType(["UNDECIDABLE"], "SURFACE_ROUGH"), ["SURFACE_ROUGH"]);
 
 const shot = (shotId: number, status: DefectShot["status"], types: DefectShot["types"] = []): DefectShot =>
-  ({ castingId: `261011_000000_${shotId}`, shotId, time: "0:00:00", status, types });
+  ({ castingId: `L1_261011_000000_${shotId}`, shotId, time: "0:00:00", status, types });
 
 // 저장된 유형: 폐기면 UNDECIDABLE, 라벨 완료면 그 유형, 미라벨이면 없음
 assert.deepEqual(typesOf(shot(1, "discarded")), ["UNDECIDABLE"]);

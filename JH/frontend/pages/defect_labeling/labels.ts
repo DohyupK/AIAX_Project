@@ -16,7 +16,7 @@ export type LabelStatus = 'unlabeled' | 'labeled' | 'discarded';
 
 /** 불량 샷 1개 + 라벨 상태 (서버 /api/casting/defects 응답 한 줄) */
 export interface DefectShot {
-  castingId: string;   // DB 키 'YYMMDD_HHMMSS_생산번호'
+  castingId: string;   // DB 키 'L<라인번호>_YYMMDD_HHMMSS_생산번호'
   shotId: number;      // 생산번호 (화면 표시·목업 이미지용)
   time: string;        // 'H:mm:ss'
   status: LabelStatus;
@@ -52,7 +52,8 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/** 불량 샷이 있는 날짜 (최근 날짜가 먼저) */
-export const fetchDefectDates = () => get<string[]>('/api/casting/defect-dates');
-/** 그날 불량 샷 + 라벨 상태 (최신순) */
-export const fetchDefects = (date: string) => get<DefectShot[]>(`/api/casting/defects?date=${encodeURIComponent(date)}`);
+/** 그 라인의 불량 샷이 있는 날짜 (최근 날짜가 먼저) */
+export const fetchDefectDates = (line: string) => get<string[]>(`/api/casting/defect-dates?line=${encodeURIComponent(line)}`);
+/** 그 라인·그날 불량 샷 + 라벨 상태 (최신순) */
+export const fetchDefects = (line: string, date: string) =>
+  get<DefectShot[]>(`/api/casting/defects?${new URLSearchParams({ line, date })}`);
