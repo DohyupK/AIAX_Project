@@ -8,7 +8,6 @@ import s from './ProcessOptimization.module.css';
 const WINDOW = 100;              // 최근 표시 샷 수 (약 4시간)
 const W = 620;                   // 세 그래프 공통 가로 (오른쪽 여백 = 관리선 값 표시 자리)
 const L = 44, R = 86, T = 10, B = 22;
-const TIP_W = 220;
 /** 생산 흐름 색 — A 는 I·MR 진회색 / EWMA 파랑, B~D 는 세 그래프 공통 (▲ 주황·◆ 파랑과 겹치지 않게) */
 const FLOW_COLORS = ['#0f9d8a', '#8b5cf6', '#b45309'];
 const FLOW_NAMES = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -133,6 +132,7 @@ function ControlChart({ k, kind, pts, lines, h, title, note, className }: {
         <b>{title}</b>
         <span className={s.sub}>{note}{marked > 0 && <> · 표시 <b className={s.spcTrend}>{marked}</b>점</>}</span>
       </figcaption>
+      <div className={s.spcPlot}>
       <svg className={s.chart} viewBox={`0 0 ${W} ${h}`} role="img"
         aria-label={`${LABELS[k]} ${title}, UCL ${fmt(lines.ucl)}, CL ${fmt(lines.cl)}, LCL ${fmt(lines.lcl)}, 표시 ${marked}점${flows > 1 ? `, 생산 흐름 ${flows}개` : ''}`}>
         {ticks.map(t => (
@@ -175,27 +175,24 @@ function ControlChart({ k, kind, pts, lines, h, title, note, className }: {
           );
         })}
 
-        {hp && (() => {
-          const m = marksOf(hp.p);
-          const rows = [
-            `#${hp.p.shotId} · ${hp.p.time}${flows > 1 ? ` · 흐름 ${FLOW_NAMES[hp.p.flow] ?? hp.p.flow + 1}` : ''}${hp.p.runStart ? ' · 런 첫 샷' : ''}`,
-            `${LABELS[k]} ${fmt(hp.p.value)}${unit && ` ${unit}`}`,
-            ...(kind === 'i' ? [] : [`${kind === 'mr' ? 'MR' : 'EWMA'} ${fmt(hp.y)}`]),
-          ];
-          const bh = 8 + (rows.length + m.length) * 14;
-          const tx = Math.min(Math.max(x(hp.i) - TIP_W / 2, L), W - R - TIP_W);
-          const ty = y(hp.y) > T + bh + 10 ? y(hp.y) - bh - 10 : y(hp.y) + 10;
-          return (
-            <g pointerEvents="none">
-              <rect x={tx} y={ty} width={TIP_W} height={bh} rx={4} fill="var(--ink)" opacity={0.9} />
-              {rows.map((r, j) => <text key={j} x={tx + 8} y={ty + 14 + j * 14} className={s.tipText}>{r}</text>)}
-              {m.map((mk, j) => (
-                <text key={mk} x={tx + 8} y={ty + 14 + (rows.length + j) * 14} className={mk === 'n1' ? s.tipRule : s.tipTrend}>{MARK_TEXT[mk]}</text>
-              ))}
-            </g>
-          );
-        })()}
       </svg>
+      {/* 툴팁은 SVG 밖 HTML — 그래프 칸 폭이 달라도(EWMA 칸이 좁음) 세 그래프 모두 같은 글자 크기 */}
+      {hp && (() => {
+        const m = marksOf(hp.p);
+        const left = (x(hp.i) / W) * 100, top = (y(hp.y) / h) * 100;
+        const shift = left < 25 ? '0%' : left > 70 ? '-100%' : '-50%'; // 양 끝에서는 그래프 밖으로 나가지 않게
+        const below = top < 35;                                      // 위쪽 점은 툴팁을 아래로
+        return (
+          <div className={s.spcTip} role="tooltip"
+            style={{ left: `${left}%`, top: `${top}%`, transform: `translate(${shift}, ${below ? '12px' : 'calc(-100% - 12px)'})` }}>
+            <div>#{hp.p.shotId} · {hp.p.time}{flows > 1 && ` · 흐름 ${FLOW_NAMES[hp.p.flow] ?? hp.p.flow + 1}`}{hp.p.runStart && ' · 런 첫 샷'}</div>
+            <div>{LABELS[k]} {fmt(hp.p.value)}{unit && ` ${unit}`}</div>
+            {kind !== 'i' && <div>{kind === 'mr' ? 'MR' : 'EWMA'} {fmt(hp.y)}</div>}
+            {m.map(mk => <div key={mk} className={mk === 'n1' ? s.spcTipRule : s.spcTipTrend}>{MARK_TEXT[mk]}</div>)}
+          </div>
+        );
+      })()}
+      </div>
     </figure>
   );
 }
