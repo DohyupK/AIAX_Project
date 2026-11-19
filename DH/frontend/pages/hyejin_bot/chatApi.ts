@@ -40,7 +40,7 @@ export async function askHyejinBot(query: string): Promise<AskResult> {
     data = (await res.json()) as AskApiResponse;
   } catch (e) {
     if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
-      throw new Error("혜진봇 응답 시간 초과 (30초) — 서버 DB·OPENAI_API_KEY 확인");
+      throw new Error("혜진봇 응답 시간 초과 (30초) — 서버 DB·NVIDIA_API_KEY/OPENAI_API_KEY 확인");
     }
     throw e;
   }

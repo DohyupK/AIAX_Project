@@ -10,7 +10,8 @@ from common.db import connect
 from documents.chunk import split_text
 from documents.embed import embed_texts
 from documents.extract import extract_text
-from documents.paths import EMBED_MODEL, JOB_TIMEOUT_SEC, file_path_for
+from documents.llm_client import embed_model
+from documents.paths import JOB_TIMEOUT_SEC, file_path_for
 
 log = logging.getLogger("jh.documents.jobs")
 DB = "DOCS_DATABASE_URL"
@@ -86,10 +87,11 @@ def run_chunk_once(doc_idx: int) -> None:
             [(cid, doc_idx, i, content) for i, (cid, content) in enumerate(zip(ids, parts), start=1)],
         )
 
-    vectors = embed_texts(parts)
+    vectors = embed_texts(parts, input_type="passage")
     if time.monotonic() - t0 > JOB_TIMEOUT_SEC:
         raise TimeoutError("청킹 2분 초과 (임베딩)")
 
+    model_name = embed_model()
     with connect(DB) as conn:
         eids = _next_ids(conn, "org.document_chunk_embedding", "document_chunk_embedding_idx", len(ids))
         conn.executemany(
@@ -98,7 +100,7 @@ def run_chunk_once(doc_idx: int) -> None:
               (document_chunk_embedding_idx, document_chunk_idx, embedding, model_name)
             VALUES (%s, %s, %s::real[], %s)
             """,
-            [(eid, cid, vec, EMBED_MODEL) for eid, cid, vec in zip(eids, ids, vectors)],
+            [(eid, cid, vec, model_name) for eid, cid, vec in zip(eids, ids, vectors)],
         )
 
     set_job_status(doc_idx, "ok", 0, None)
@@ -161,3 +163,29 @@ def rechunk_midnight_pending() -> dict:
             set_job_status(idx, "midnight_pending", 4, str(e)[:500])
             log.exception("자정 재청킹 실패 doc=%s", idx)
     return {"ok": ok, "fail": fail, "total": len(rows)}
+
+
+def requeue_all_for_reembed() -> dict:
+    """NIM/모델 전환 후 — 전 문서 순차 재청킹·재임베딩 (CLI용, 스레드 종료 방지)."""
+    with connect(DB) as conn:
+        rows = conn.execute(
+            "SELECT company_document_idx FROM org.company_document ORDER BY company_document_idx"
+        ).fetchall()
+    ids = [int(r["company_document_idx"]) for r in rows]
+    ok, fail = 0, 0
+    for idx in ids:
+        set_job_status(idx, "pending", 0, None)
+        try:
+            run_chunk_once(idx)
+            ok += 1
+        except Exception as e:
+            fail += 1
+            set_job_status(idx, "midnight_pending", 1, str(e)[:500])
+            log.exception("재임베딩 실패 doc=%s", idx)
+    log.info(
+        "전 문서 재임베딩 완료 ok=%d fail=%d model=%s",
+        ok,
+        fail,
+        embed_model(),
+    )
+    return {"ok": ok, "fail": fail, "total": len(ids), "model": embed_model()}

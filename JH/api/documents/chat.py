@@ -1,14 +1,13 @@
-"""혜진봇용 OpenAI Chat Completions — 키는 루트 .env OPENAI_API_KEY (임베딩과 동일)."""
+"""혜진봇 Chat — NIM(meta/llama-3.1-8b-instruct) 우선, 없으면 OpenAI gpt-4o-mini."""
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from documents.embed import _api_key
+from documents.llm_client import chat_model, get_openai_client
 
 log = logging.getLogger("jh.documents.chat")
 
-CHAT_MODEL = "gpt-4o-mini"
 MAX_TOKENS = 1024
 
 _SYSTEM = (
@@ -21,8 +20,6 @@ _SYSTEM = (
 
 def generate_answer(query: str, hits: list[dict[str, Any]]) -> str:
     """검색 히트를 컨텍스트로 Chat Completions 호출. 예외는 호출측에서 HTTP로 변환."""
-    from openai import OpenAI
-
     blocks: list[str] = []
     for h in hits:
         doc_no = h.get("doc_no") or f"DOC-{h.get('company_document_idx')}"
@@ -32,9 +29,10 @@ def generate_answer(query: str, hits: list[dict[str, Any]]) -> str:
         blocks.append(f"[{doc_no}] {title} (chunk {chunk_no})\n{body}")
     context = "\n\n".join(blocks)
 
-    client = OpenAI(api_key=_api_key())
+    client = get_openai_client()
+    model = chat_model()
     resp = client.chat.completions.create(
-        model=CHAT_MODEL,
+        model=model,
         max_tokens=MAX_TOKENS,
         temperature=0.2,
         messages=[
@@ -47,5 +45,5 @@ def generate_answer(query: str, hits: list[dict[str, Any]]) -> str:
     )
     text = (resp.choices[0].message.content or "").strip()
     if not text:
-        raise RuntimeError("OpenAI Chat 응답이 비어 있습니다.")
+        raise RuntimeError(f"Chat 응답이 비어 있습니다. (model={model})")
     return text
