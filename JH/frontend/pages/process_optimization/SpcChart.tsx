@@ -8,7 +8,6 @@ import s from './ProcessOptimization.module.css';
 const WINDOW = 100;              // 최근 표시 샷 수 (약 4시간)
 const W = 620;                   // 세 그래프 공통 가로 (오른쪽 여백 = 관리선 값 표시 자리)
 const L = 44, R = 86, T = 10, B = 22;
-const TIP_W = 220;
 /** 생산 흐름 색 — A 는 I·MR 진회색 / EWMA 파랑, B~D 는 세 그래프 공통 (▲ 주황·◆ 파랑과 겹치지 않게) */
 const FLOW_COLORS = ['#0f9d8a', '#8b5cf6', '#b45309'];
 const FLOW_NAMES = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -24,7 +23,7 @@ const MARKS_OF: Record<Kind, SpcPoint['marks']> = { i: ['n1', 'n2', 'n3'], mr: [
 const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
 /**
- * 관리도(SPC) — 왼쪽 위 I, 왼쪽 아래 MR, 오른쪽 EWMA. 기준선 = 라인별·변수별 고정 표 (서버 casting/spc.py)
+ * 관리도(SPC) — 왼쪽 위 I, 왼쪽 아래 MR, 오른쪽 EWMA. UCL·LCL 실선, CL 점선. 기준선 = 라인별·변수별 고정 표 (서버 casting/spc.py)
  * EWMA·MR·넬슨 2·3 은 서버가 **생산 흐름별로 생산 런의 첫 샷(재가동 후 첫 샷)부터** 계산하고, 여기서는 보이는 구간만 그림.
  * 날짜·창·라인 선택은 보여 주는 범위만 바꿈. 라인1 원본 구간처럼 생산 흐름이 여러 개면 흐름별 선을 겹쳐 그림
  */
@@ -95,7 +94,7 @@ function SpcChart({ shots, k, line }: { shots: Shot[]; k: FeatureKey; line: stri
   );
 }
 
-/** 관리도 1개 — CL 실선, UCL·LCL 점선, 가로축 = 샷 순서(눈금 글자 = 시각), 흐름별 선 겹침, ▲ 주의 · ◆ 관찰 */
+/** 관리도 1개 — UCL·LCL 빨간 실선, CL 회색 점선, 가로축 = 샷 순서(눈금 글자 = 시각), 흐름별 선 겹침, ▲ 주의 · ◆ 관찰 */
 function ControlChart({ k, kind, pts, lines, h, title, note, className }: {
   k: FeatureKey; kind: Kind; pts: SpcPoint[]; lines: { cl: number; ucl: number; lcl: number };
   h: number; title: string; note: string; className: string;
@@ -120,10 +119,11 @@ function ControlChart({ k, kind, pts, lines, h, title, note, className }: {
   const hp = hover != null ? shown.find(z => z.i === hover) : undefined;
   const unit = unitOf(k);
   const marked = shown.filter(z => marksOf(z.p).length).length;
+  // UCL·LCL = 빨간 실선, CL = 회색 점선 (사용자 지정)
   const guides = [
-    { name: 'UCL', v: lines.ucl, dash: '6 4' },
-    { name: 'CL', v: lines.cl, dash: undefined },
-    { name: 'LCL', v: lines.lcl, dash: '6 4' },
+    { name: 'UCL', v: lines.ucl, dash: undefined, color: 'var(--bad)', cls: s.limitText },
+    { name: 'CL', v: lines.cl, dash: '5 4', color: 'var(--muted)', cls: s.clText },
+    { name: 'LCL', v: lines.lcl, dash: undefined, color: 'var(--bad)', cls: s.limitText },
   ];
 
   return (
@@ -132,6 +132,7 @@ function ControlChart({ k, kind, pts, lines, h, title, note, className }: {
         <b>{title}</b>
         <span className={s.sub}>{note}{marked > 0 && <> · 표시 <b className={s.spcTrend}>{marked}</b>점</>}</span>
       </figcaption>
+      <div className={s.spcPlot}>
       <svg className={s.chart} viewBox={`0 0 ${W} ${h}`} role="img"
         aria-label={`${LABELS[k]} ${title}, UCL ${fmt(lines.ucl)}, CL ${fmt(lines.cl)}, LCL ${fmt(lines.lcl)}, 표시 ${marked}점${flows > 1 ? `, 생산 흐름 ${flows}개` : ''}`}>
         {ticks.map(t => (
@@ -143,9 +144,8 @@ function ControlChart({ k, kind, pts, lines, h, title, note, className }: {
         {[lo - pad, (lo + hi) / 2, hi + pad].map((v, j) => <text key={j} x={L - 6} y={y(v) + 3} textAnchor="end">{fmt(v)}</text>)}
         {guides.map(g => (
           <g key={g.name}>
-            <line x1={L} x2={W - R} y1={y(g.v)} y2={y(g.v)} stroke={g.dash ? 'var(--muted)' : 'var(--ink)'}
-              strokeOpacity={g.dash ? 0.9 : 0.55} strokeWidth={1.2} strokeDasharray={g.dash} />
-            <text x={W - R + 6} y={y(g.v) + 3} className={s.clText}>{g.name} {fmt(g.v)}</text>
+            <line x1={L} x2={W - R} y1={y(g.v)} y2={y(g.v)} stroke={g.color} strokeWidth={1.3} strokeDasharray={g.dash} />
+            <text x={W - R + 6} y={y(g.v) + 3} className={g.cls}>{g.name} {fmt(g.v)}</text>
           </g>
         ))}
 
@@ -175,27 +175,24 @@ function ControlChart({ k, kind, pts, lines, h, title, note, className }: {
           );
         })}
 
-        {hp && (() => {
-          const m = marksOf(hp.p);
-          const rows = [
-            `#${hp.p.shotId} · ${hp.p.time}${flows > 1 ? ` · 흐름 ${FLOW_NAMES[hp.p.flow] ?? hp.p.flow + 1}` : ''}${hp.p.runStart ? ' · 런 첫 샷' : ''}`,
-            `${LABELS[k]} ${fmt(hp.p.value)}${unit && ` ${unit}`}`,
-            ...(kind === 'i' ? [] : [`${kind === 'mr' ? 'MR' : 'EWMA'} ${fmt(hp.y)}`]),
-          ];
-          const bh = 8 + (rows.length + m.length) * 14;
-          const tx = Math.min(Math.max(x(hp.i) - TIP_W / 2, L), W - R - TIP_W);
-          const ty = y(hp.y) > T + bh + 10 ? y(hp.y) - bh - 10 : y(hp.y) + 10;
-          return (
-            <g pointerEvents="none">
-              <rect x={tx} y={ty} width={TIP_W} height={bh} rx={4} fill="var(--ink)" opacity={0.9} />
-              {rows.map((r, j) => <text key={j} x={tx + 8} y={ty + 14 + j * 14} className={s.tipText}>{r}</text>)}
-              {m.map((mk, j) => (
-                <text key={mk} x={tx + 8} y={ty + 14 + (rows.length + j) * 14} className={mk === 'n1' ? s.tipRule : s.tipTrend}>{MARK_TEXT[mk]}</text>
-              ))}
-            </g>
-          );
-        })()}
       </svg>
+      {/* 툴팁은 SVG 밖 HTML — 그래프 칸 폭이 달라도(EWMA 칸이 좁음) 세 그래프 모두 같은 글자 크기 */}
+      {hp && (() => {
+        const m = marksOf(hp.p);
+        const left = (x(hp.i) / W) * 100, top = (y(hp.y) / h) * 100;
+        const shift = left < 25 ? '0%' : left > 70 ? '-100%' : '-50%'; // 양 끝에서는 그래프 밖으로 나가지 않게
+        const below = top < 35;                                      // 위쪽 점은 툴팁을 아래로
+        return (
+          <div className={s.spcTip} role="tooltip"
+            style={{ left: `${left}%`, top: `${top}%`, transform: `translate(${shift}, ${below ? '12px' : 'calc(-100% - 12px)'})` }}>
+            <div>#{hp.p.shotId} · {hp.p.time}{flows > 1 && ` · 흐름 ${FLOW_NAMES[hp.p.flow] ?? hp.p.flow + 1}`}{hp.p.runStart && ' · 런 첫 샷'}</div>
+            <div>{LABELS[k]} {fmt(hp.p.value)}{unit && ` ${unit}`}</div>
+            {kind !== 'i' && <div>{kind === 'mr' ? 'MR' : 'EWMA'} {fmt(hp.y)}</div>}
+            {m.map(mk => <div key={mk} className={mk === 'n1' ? s.spcTipRule : s.spcTipTrend}>{MARK_TEXT[mk]}</div>)}
+          </div>
+        );
+      })()}
+      </div>
     </figure>
   );
 }

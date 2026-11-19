@@ -11,7 +11,8 @@ log = logging.getLogger("jh.documents.llm")
 
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 NIM_EMBED_MODEL = "nvidia/nemotron-3-embed-1b"
-NIM_CHAT_MODEL = "meta/llama-3.1-8b-instruct"
+# llama-3.1-8b Free Endpoint Deprecated → 410 Gone. 교체: nemotron-3.5-bolt-e4b
+NIM_CHAT_MODEL = "nvidia/nemotron-3.5-bolt-e4b"
 NIM_EMBED_DIM = 2048
 
 OA_EMBED_MODEL = "text-embedding-3-small"
@@ -58,7 +59,11 @@ def embed_model() -> str:
 
 
 def chat_model() -> str:
-    return NIM_CHAT_MODEL if provider() == "nim" else OA_CHAT_MODEL
+    if provider() != "nim":
+        return OA_CHAT_MODEL
+    # .env NIM_CHAT_MODEL= 있으면 우선 (다음 폐기 때 코드 없이 교체)
+    override = _read_key("NIM_CHAT_MODEL")
+    return override or NIM_CHAT_MODEL
 
 
 def embed_dim() -> int:

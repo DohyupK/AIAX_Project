@@ -1,6 +1,6 @@
 // 사내 문서함 규칙 자체 점검 — 실행: node JH/frontend/pages/company_documents/docs.check.ts (Node 23.6+)
 import assert from "node:assert/strict";
-import { CATEGORIES, MAX_FILE_BYTES, buildDocMeta, canDelete, createdAt, extOf, formatDateTime, formatSize, sortDocs, validateUpload, type DocMeta, type UploadDraft } from "./docs.ts";
+import { CATEGORIES, MAX_FILE_BYTES, buildDocMeta, canDelete, createdAt, extOf, formatDateTime, formatSize, sortDocs, validateUpload, viewModeOf, type DocMeta, type UploadDraft } from "./docs.ts";
 
 assert.equal(extOf("보고서.최종.PDF"), "pdf");
 assert.equal(extOf("README"), "");
@@ -47,5 +47,9 @@ assert.equal(CATEGORIES.length, 7);
 assert.equal(formatSize(512), "512 B");
 assert.equal(formatSize(2048), "2 KB");
 assert.equal(formatSize(5 * 1024 * 1024), "5.0 MB");
+
+// 문서 내용 보기 방식 (대소문자 무관)
+assert.deepEqual(["a.PDF", "b.png", "c.jpeg", "d.docx", "e.xlsx", "f.pptx", "g.hwp", "h.hwpx", "i.txt", "j.zip", "noext"].map(viewModeOf),
+  ["pdf", "image", "image", "convert", "convert", "convert", "text", "text", "text", "none", "none"]);
 
 console.log("company_documents docs: OK");

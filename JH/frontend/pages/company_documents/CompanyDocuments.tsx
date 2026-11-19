@@ -2,10 +2,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ALLOWED_EXT, CATEGORIES, MAX_FILE_BYTES,
-  buildDocMeta, canDelete, extOf, formatDateTime, formatSize, sortDocs, validateUpload,
+  buildDocMeta, canDelete, extOf, formatDateTime, formatSize, sortDocs, validateUpload, viewModeOf,
   type Category, type DocMeta, type UploadDraft,
 } from './docs';
-import { addDoc, deleteDoc, getDocBlob, listDocs, searchDocs, type SearchHit } from './docStore';
+import { addDoc, deleteDoc, getDocBlob, getDocPreview, getDocText, listDocs, searchDocs, type SearchHit } from './docStore';
 import { getCurrentUser } from '../../common/currentUser';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import s from './CompanyDocuments.module.css';
@@ -303,7 +303,7 @@ function DetailDialog({ doc, onClose, onDeleted }: { doc: DocMeta; onClose: () =
 
   return (
     <div className={po.backdrop} onClick={onClose}>
-      <div className={`${po.dialog} ${s.dialog}`} role="dialog" aria-modal="true" aria-labelledby="doc-title" onClick={e => e.stopPropagation()}>
+      <div className={`${po.dialog} ${s.dialog} ${s.detailDialog}`} role="dialog" aria-modal="true" aria-labelledby="doc-title" onClick={e => e.stopPropagation()}>
         <div className={po.dialogHead}>
           <span className={po.sub}>{CATEGORY_LABEL[doc.category]}</span>
           <span className={`${po.sub} ${po.num}`}>{doc.doc_no}</span>
@@ -322,6 +322,7 @@ function DetailDialog({ doc, onClose, onDeleted }: { doc: DocMeta; onClose: () =
           <dt>등록 일시</dt><dd className={po.num}>{formatDateTime(doc.created_at)}</dd>
           {doc.chunk_status && <><dt>청킹</dt><dd>{doc.chunk_status}</dd></>}
         </dl>
+        <DocContent doc={doc} />
         {error && <p className={s.err} role="alert">{error}</p>}
         <div className={s.actions}>
           {deletable && (
@@ -333,5 +334,78 @@ function DetailDialog({ doc, onClose, onDeleted }: { doc: DocMeta; onClose: () =
         </div>
       </div>
     </div>
+  );
+}
+
+type Content =
+  | { kind: 'loading' }
+  | { kind: 'pdf' | 'image'; url: string }
+  | { kind: 'text'; text: string; truncated: boolean; note?: string }
+  | { kind: 'none'; message: string };
+
+/**
+ * 문서 내용 — pdf·이미지는 원본, docx·xlsx·pptx 는 서버 PDF 변환본(변환 도구 없으면 본문 텍스트), hwp·hwpx·txt 는 본문 텍스트
+ * 받은 파일은 팝업을 닫거나 다른 문서를 열 때 해제 (메모리 누수 방지)
+ */
+function DocContent({ doc }: { doc: DocMeta }) {
+  const [c, setC] = useState<Content>({ kind: 'loading' });
+  const key = doc.company_document_idx ?? doc.doc_no;
+
+  useEffect(() => {
+    let alive = true;
+    let url: string | null = null;
+    const show = (blob: Blob, kind: 'pdf' | 'image') => {
+      // PDF 는 형식을 명시해야 브라우저 PDF 보기로 열림
+      url = URL.createObjectURL(kind === 'pdf' ? new Blob([blob], { type: 'application/pdf' }) : blob);
+      if (alive) setC({ kind, url });
+    };
+    const text = async (note?: string) => {
+      const t = await getDocText(key);
+      if (!alive) return;
+      setC(t.text.trim()
+        ? { kind: 'text', text: t.text, truncated: t.truncated, note }
+        : { kind: 'none', message: '본문 텍스트를 읽을 수 없는 문서입니다. 다운로드해서 확인해 주세요.' });
+    };
+    setC({ kind: 'loading' });
+    (async () => {
+      const mode = viewModeOf(doc.file_name);
+      if (mode === 'pdf' || mode === 'image') {
+        const blob = await getDocBlob(key);
+        if (!blob) throw new Error('저장된 파일을 찾을 수 없습니다.');
+        show(blob, mode);
+      } else if (mode === 'convert') {
+        const pdf = await getDocPreview(key);
+        if (pdf) show(pdf, 'pdf');
+        else await text('원본 모양 보기는 서버에 변환 도구(LibreOffice)가 설치된 뒤 가능합니다. 지금은 본문 텍스트만 보여 줍니다.');
+      } else if (mode === 'text') {
+        await text();
+      } else if (alive) {
+        setC({ kind: 'none', message: '미리보기를 지원하지 않는 형식입니다. 다운로드해서 확인해 주세요.' });
+      }
+    })().catch((e: Error) => {
+      console.error('[company_documents] 문서 내용 불러오기 실패', key, e);
+      if (alive) setC({ kind: 'none', message: `문서 내용을 불러오지 못했습니다: ${e.message}` });
+    });
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [key, doc.file_name]);
+
+  return (
+    <section className={s.content} aria-label="문서 내용">
+      <h4 className={s.contentTitle}>문서 내용</h4>
+      {c.kind === 'loading' && <p className={po.sub}>불러오는 중…</p>}
+      {c.kind === 'pdf' && <iframe className={s.pdfFrame} src={c.url} title={`${doc.title} 내용`} />}
+      {c.kind === 'image' && <img className={s.imageView} src={c.url} alt={doc.title} />}
+      {c.kind === 'text' && (
+        <>
+          {c.note && <p className={po.sub}>{c.note}</p>}
+          <pre className={s.textView}>{c.text}</pre>
+          {c.truncated && <p className={po.sub}>앞부분 2만 자까지만 보여 줍니다. 이후 내용은 다운로드해서 확인해 주세요.</p>}
+        </>
+      )}
+      {c.kind === 'none' && <p className={po.sub}>{c.message}</p>}
+    </section>
   );
 }

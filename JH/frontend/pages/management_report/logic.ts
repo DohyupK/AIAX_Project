@@ -1,6 +1,6 @@
 // 경영 리포트 계산 (화면·CSS import 없음) — 자체 점검: logic.check.ts
-// 타입만 import → node 단독 실행 가능. 단가는 인자로 받음
-import type { DailyProduction, Period, PeriodReport, SafetyData } from "./data";
+// 타입만 import → node 단독 실행 가능
+import type { FixedRow, FixedValues, Period, PeriodReport, ReportSource, SafetyData } from "./data";
 
 /** 분모 0이면 null */
 export const ratio = (n: number, d: number) => (d ? n / d : null);
@@ -37,81 +37,11 @@ export function listReports(p: Period, now: Date, count = LIST_COUNT[p]): Report
   });
 }
 
-/** 문자열 → 0~1 고정 난수 (FNV-1a). 같은 리포트는 항상 같은 값 */
-function rand01(seed: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 0x01000193);
-  return (h >>> 0) / 0xffffffff;
-}
-
 /**
- * 기간 기준값에 리포트별 변동을 준 목업 리포트 (±spread 범위, 정합성 유지)
- * ponytail: 목업 전용. 집계 API 연동 시 리포트 id 로 실제 값을 받아 이 함수 삭제
- */
-export function mockReport(base: PeriodReport, seed: string): PeriodReport {
-  const v = (n: number, key: string, spread = 0.12) => Math.round(n * (1 - spread + 2 * spread * rand01(seed + key)));
-  const production = v(base.production, "p");
-  const defects = Math.min(production, v(base.defects, "d", 0.3));
-  const firstDefects = Math.min(production, Math.max(defects, v(base.firstDefects, "f", 0.2)));
-  const total = base.attendance.total;
-  const present = Math.min(total, v(base.attendance.present, "a", 0.03));
-  const byCompany = base.safety.byCompany
-    .map((c) => ({ ...c, count: v(c.count, "c" + c.company, 0.5) }))
-    .filter((c) => c.count > 0);
-  const violations = byCompany.reduce((a, c) => a + c.count, 0);
-  const byGear = { ...base.safety.byGear };
-  for (const g of Object.keys(byGear) as (keyof typeof byGear)[]) byGear[g] = v(byGear[g], "g" + g, 0.5);
-  // 위반 1건에 장구 1개 이상 → 장구 합계가 위반보다 작으면 최다 장구에 보정
-  const gearSum = Object.values(byGear).reduce((a, n) => a + n, 0);
-  if (gearSum < violations) {
-    const top = (Object.keys(byGear) as (keyof typeof byGear)[]).sort((a, b) => byGear[b] - byGear[a])[0];
-    byGear[top] += violations - gearSum;
-  }
-  return {
-    attendance: { total, present },
-    production,
-    defects,
-    defectTypes: scaleTo(base.defectTypes, defects),
-    firstDefects,
-    recycled: Math.min(firstDefects, v(base.recycled, "r", 0.2)),
-    spcAlarms: { ucl: v(base.spcAlarms.ucl, "u", 0.4), lcl: v(base.spcAlarms.lcl, "l", 0.4) },
-    safety: {
-      scans: present,
-      violations,
-      repeatViolators: Math.min(violations, v(base.safety.repeatViolators, "rv", 0.5)),
-      byCompany,
-      byGear,
-    },
-  };
-}
-
-/**
- * 목업 리포트에 실제 생산량·불량(기간 합산)을 넣음. 기간에 생산 데이터가 없으면 0 + noData
- * 목업 항목은 실제 값과 모순되지 않게 맞춤: 1차 불량 ≥ 최종 불량, 재활용 ≤ 1차 불량, 불량 유형 합계 = 불량
- */
-export function withActual(mock: PeriodReport, daily: DailyProduction[], from: string, to: string): PeriodReport {
-  const days = daily.filter((d) => d.date >= from && d.date <= to);
-  const production = days.reduce((a, d) => a + d.production, 0);
-  const defects = days.reduce((a, d) => a + d.defects, 0);
-  // 목업 1차 불량 비율(1차 ÷ 최종)을 실제 불량에 적용
-  const firstDefects = Math.min(production, Math.max(defects, Math.round(defects * (mock.firstDefects / Math.max(1, mock.defects)))));
-  return {
-    ...mock,
-    noData: days.length === 0,
-    production,
-    defects,
-    defectTypes: scaleTo(mock.defectTypes, defects),
-    firstDefects,
-    recycled: Math.min(firstDefects, Math.round(firstDefects * (mock.recycled / Math.max(1, mock.firstDefects)))),
-  };
-}
-
-/**
- * 리포트 안전 값을 실제 원자료(기간 합산)로 교체 — 재위반 = 그 기간 안 2회 이상 위반한 사람
+ * 안전 원자료(기간 합산) — 재위반 = 그 기간 안 2회 이상 위반한 사람
  * 업체: 본사 사원 = 부서 이름, 하청 = 업체 이름. 장구별 = 위반 건의 미착용 판정 수
  */
-export function withSafety(r: PeriodReport, data: SafetyData, from: string, to: string): PeriodReport {
-  const inRange = (d: string) => d >= from && d <= to;
+function safetyOf(data: SafetyData, inRange: (d: string) => boolean): PeriodReport["safety"] {
   const v = data.violations.filter((x) => inRange(x.date));
   const perUser = new Map<string, number>();
   const perCompany = new Map<string, { company: string; type: "본사" | "하청업체"; count: number }>();
@@ -125,33 +55,68 @@ export function withSafety(r: PeriodReport, data: SafetyData, from: string, to: 
     for (const g of x.missing) byGear[g]++;
   }
   return {
-    ...r,
-    safety: {
-      scans: data.scans.filter((x) => inRange(x.date)).reduce((a, x) => a + x.count, 0),
-      violations: v.length,
-      repeatViolators: [...perUser.values()].filter((n) => n >= 2).length,
-      byCompany: [...perCompany.values()],
-      byGear,
-    },
+    scans: data.scans.filter((x) => inRange(x.date)).reduce((a, x) => a + x.count, 0),
+    violations: v.length,
+    repeatViolators: [...perUser.values()].filter((n) => n >= 2).length,
+    byCompany: [...perCompany.values()],
+    byGear,
   };
 }
 
-/** 리포트 파생 지표 (비율 0~1, 금액 원) */
-export function computeReport(r: PeriodReport, unitPrice: number, recycleValue: number) {
+/** 리포트 1건 = 기간(from~to) 원자료 합산 + 기간 마지막 날 기준 고정값 */
+export function buildReport(src: ReportSource, from: string, to: string): PeriodReport {
+  const inRange = (d: string) => d >= from && d <= to;
+  function sum<T extends { date: string }>(rows: T[], val: (r: T) => number) {
+    return rows.reduce((a, r) => a + (inRange(r.date) ? val(r) : 0), 0);
+  }
+  return {
+    fixed: pickFixed(src.fixed, to),
+    noData: !src.daily.some((d) => inRange(d.date)),
+    production: sum(src.daily, (d) => d.production),
+    defects: sum(src.daily, (d) => d.defects),
+    spcAlarms: { ucl: sum(src.spc, (d) => d.ucl), lcl: sum(src.spc, (d) => d.lcl) },
+    attendance: { total: sum(src.attendance, (d) => d.scheduled), present: sum(src.attendance, (d) => d.present) },
+    safety: safetyOf(src.safety, inRange),
+  };
+}
+
+/** 화면 항목 ↔ DB org.fixed_value.value_name */
+const FIXED_NAME: Record<keyof FixedValues, string> = {
+  unitPrice: "제품_단가", recycleValue: "재활용_회수액", recycleRate: "재활용률",
+  mttr: "MTTR", mtbf: "MTBF", recall: "리콜_횟수_12개월",
+};
+
+/** 날짜(YYYY-MM-DD)에 적용되는 고정값 — 이름마다 적용 시작일 ≤ 그날 중 가장 최근 행, 없으면 null */
+export function pickFixed(rows: FixedRow[], date: string): FixedValues {
+  const at = (name: string) => {
+    let best: FixedRow | null = null;
+    for (const r of rows) if (r.name === name && r.effectiveDate <= date && (!best || r.effectiveDate >= best.effectiveDate)) best = r;
+    return best ? best.value : null;
+  };
+  return Object.fromEntries(Object.entries(FIXED_NAME).map(([k, name]) => [k, at(name)])) as unknown as FixedValues;
+}
+
+/**
+ * 리포트 파생 지표 (비율 0~1, 금액 원). 고정값이 없으면(null) 그 값으로 계산하는 항목은 null → 화면 「—」
+ * 재활용 = 최종 불량 × 재활용률 (불량 주물은 재용해, 회수 = 재활용 수량 × 회수액). 순손실 = 불량 손실 − 재활용 회수
+ */
+export function computeReport(r: PeriodReport) {
+  const { unitPrice, recycleValue, recycleRate } = r.fixed;
+  const mul = (n: number | null, v: number | null) => (n == null || v == null ? null : n * v);
+  const recycled = recycleRate == null ? null : Math.round(r.defects * recycleRate);
+  const amount = mul(r.production, unitPrice), lossCost = mul(r.defects, unitPrice), recycleSaving = mul(recycled, recycleValue);
+  const netLoss = lossCost == null || recycleSaving == null ? null : lossCost - recycleSaving;
   return {
     attendanceRate: ratio(r.attendance.present, r.attendance.total),
-    amount: r.production * unitPrice,
+    amount,
     defectRate: ratio(r.defects, r.production),
-    lossCost: r.defects * unitPrice,
+    lossCost,
     spcTotal: r.spcAlarms.ucl + r.spcAlarms.lcl,
-    recycleRate: ratio(r.recycled, r.firstDefects),
-    recycleSaving: r.recycled * recycleValue,
-    netLoss: r.defects * unitPrice - r.recycled * recycleValue, // 불량 손실 − 재활용 회수
-    netLossRate: ratio(r.defects * unitPrice - r.recycled * recycleValue, r.production * unitPrice),
+    recycled,
+    recycleSaving,
+    netLoss,
+    netLossRate: netLoss == null || amount == null ? null : ratio(netLoss, amount),
     perCapita: ratio(r.production, r.attendance.present),     // 인당 생산(개)
-    defectTypes: (Object.entries(r.defectTypes) as [keyof PeriodReport["defectTypes"], number][])
-      .filter(([, n]) => n > 0)
-      .sort((a, b) => b[1] - a[1]),
     safetyPassRate: ratio(r.safety.scans - r.safety.violations, r.safety.scans),
     companies: [...r.safety.byCompany].sort((a, b) => b.count - a.count),
     gears: (Object.entries(r.safety.byGear) as [keyof PeriodReport["safety"]["byGear"], number][])
@@ -168,19 +133,4 @@ export function compareReport(r: PeriodReport, prev: PeriodReport | null) {
     violations: r.safety.violations - prev.safety.violations,
     defectRatePp: cur == null || before == null ? null : (cur - before) * 100,
   };
-}
-
-/** 합계를 total 에 맞춰 비례 배분 (최대 잔여 방식 — 반올림 오차 없이 합계 일치) */
-export function scaleTo<K extends string>(parts: Record<K, number>, total: number): Record<K, number> {
-  const keys = Object.keys(parts) as K[];
-  const sum = keys.reduce((a, k) => a + parts[k], 0);
-  if (!sum) return { ...parts };
-  const raw = keys.map((k) => (parts[k] / sum) * total);
-  const out = Object.fromEntries(keys.map((k, i) => [k, Math.floor(raw[i])])) as Record<K, number>;
-  let left = total - keys.reduce((a, k) => a + out[k], 0);
-  for (const i of raw.map((x, i) => i).sort((a, b) => (raw[b] % 1) - (raw[a] % 1))) {
-    if (left-- <= 0) break;
-    out[keys[i]]++;
-  }
-  return out;
 }
