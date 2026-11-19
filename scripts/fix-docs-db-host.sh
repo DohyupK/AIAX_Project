@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 서버(/root/AIAX_Project)에서 실행 — DOCS_DATABASE_URL 호스트를 127.0.0.1 로, DOCUMENT_ROOT=/document
+# 서버(/root/AIAX_Project)에서 실행 — DOCS_DATABASE_URL 호스트를 127.0.0.1 로, DOCUMENT_ROOT=/root/document
 # 사용: bash scripts/fix-docs-db-host.sh
 # 원인: 공인 IP 로 붙으면 ConnectionTimeout (개발과정/서버배포_aiax.md §5)
 set -euo pipefail
@@ -24,14 +24,14 @@ else
   exit 1
 fi
 
-# Windows 경로가 서버에 남아 있으면 /document 로
+# DOCUMENT_ROOT → /root/document (사용자 확정)
 if grep -q '^DOCUMENT_ROOT=' "$ENV"; then
-  sed -i -E 's#^DOCUMENT_ROOT=.*#DOCUMENT_ROOT=/document#' "$ENV"
+  sed -i -E 's#^DOCUMENT_ROOT=.*#DOCUMENT_ROOT=/root/document#' "$ENV"
 else
-  printf '\nDOCUMENT_ROOT=/document\n' >> "$ENV"
+  printf '\nDOCUMENT_ROOT=/root/document\n' >> "$ENV"
 fi
 
-mkdir -p /document
+mkdir -p /root/document/files
 
 echo "== after =="
 grep -E '^(DOCS_DATABASE_URL|DOCUMENT_ROOT)=' "$ENV" \

@@ -1,4 +1,4 @@
-"""문서 파일 루트 — 루트 .env 의 DOCUMENT_ROOT (NCP=/document, 로컬=C:\\document)."""
+"""문서 파일 루트 — 루트 .env 의 DOCUMENT_ROOT (서버 확정: /root/document)."""
 from __future__ import annotations
 
 import os
