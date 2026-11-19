@@ -2,6 +2,7 @@
 
 응답 형식은 프런트 JH/frontend/common/casting/types.ts 의 Shot 과 같음.
 prob = 1차(ML) 불량 점수 (Model Management 「품질 1차 검사」 배포 모델, 없으면 기본 모델 — casting/model.py), actual = 실제 판정(passorfail).
+/second = 2차(DL) 판정 (「품질 2차 검사」 배포 모델, 없으면 기본 모델 — casting/dl_model.py, 이미지 mes.casting_image).
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ from datetime import date as Date
 
 from fastapi import APIRouter, HTTPException, Query
 
-from casting import model
+from casting import dl_model, model
 from common.db import connect
 
 router = APIRouter(prefix="/api/casting")
@@ -93,6 +94,48 @@ def model_info() -> dict:
     except Exception:
         log.exception("1차 검사 모델 로드 실패")
         raise HTTPException(503, "1차 검사 모델을 불러오지 못했습니다.")
+
+
+# ---- 2차(DL) 검사 — mes.casting_image 이미지가 있는 샷만 ----
+@router.get("/second")
+def second(date: Date, line: str = LINE) -> dict:
+    """그날 그 라인의 이미지가 있는 샷 2차 판정 + 쓴 모델. 1차 양품만 2차 대상인 건 화면이 거름"""
+    try:
+        model_meta = dl_model.current()[1]   # 배포 모델이 바뀌었으면 여기서 교체 (캐시도 비움)
+    except dl_model.ModelError as e:
+        log.error("2차 검사 배포 모델 사용 불가: %s", e)
+        raise HTTPException(503, str(e))
+    except Exception:
+        log.exception("2차 검사 모델 로드 실패")
+        raise HTTPException(503, "2차 검사 모델을 불러오지 못했습니다.")
+    try:
+        with connect(DB) as conn:
+            shots = conn.execute(
+                """SELECT i.casting_id, i.updated_at FROM mes.casting_image i
+                   JOIN mes.investment_casting m USING (casting_id)
+                   WHERE m.line_unit = %s AND m."timestamp" = %s""",
+                (line, date),
+            ).fetchall()
+            hits = {s["casting_id"]: dl_model.cached(s["casting_id"], s["updated_at"]) for s in shots}
+            miss = [cid for cid, h in hits.items() if h is None]
+            # 이미지(장당 수백 KB)는 캐시에 없는 샷만 받음
+            images = conn.execute(
+                "SELECT casting_id, updated_at, image_base64, content_type FROM mes.casting_image WHERE casting_id = ANY(%s)",
+                (miss,),
+            ).fetchall() if miss else []
+    except Exception:
+        log.exception("2차 검사 이미지 조회 실패 line=%s date=%s", line, date)
+        raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
+    results = [h for h in hits.values() if h is not None]
+    for r in images:
+        try:
+            results.append(dl_model.predict(r["casting_id"], r["updated_at"], r["image_base64"], r["content_type"]))
+        except ValueError as e:   # 이미지 하나가 깨져도 나머지는 계속 — 그 샷은 「이미지 없음」으로 보임
+            log.warning("2차 검사 이미지 사용 불가 casting_id=%s: %s", r["casting_id"], e)
+        except Exception:
+            log.exception("2차 검사 추론 실패 casting_id=%s", r["casting_id"])
+            raise HTTPException(503, "2차 검사 모델을 실행하지 못했습니다.")
+    return {"model": model_meta, "results": results}
 
 
 # ---- 불량 유형 라벨링 (lake 정제본 + ai 라벨) ----

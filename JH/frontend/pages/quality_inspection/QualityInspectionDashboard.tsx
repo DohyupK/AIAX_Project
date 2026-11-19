@@ -1,13 +1,12 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { LINES, fetchActiveModel, fetchDates, fetchMlModel, type Line } from '../../common/casting/api';
+import { LINES, fetchActiveModel, fetchDates, fetchMlModel, fetchSecond, type Line } from '../../common/casting/api';
 import { useShotStream } from '../../common/casting/useShotStream';
-import type { MlModel, ModelInfo, Shot } from '../../common/casting/types';
+import type { MlModel, ModelInfo, SecondCheck, SecondResult, Shot } from '../../common/casting/types';
 import SensorMonitor from '../process_optimization/SensorMonitor';
-import { fetchDeployedModel, type Model } from '../model_management/data';
 import KeyVariables from './KeyVariables';
 import ProbChart from './ProbChart';
-import { DL_CONNECTED, confusion, firstFail, rate } from './inspection';
+import { confusion, firstFail, rate, secondOf, summarize, type InspectionSummary } from './inspection';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import s from './QualityInspection.module.css';
 
@@ -16,7 +15,9 @@ const pct = (v: number | null) => (v == null ? '—' : v.toFixed(1));
 const pct1 = (v: number | null | undefined) => (v == null ? '—' : (v * 100).toFixed(1));
 /** 모델 학습 라인 — 다른 라인은 학습한 적 없는 데이터라 안내 */
 const TRAINED_LINE = 'line_no1';
-const DL_PENDING = 'DL 모델 연결 전';
+const NO_RESULTS: ReadonlyMap<string, SecondResult> = new Map();
+/** 2차 결과 한 줄 — 「불량 0.835」 */
+const secondLabel = (r: SecondResult) => `${r.result === 'fail' ? '불량' : '양품'} ${r.confidenceScore.toFixed(3)}`;
 /** 샷 고유키 — shotId(생산번호)는 하루 안에서 중복될 수 있어 casting_id 우선 */
 const keyOf = (x: Shot) => x.castingId ?? String(x.shotId);
 type ListFilter = 'all' | 'first' | 'defect' | 'missed';
@@ -30,13 +31,14 @@ const LIST_FILTERS: { key: ListFilter; label: string }[] = [
 /**
  * 품질 검사 대시보드 — 1차 검사(ML) 후 1차 양품 샷만 2차 검사(DL). 최종 불량 = 1차 불량 + 2차 불량
  * 1차 = 샷 점수(prob, TM 배포 모델 DieCasting_XGB_20261114_09) ≥ 기준값. 실제 판정(passorfail)과 비교해 보여 줌
- * 모델 = Model Management 배포 모델 (1차 = 「품질 1차 검사」, 2차 = 「품질 2차 검사」 — 2차는 이름만, DL 실행은 연결 후)
- * 2차 = DL 모델 연결 전 (inspection.ts DL_CONNECTED). 정상 범위는 목업 model.json (공정 변수 모니터와 같은 기준)
+ * 모델 = Model Management 배포 모델 (1차 = 「품질 1차 검사」, 2차 = 「품질 2차 검사」, 없으면 각 기본 모델)
+ * 2차 = 샷 이미지(mes.casting_image)를 DL 모델로 판정 — 이미지가 없는 샷은 「이미지 없음」. 정상 범위는 목업 model.json
  */
 export default function QualityInspectionDashboard() {
   const [model, setModel] = useState<ModelInfo | null>(null);
   const [ml, setMl] = useState<MlModel | null>(null); // 1차 검사 모델 (점수 기준값·검증 성적)
-  const [dl, setDl] = useState<Model | null | undefined>(undefined); // 2차 배포 모델 (undefined = 조회 전, null = 없음)
+  const [second, setSecond] = useState<SecondCheck | null>(null); // 2차(DL) 판정 — 그날 그 라인 (null = 조회 중)
+  const [secondError, setSecondError] = useState<string | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [mlOpen, setMlOpen] = useState(false);
   const [playing, setPlaying] = useState(true);
@@ -51,10 +53,23 @@ export default function QualityInspectionDashboard() {
   const loadModels = () => {
     fetchActiveModel().then(setModel).catch((e: Error) => setMetaError(e.message));
     fetchMlModel().then(setMl).catch((e: Error) => setMetaError(`1차 검사 모델: ${e.message}`));
-    // 2차는 표시용 — 실패해도 화면은 계속 (콘솔에만)
-    fetchDeployedModel('qc2').then(setDl).catch((e: unknown) => { console.error('[quality_inspection] 2차 배포 모델 조회 실패', e); setDl(null); });
   };
   useEffect(loadModels, []);
+  // 2차(DL) — 실패해도 1차 화면은 계속 (2차 카드에만 안내)
+  const loadSecond = () => {
+    if (!date) return;
+    let alive = true;
+    setSecond(null);
+    setSecondError(null);
+    fetchSecond(line, date)
+      .then(r => { if (alive) setSecond(r); })
+      .catch((e: Error) => {
+        console.error('[quality_inspection] 2차 검사 조회 실패', e);
+        if (alive) setSecondError(e.message);
+      });
+    return () => { alive = false; };
+  };
+  useEffect(loadSecond, [line, date]);
   const loadDates = (l: Line) => {
     let alive = true;
     setDates(null);
@@ -73,6 +88,7 @@ export default function QualityInspectionDashboard() {
     if (!dates?.length) loadDates(line);
     retry();
     if (!model || !ml) loadModels();
+    if (secondError) loadSecond();
   };
   const togglePlay = () => {
     if (!playing && finished) restart();
@@ -80,12 +96,19 @@ export default function QualityInspectionDashboard() {
   };
 
   const th = ml?.threshold ?? 1;
+  const results = useMemo(() => (second ? new Map(second.results.map(r => [r.castingId, r])) : NO_RESULTS), [second]);
   // 집계는 하루 전체 기준 — 재생 초반에 1차 불량이 아직 안 나와 0으로 보이는 문제 방지
-  const first = useMemo(() => day.filter(x => firstFail(x, th)).length, [day, th]);
+  const sum = useMemo(() => summarize(day, th, results), [day, th, results]);
+  const first = sum.first;
   const firstSoFar = useMemo(() => shots.filter(x => firstFail(x, th)).length, [shots, th]);
   // 1차 판정 vs 실제 판정 — 하루 전체 기준
   const cm = useMemo(() => confusion(day, th), [day, th]);
-  const secondTargets = day.length - first;
+  // 최근 2차 불량 샷 (하루 전체 중 1차 양품·DL 불량, 최근 순 5개)
+  const recentSecondFails = useMemo(
+    () => day.flatMap(x => { const st = secondOf(x, th, results); return typeof st === 'object' && st.result === 'fail' ? [{ shot: x, r: st }] : []; })
+      .slice(-5).reverse(),
+    [day, th, results],
+  );
   const replayNote = `재생 ${shots.length.toLocaleString()}/${day.length.toLocaleString()}샷 · 지금까지 1차 불량 ${firstSoFar}개`;
   const latest = shots[shots.length - 1];
 
@@ -123,7 +146,8 @@ export default function QualityInspectionDashboard() {
 
       <div className={po.banner}>
         실데이터(공정 DB): 고른 날짜의 샷을 처음부터 재생합니다. 1차(ML) 검사는 모델 점수가 기준값 이상이면 불량으로 판정하고
-        실제 판정(passorfail)과 비교합니다. 2차(DL) 검사는 {DL_PENDING}이라 최종 불량은 지금 1차 기준입니다.
+        실제 판정(passorfail)과 비교합니다. 2차(DL) 검사는 1차 양품 샷의 이미지를 DL 모델로 판정하며(불량 확률 0.5 이상 불량),
+        이미지가 없는 샷은 2차 판정 없이 양품으로 셉니다. 최종 불량 = 1차 불량 + 2차 불량.
         {ml && line !== TRAINED_LINE && <><br /><b>주의:</b> 1차 모델은 {TRAINED_LINE} 데이터로만 학습했습니다. {line} 결과는 참고용입니다.</>}
       </div>
 
@@ -149,10 +173,10 @@ export default function QualityInspectionDashboard() {
         <>
           <section className={`${po.grid} ${s.kpis3}`} aria-label="품질 요약 지표">
             <Kpi label="전체 생산 샷 (하루)" value={day.length.toLocaleString()} unit="샷" note={`재생 ${shots.length.toLocaleString()}샷`} />
-            <Kpi label={DL_CONNECTED ? '최종 불량률' : '최종 불량률 (2차 연결 전 · 1차 기준)'}
-              value={pct(rate(first, day.length))} unit="%" bad={first > 0} note="하루 전체 기준" />
-            <Kpi label={DL_CONNECTED ? '전체 불량 개수' : '전체 불량 개수 (1차 기준)'} value={String(first)} unit="개" bad={first > 0}
-              note={replayNote} />
+            <Kpi label="최종 불량률 (1차 + 2차)" value={pct(rate(sum.final, day.length))} unit="%" bad={sum.final > 0}
+              note={second ? `하루 전체 기준 · 2차는 이미지 있는 ${sum.inspected}샷만` : '하루 전체 기준 · 2차 조회 중이면 1차만'} />
+            <Kpi label="전체 불량 개수 (1차 + 2차)" value={String(sum.final)} unit="개" bad={sum.final > 0}
+              note={`1차 ${first} + 2차 ${sum.second} · ${replayNote}`} />
           </section>
 
           <section className={`${po.grid} ${s.models}`}>
@@ -183,21 +207,23 @@ export default function QualityInspectionDashboard() {
             </button>
             <div className={`${po.panel} ${s.modelCard}`}>
               <span className={s.modelHead}><b>DL 모델 · 2차 검사</b><span className={po.sub}>1차 양품 샷만 검사</span></span>
-              <span className={s.modelBody}>
-                <span className={s.stats}>
-                  <Stat label="2차 불량률" value="— %" />
-                  <Stat label="2차 불량 개수" value="— 개" />
-                </span>
-                <span className={po.sub}>1차 양품 {secondTargets}샷이 2차 대상 · {DL_PENDING}</span>
-                <span className={po.sub}>
-                  {dl === undefined ? '배포 모델 조회 중…'
-                    : dl ? <>배포 모델 <b>{dl.name} {dl.version}</b> (Model Management 「품질 2차 검사」)</>
-                    : 'Model Management 「품질 2차 검사」에 배포된 모델 없음'}
-                </span>
+              <ModelStats label="2차" n={sum.second} rateV={rate(sum.second, sum.inspected)}
+                base={`1차 양품 ${sum.secondTargets.toLocaleString()}샷 중 이미지 있는 ${sum.inspected}샷 검사 · 이미지 없음 ${(sum.secondTargets - sum.inspected).toLocaleString()}샷`} />
+              <span className={po.sub}>
+                {secondError ? <span role="alert">2차 검사를 불러오지 못했습니다: {secondError}</span>
+                  : !second ? '2차 검사 중… (처음 조회는 이미지마다 모델을 실행해 몇 초 걸립니다)'
+                  : <>모델 <b>{second.model.name}{second.model.version && ` ${second.model.version}`}</b>
+                    {second.model.source === 'registry' ? ' · Model Management 「품질 2차 검사」 배포 모델' : ' · 레지스트리 미등록 — 기본 모델'}</>}
               </span>
               <span className={s.cardSection}>
-                <span className={po.sub}>실시간 2차 분석 · 최근 2차 불량 샷</span>
-                <span className={s.slot}>{DL_PENDING} — 연결되면 샷 이미지 분석 결과가 표시됩니다</span>
+                <span className={po.sub}>최근 2차 불량 샷 (하루 전체 · 불량 확률)</span>
+                {recentSecondFails.length === 0
+                  ? <span className={s.slot}>{second ? '2차 불량 샷이 없습니다' : '—'}</span>
+                  : <span className={s.stats}>
+                      {recentSecondFails.map(({ shot, r }) => (
+                        <Stat key={r.castingId} label={`#${shot.shotId} · ${shot.time}`} value={secondLabel(r)} />
+                      ))}
+                    </span>}
               </span>
             </div>
           </section>
@@ -205,7 +231,7 @@ export default function QualityInspectionDashboard() {
           <SensorMonitor shots={shots} model={model} />
 
           {/* 팝업도 하루 전체 기준 — 재생 진행과 무관하게 그날 샷 전부 */}
-          {mlOpen && <MlDialog shots={day} model={model} ml={ml} first={first} onClose={() => setMlOpen(false)} />}
+          {mlOpen && <MlDialog shots={day} model={model} ml={ml} sum={sum} results={results} onClose={() => setMlOpen(false)} />}
         </>
       )}
     </div>
@@ -244,10 +270,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /** 샷 목록 팝업 (하루 전체 샷) — 좌: 1차 점수·판정과 실제 판정 / 우: 선택 샷의 2차(DL) 칸 + 주요 변수 */
-function MlDialog({ shots, model, ml, first, onClose }: {
-  shots: Shot[]; model: ModelInfo; ml: MlModel; first: number; onClose: () => void;
+function MlDialog({ shots, model, ml, sum, results, onClose }: {
+  shots: Shot[]; model: ModelInfo; ml: MlModel; sum: InspectionSummary; results: ReadonlyMap<string, SecondResult>; onClose: () => void;
 }) {
   const th = ml.threshold;
+  const first = sum.first;
   const [filter, setFilter] = useState<ListFilter>('all');
   // 최근 샷이 위로
   const list = useMemo(() => {
@@ -291,12 +318,13 @@ function MlDialog({ shots, model, ml, first, onClose }: {
             </div>
             <div className={s.list}>
               <table className={s.table}>
-                <thead><tr><th>샷</th><th>시각</th><th>1차 점수</th><th>1차</th><th>실제</th></tr></thead>
+                <thead><tr><th>샷</th><th>시각</th><th>1차 점수</th><th>1차</th><th>2차</th><th>실제</th></tr></thead>
                 <tbody>
                   {list.length === 0 ? (
-                    <tr><td colSpan={5} className={po.sub}>표시할 샷이 없습니다</td></tr>
+                    <tr><td colSpan={6} className={po.sub}>표시할 샷이 없습니다</td></tr>
                   ) : list.map(x => {
                     const fail = firstFail(x, th);
+                    const st = secondOf(x, th, results);
                     return (
                       <tr key={keyOf(x)} className={keyOf(x) === selectedId ? s.rowSelected : ''} onClick={() => setSelectedId(keyOf(x))}>
                         <td>
@@ -306,6 +334,11 @@ function MlDialog({ shots, model, ml, first, onClose }: {
                         <td className={po.num}>{x.time}</td>
                         <td className={po.num}>{x.prob.toFixed(3)}</td>
                         <td><span className={`${po.pill} ${fail ? po.pill_bad : po.pill_ok}`}>{fail ? '불량' : '양품'}</span></td>
+                        <td>
+                          {typeof st === 'object'
+                            ? <span className={`${po.pill} ${st.result === 'fail' ? po.pill_bad : po.pill_ok}`}>{st.result === 'fail' ? '불량' : '양품'}</span>
+                            : <span className={po.sub}>{st === 'first' ? '대상 아님' : '이미지 없음'}</span>}
+                        </td>
                         <td>
                           {x.actual == null
                             ? <span className={po.sub}>미판정</span>
@@ -321,10 +354,10 @@ function MlDialog({ shots, model, ml, first, onClose }: {
 
           <section className={s.col}>
             <div className={s.stats}>
-              <Stat label="2차 불량률" value="— %" />
-              <Stat label="2차 불량 개수" value="— 개" />
+              <Stat label={`2차 불량률 (검사 ${sum.inspected}샷)`} value={`${pct(rate(sum.second, sum.inspected))} %`} />
+              <Stat label="2차 불량 개수" value={`${sum.second} 개`} />
             </div>
-            {selected ? <ShotAnalysis shot={selected} model={model} th={th} /> : <div className={s.slot}>샷을 선택하세요</div>}
+            {selected ? <ShotAnalysis shot={selected} model={model} th={th} results={results} /> : <div className={s.slot}>샷을 선택하세요</div>}
           </section>
         </div>
       </div>
@@ -333,16 +366,20 @@ function MlDialog({ shots, model, ml, first, onClose }: {
 }
 
 /** 선택 샷 — 1차 결과 + 2차(DL) 칸 + 주요 변수 */
-function ShotAnalysis({ shot, model, th }: { shot: Shot; model: ModelInfo; th: number }) {
-  const fail = firstFail(shot, th);
+function ShotAnalysis({ shot, model, th, results }: {
+  shot: Shot; model: ModelInfo; th: number; results: ReadonlyMap<string, SecondResult>;
+}) {
+  const st = secondOf(shot, th, results);
   return (
     <>
       <span className={po.sub}>
-        #{shot.shotId} · {shot.time} · 1차 점수 <span className={po.num}>{shot.prob.toFixed(3)}</span> ({fail ? '불량' : '양품'})
+        #{shot.shotId} · {shot.time} · 1차 점수 <span className={po.num}>{shot.prob.toFixed(3)}</span> ({st === 'first' ? '불량' : '양품'})
         {' '}· 실제 {shot.actual === 1 ? '불량' : shot.actual === 0 ? '양품' : '미판정'}
       </span>
       <div className={s.slot}>
-        {fail ? `#${shot.shotId} · 1차 불량 확정 — 2차 검사 대상 아님` : `2차(DL) 검사 대상 · ${DL_PENDING}`}
+        {st === 'first' ? `#${shot.shotId} · 1차 불량 확정 — 2차 검사 대상 아님`
+          : st === 'noImage' ? '2차(DL) 검사 대상 · 샷 이미지 없음 (이미지 수집 전)'
+          : <>2차(DL) <b>{st.result === 'fail' ? '불량' : '양품'}</b> · 불량 확률 <span className={po.num}>{st.confidenceScore.toFixed(3)}</span> · {st.modelName}</>}
       </div>
       <KeyVariables shot={shot} model={model} />
     </>
