@@ -334,3 +334,16 @@
   .formGrid, .formGrid3 { grid-template-columns: 1fr; }
   .table { font-size: 12px; }
 }
+
+/* 강건성 버튼 (품질 2차, 성과지표 위 오른쪽) */
+.metricsHead { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+
+/* 강건성 팝업 — 표가 넓어 등록 팝업보다 넓게, 좁은 화면은 표만 가로 스크롤 */
+.dialogWide { width: min(760px, 100%); }
+.robustScroll { overflow-x: auto; }
+.robustTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.robustTable th,
+.robustTable td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.robustTable th { background: #f2f4f7; font-weight: 600; }
+.robustStrong td { font-weight: 700; }
+.robustNote { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.7; }

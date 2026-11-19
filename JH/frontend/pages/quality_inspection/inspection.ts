@@ -1,28 +1,35 @@
-import type { FeatureKey, ModelInfo, Shot } from '../../common/casting/types';
+import type { FeatureKey, ModelInfo, SecondResult, Shot } from '../../common/casting/types';
 
-/**
- * 1차(ML)·2차(DL) 검사 판정
- * ponytail: DL 모델 미완성 — 2차 판정은 목업의 실제 라벨(actual)로 대신함. DL 연결 시 secondFail 만 교체
- */
+/** 1차(ML) 판정 — 점수 ≥ 기준값이면 불량 */
 export const firstFail = (s: Shot, th: number) => s.prob >= th;
+
 /**
- * 2차(DL) 모델 연결 여부 — false 면 품질 검사 화면은 2차 칸을 「연결 전」으로 두고 secondFail 을 쓰지 않음
- * (secondFail 은 실제 라벨로 흉내 낸 목업이라 화면에 DL 결과처럼 보이면 안 됨). DL 연결 시 true + secondFail 교체
+ * 2차(DL) 상태 — 2차는 1차 양품 샷만 대상 (ML 이 놓친 불량을 이미지로 재검)
+ * first = 1차 불량 확정(대상 아님) / noImage = 대상이지만 샷 이미지 없음 / 그 외 = DL 판정 결과
  */
-export const DL_CONNECTED = false;
-/** 2차 검사는 1차 패스(양품) 샷만 대상 — ML 이 놓친 불량을 DL 이 재검. 1차 불량이면 null(이미 불량 확정) */
-export const secondFail = (s: Shot, th: number): boolean | null => (firstFail(s, th) ? null : s.actual === 1);
+export type SecondState = 'first' | 'noImage' | SecondResult;
 
-/** 최종 불량 = 1차 불량 + 2차 불량 */
-export interface InspectionSummary { total: number; first: number; second: number; secondTargets: number; final: number }
+export function secondOf(s: Shot, th: number, results: ReadonlyMap<string, SecondResult>): SecondState {
+  if (firstFail(s, th)) return 'first';
+  return (s.castingId && results.get(s.castingId)) || 'noImage';
+}
 
-export function summarize(shots: Shot[], th: number): InspectionSummary {
-  let first = 0, second = 0;
+/** 최종 불량 = 1차 불량 + 2차 불량. 2차 불량률 분모 = 실제로 검사한 샷(이미지 있는 1차 양품) */
+export interface InspectionSummary {
+  total: number; first: number; secondTargets: number; inspected: number; second: number; final: number;
+}
+
+export function summarize(shots: Shot[], th: number, results: ReadonlyMap<string, SecondResult>): InspectionSummary {
+  let first = 0, inspected = 0, second = 0;
   for (const s of shots) {
-    if (firstFail(s, th)) first++;
-    else if (secondFail(s, th)) second++;
+    const st = secondOf(s, th, results);
+    if (st === 'first') first++;
+    else if (st !== 'noImage') {
+      inspected++;
+      if (st.result === 'fail') second++;
+    }
   }
-  return { total: shots.length, first, second, secondTargets: shots.length - first, final: first + second };
+  return { total: shots.length, first, secondTargets: shots.length - first, inspected, second, final: first + second };
 }
 
 /** 분모 0이면 null */
