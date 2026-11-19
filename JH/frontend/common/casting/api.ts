@@ -61,9 +61,20 @@ export async function fetchShots(line: string, date: string, real = false): Prom
     if (!res.ok) throw new Error(`${MOCK_SHOTS_URL} 요청 실패 (HTTP ${res.status})`);
     return ((await res.json()) as Shot[]).slice(MOCK_WARMUP_SHOTS);
   }
-  // ponytail: 매번 하루치 전체 조회. 샷이 많아지면 &since=<마지막 shotId>로 증분 조회로 바꾸세요
   return get<Shot[]>(`/api/casting/predictions?line=${encodeURIComponent(line)}&date=${date}`);
 }
+
+/** 실시간 응답 — reset=true 면 목록 교체(첫 조회·날짜 바뀜), false 면 뒤에 붙임 */
+export interface LiveShots { date: string; reset: boolean; shots: Shot[] }
+
+/** 실시간 따라가기 — 오늘(KST) 현재 시각 이전 샷. after(마지막 castingId) 이후만 받음 */
+export function fetchLive(line: string, after?: string): Promise<LiveShots> {
+  const q = new URLSearchParams({ line, ...(after ? { after } : {}) });
+  return get<LiveShots>(`/api/casting/live?${q}`);
+}
+
+/** 오늘 날짜 (KST, 'YYYY-MM-DD') — 공정 최적화: 오늘이면 실시간, 지난 날짜면 재생 */
+export const todayKst = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 
 /**
  * 2차(DL) 판정 — 그날 그 라인의 이미지가 있는 샷만 (1차 양품 거르기는 화면에서)

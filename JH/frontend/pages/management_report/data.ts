@@ -1,9 +1,10 @@
-// 경영 관리자 리포트 목업 — 생산·근태·안전 집계 API 연동 전 자리 (연동 시 이 파일만 API 호출로 교체)
+// 경영 관리자 리포트 데이터 — 서버 실제 값: 생산량·최종 불량(/api/report/daily, mes 세 라인 합계), 안전(/api/report/safety, 보호구 대시보드 기준)
+// 그 외(근태·SPC·1차 불량·재활용·불량 유형)는 아래 REPORTS 목업. ponytail: 항목별 집계 API 가 생기면 그 항목만 교체
 import type { Gear } from "../ppe_violation/rules";
 
 export type Period = "daily" | "weekly" | "monthly";
 
-export const LINE = "line_no1";
+export const LINE = "전체 라인(line_no1~3)";
 export const PRODUCT = "CylinderHead";
 
 /** 불량 유형 — 2차 검사(DL) 결함 분류 출력과 맞출 키 */
@@ -21,6 +22,7 @@ export const FIXED = {
 };
 
 export interface PeriodReport {
+  noData?: boolean;        // 기간에 생산 데이터가 없음 → 생산량·불량 「—」
   attendance: { total: number; present: number }; // 일일 = 인원, 주간·월간 = 기간 누적 연인원
   production: number;      // 생산량(개)
   defects: number;         // 최종 불량(개)
@@ -88,3 +90,33 @@ export const REPORTS: Record<Period, PeriodReport> = {
     },
   },
 };
+
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+
+/** 날짜별 생산량·최종 불량 (서버 mes, 세 라인 합계). 생산 없는 날은 빠짐 */
+export interface DailyProduction { date: string; production: number; defects: number }
+
+/** 기간(from~to, 'YYYY-MM-DD', 양 끝 포함) 날짜별 생산 — 최대 220일 */
+export async function fetchDailyProduction(from: string, to: string): Promise<DailyProduction[]> {
+  // 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지
+  const res = await fetch(`${BASE}/api/report/daily?${new URLSearchParams({ from, to })}`, {
+    cache: "no-store", signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`/api/report/daily 요청 실패 (HTTP ${res.status})`);
+  return (await res.json()) as DailyProduction[];
+}
+
+/** 안전 원자료 (서버 ai.ppe_check, 보호구 착용 위반 대시보드와 같은 판정·위반 기준) */
+export interface SafetyData {
+  scans: { date: string; count: number }[]; // 날짜별 판정 수 (판정 불가 포함)
+  violations: { date: string; userId: string; company: string; vendor: boolean; missing: Gear[] }[];
+}
+
+/** 기간(from~to) 안전 원자료 — 최대 220일 */
+export async function fetchSafety(from: string, to: string): Promise<SafetyData> {
+  const res = await fetch(`${BASE}/api/report/safety?${new URLSearchParams({ from, to })}`, {
+    cache: "no-store", signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`/api/report/safety 요청 실패 (HTTP ${res.status})`);
+  return (await res.json()) as SafetyData;
+}

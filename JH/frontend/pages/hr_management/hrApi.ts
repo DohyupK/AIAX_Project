@@ -4,6 +4,10 @@
 
 const BASE = process.env.NEXT_PUBLIC_HR_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
+// 목업 계정 선택 기억 — 인사 관리·Model Management 가 같이 씀 (로그인 전 전용)
+export const ACCOUNT_KEY = 'jh.hr.mock_employee_no';
+export const DEFAULT_ACCOUNT = 'e0002';   // 경영부 부장 (org 2026-11-17 개편 사번)
+
 export type Tier = 'basic' | 'manage' | 'hr';
 
 export interface Me {

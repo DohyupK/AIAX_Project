@@ -22,6 +22,9 @@
 | `ai.model_metric_safe_ppe` | `accuracy_score`, `recall_score`, `precision_score`, `f1_score` | 읽기 | 위 (SAFE-PPE) | 화면 「보호구 착용 위반」 |
 | `ai.model_robustness` | `model_name`+`version`+`condition_name`(PK, FK → model_registry ON DELETE CASCADE), `accuracy_score`, `recall_score`, `precision_score`, `f1_score` (0~1) | 읽기 | `GET /api/models/{idx}/robustness` | 2026-11-19 추가. 화면 품질 2차 「강건성」 팝업 — 원본 줄은 `model_metric_cast_qc2` 값 |
 
+| `org.access_code` | `employee_no`, `access_code` | 읽기 | `GET /api/models/me` (목록·강건성 API 권한 검사에도 사용) | 2026-11-19 추가. 목업 계정 사번 → 접근 코드. 처음엔 lake 사본(`lake.lake_access_code`)이었으나 lake 복제(Spark) 미구현이라 원본으로 변경(사용자 결정) — lake 연결 시 다시 사본으로 |
+| `org.model_management_page` | `access_code`, `access_level`(`read`/`edit`) | 읽기 | 위 | 2026-11-19 추가. 행 없으면 접근 불가(none). 위와 같은 이유로 원본(`lake.lake_model_management_page` 대신) |
+
 ## 메모
 
 - **코드 ↔ 화면 이름**: CAST-QC1 = 품질 1차 검사, CAST-QC2 = 품질 2차 검사, SAFE-PPE = 보호구 착용 위반. (2026-11-18 MS 가 CAST-OPT·CAST-QC·SAFE-GATE 와 지표 테이블 이름을 변경 → JH 코드 맞춤. 리포 `MS/db/init/11_ai.sql` 은 아직 이전 이름)

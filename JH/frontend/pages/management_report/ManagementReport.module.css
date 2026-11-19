@@ -85,3 +85,6 @@
   .types { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reportHead { flex-direction: column; }
 }
+
+/* 집계 연동 전 목업 항목 표시 */
+.mockTag { margin-left: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; font-size: 10.5px; font-weight: 500; opacity: 0.6; }

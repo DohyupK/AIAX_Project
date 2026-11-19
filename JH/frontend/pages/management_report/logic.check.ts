@@ -1,7 +1,7 @@
 // 경영 리포트 계산 자체 점검 — 실행: node JH/frontend/pages/management_report/logic.check.ts (Node 23.6+)
 import assert from "node:assert/strict";
 import { REPORTS } from "./data.ts";
-import { compareReport, computeReport, listReports, mockReport, ratio, scaleTo } from "./logic.ts";
+import { compareReport, computeReport, listReports, mockReport, ratio, scaleTo, withActual, withSafety } from "./logic.ts";
 
 assert.equal(ratio(1, 0), null);
 assert.equal(ratio(1, 4), 0.25);
@@ -66,5 +66,35 @@ const cmp = compareReport(cur, prev);
 assert.equal(cmp.violations, 1);
 assert.ok(Math.abs(cmp.defectRatePp! - 1) < 1e-9);
 assert.deepEqual(compareReport(cur, null), { violations: null, defectRatePp: null });
+
+// 실제 생산 합산: 기간 안의 날만, 목업 항목은 실제 불량과 모순 없게
+const days = [
+  { date: "2026-11-09", production: 100, defects: 5 },
+  { date: "2026-11-10", production: 1000, defects: 40 },
+  { date: "2026-11-11", production: 2000, defects: 60 },
+];
+const act = withActual(REPORTS.daily, days, "2026-11-10", "2026-11-11");
+assert.deepEqual([act.production, act.defects, act.noData], [3000, 100, false]);
+assert.ok(act.defects <= act.firstDefects && act.recycled <= act.firstDefects && act.firstDefects <= act.production);
+assert.equal(Object.values(act.defectTypes).reduce((a, n) => a + n, 0), 100);
+const none = withActual(REPORTS.daily, days, "2026-06-01", "2026-06-30");
+assert.deepEqual([none.production, none.defects, none.firstDefects, none.recycled, none.noData], [0, 0, 0, 0, true]);
+assert.equal(computeReport(none, 1, 1).defectRate, null); // 생산 0 → 불량률 「—」
+
+// 실제 안전: 기간 안 위반만, 재위반 = 기간 안 2회 이상, 같은 이름이어도 본사·하청은 따로
+const safetyData = {
+  scans: [{ date: "2026-11-09", count: 50 }, { date: "2026-11-10", count: 40 }, { date: "2026-11-11", count: 60 }],
+  violations: [
+    { date: "2026-11-09", userId: "e0001", company: "생산부", vendor: false, missing: ["vest" as const] },
+    { date: "2026-11-10", userId: "e0001", company: "생산부", vendor: false, missing: ["vest" as const, "gloves" as const] },
+    { date: "2026-11-11", userId: "e0001", company: "생산부", vendor: false, missing: [] },
+    { date: "2026-11-11", userId: "vc0001", company: "한빛", vendor: true, missing: ["helmet" as const] },
+  ],
+};
+const sf = withSafety(REPORTS.daily, safetyData, "2026-11-10", "2026-11-11").safety;
+assert.deepEqual([sf.scans, sf.violations, sf.repeatViolators], [100, 3, 1]);
+assert.deepEqual(sf.byCompany.map((c) => [c.company, c.type, c.count]), [["생산부", "본사", 2], ["한빛", "하청업체", 1]]);
+assert.deepEqual(sf.byGear, { helmet: 1, shoes: 0, vest: 1, gloves: 1, goggles: 0 });
+assert.equal(withSafety(REPORTS.daily, safetyData, "2026-11-09", "2026-11-09").safety.repeatViolators, 0); // 하루 1회 → 재위반 아님
 
 console.log("management_report logic: OK");
