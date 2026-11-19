@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 // 화면 셸: JH 플랫폼 인덱스 (서버 PlatformLayout + 클라이언트 사이드바 아일랜드)
 import { PlatformLayout } from "@/JH/main";
+// 혜진봇 — 전역 우하단 FAB (DH)
+import { HyejinBot } from "@/DH/main/hyejin_bot";
 
 export const metadata: Metadata = {
   title: "TeamProject",
@@ -17,6 +19,7 @@ export default function RootLayout({
     <html lang="ko">
       <body>
         <PlatformLayout>{children}</PlatformLayout>
+        <HyejinBot />
       </body>
     </html>
   );

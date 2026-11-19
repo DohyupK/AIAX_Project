@@ -1,6 +1,5 @@
-/* 혜진봇 — 우하단 FAB + 채팅 패널 */
+/* 혜진봇 — 전역 우하단 FAB + 채팅 패널 (레이아웃 공간·클릭 가로채지 않음) */
 .page {
-  --bg: #eef1f5;
   --panel: #ffffff;
   --ink: #0f1b2d;
   --muted: #5b6779;
@@ -9,13 +8,10 @@
   --accent: #2563c9;
   --bad: #cf2f2f;
   --bad-bg: #fbe5e5;
-  background: var(--bg);
   color: var(--ink);
   font-size: 14px;
   line-height: 1.5;
-  min-width: 0;
-  min-height: 100%;
-  position: relative;
+  display: contents;
 }
 .page * {
   box-sizing: border-box;
