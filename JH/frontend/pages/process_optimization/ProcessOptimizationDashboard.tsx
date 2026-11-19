@@ -1,7 +1,7 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LINES, fetchActiveModel, fetchDates, type Line } from '../../common/casting/api';
+import { LINES, fetchActiveModel, fetchDates, todayKst, type Line } from '../../common/casting/api';
 import { MONITOR_KEYS, buildAlerts } from '../../common/casting/analysis';
 import { useShotStream } from '../../common/casting/useShotStream';
 import type { FeatureKey, ModelInfo } from '../../common/casting/types';
@@ -26,7 +26,7 @@ const DEFAULT_CYCLE = 155; // 사이클 값이 없을 때 (초)
 /**
  * 공정 최적화 대시보드 — 공정 관리장용
  * 설비 장면(라벨 클릭 → 변수 모니터·관리도), 샷별 공정 변수 모니터링, 알람 로그, 변수별 관리도(SPC)
- * 데이터: 실데이터(mes.investment_casting, JH API) — 고른 날짜를 처음부터 재생.
+ * 데이터: 실데이터(mes.investment_casting, JH API) — 오늘을 고르면 실시간 따라가기(새 샷만 5초마다), 지난 날짜는 처음부터 재생.
  * ponytail: 모델 연결 전이라 불량 = 실제 판정(passorfail), 정상 범위는 목업 model.json. 모델 API가 생기면 교체
  */
 export default function ProcessOptimizationDashboard() {
@@ -40,6 +40,10 @@ export default function ProcessOptimizationDashboard() {
   const [date, setDate] = useState(''); // 기본: 데이터가 있는 가장 최근 날짜
   const [speed, setSpeed] = useState(1);
   const [cycle, setCycle] = useState(DEFAULT_CYCLE); // 지금까지 받은 샷의 평균 설비 사이클(초)
+  // 오늘(KST)은 브라우저에서만 계산 (서버 렌더 시각과 어긋나지 않게). ponytail: 페이지를 연 채 자정을 넘기면 새로고침해야 새 날짜로
+  const [today, setToday] = useState('');
+  useEffect(() => setToday(todayKst()), []);
+  const live = !!date && date === today; // 오늘 = 실시간, 지난 날짜 = 재생
 
   // 설비 장면 라벨 클릭 → 해당 변수 선택 + 공정 변수 모니터로 스크롤 (바로 아래 관리도도 같은 변수)
   const pickFromScene = useCallback((k: FeatureKey) => {
@@ -48,7 +52,7 @@ export default function ProcessOptimizationDashboard() {
     document.getElementById(SENSOR_MONITOR_ID)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   }, []);
 
-  const { shots, loading, error, retry, finished, restart } = useShotStream(line, date, playing, true, (cycle / speed) * 1000);
+  const { shots, loading, error, retry, finished, restart } = useShotStream(line, date, playing, true, (cycle / speed) * 1000, live);
 
   // 평균 설비 사이클 = KPI 「평균 사이클」과 같은 값. 정수 초로 반올림해 재생 타이머가 매 샷마다 다시 걸리지 않게
   useEffect(() => {
@@ -105,21 +109,25 @@ export default function ProcessOptimizationDashboard() {
             날짜
             <select className={s.chipSelect} value={date} aria-label="날짜 선택" disabled={!dates?.length}
               onChange={e => { setDate(e.target.value); setPlaying(true); }}>
-              {dates?.map(d => <option key={d} value={d}>{d}</option>)}
+              {dates?.map(d => <option key={d} value={d}>{d === today ? `${d} (실시간)` : d}</option>)}
             </select>
           </label>
           <span className={s.chip}>품목 <b>{PRODUCT}</b></span>
           <span className={s.chip}>
-            <span className={`${s.dot} ${playing ? s.dotLive : ''}`} />
-            <b>{playing ? '실시간' : finished ? '재생 종료' : '일시정지'}</b>
+            <span className={`${s.dot} ${live || playing ? s.dotLive : ''}`} />
+            <b>{live ? '실시간' : playing ? '재생 중' : finished ? '재생 종료' : '일시정지'}</b>
             {latest && <span className={s.num}>· {date} {latest.time}</span>}
           </span>
-          <button type="button" className={s.btn} onClick={togglePlay}>{playing ? '일시정지' : '재생'}</button>
+          {/* 실시간은 새 샷이 오는 대로 따라가므로 재생·일시정지 없음 */}
+          {!live && <button type="button" className={s.btn} onClick={togglePlay}>{playing ? '일시정지' : '재생'}</button>}
         </div>
       </header>
 
       <div className={s.banner}>
-        실데이터(공정 DB): 고른 날짜의 샷을 처음부터 재생합니다. 1샷 = 평균 설비 사이클(×20 버튼으로 20배속). 알람은 공정 변수 모니터에서 주의·이탈로 바뀌는 순간 울립니다.
+        {live
+          ? '실시간(공정 DB): 오늘 지금까지의 최근 샷을 보여 주고, 새 샷이 들어오면 5초 안에 이어 붙입니다. 설비는 샷마다 한 바퀴 돌고 다음 샷까지 기다립니다.'
+          : '실데이터(공정 DB): 고른 날짜의 샷을 처음부터 재생합니다. 1샷 = 평균 설비 사이클(×20 버튼으로 20배속).'}
+        {' '}알람은 공정 변수 모니터에서 주의·이탈로 바뀌는 순간 울립니다.
       </div>
 
       {err && (
@@ -152,7 +160,7 @@ export default function ProcessOptimizationDashboard() {
       {model && (
         <>
           <section className={`${s.grid} ${s.top}`}>
-            <DiecastScene shots={shots} model={model} playing={playing} cycleSec={cycle} speed={speed} onSpeed={setSpeed} onPick={pickFromScene} onPhase={setActiveGroup} />
+            <DiecastScene shots={shots} model={model} playing={live || playing} cycleSec={cycle} speed={speed} onSpeed={setSpeed} onPick={pickFromScene} onPhase={setActiveGroup} />
             <div className={s.side}>
               <KpiCards shots={shots} model={model} />
               <AlertLog alerts={alerts} />

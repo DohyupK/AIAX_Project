@@ -2,6 +2,7 @@
 
 응답 형식은 프런트 JH/frontend/common/casting/types.ts 의 Shot 과 같음.
 prob = 1차(ML) 불량 점수 (Model Management 「품질 1차 검사」 배포 모델, 없으면 기본 모델 — casting/model.py), actual = 실제 판정(passorfail).
+/live = 실시간 따라가기 (오늘 KST, 현재 시각 이전 샷만 — 증분 조회).
 /second = 2차(DL) 판정 (「품질 2차 검사」 배포 모델, 없으면 기본 모델 — casting/dl_model.py, 이미지 mes.casting_image).
 """
 from __future__ import annotations
@@ -29,6 +30,11 @@ FEATURES = {
     "facility_CycleTime": "facility_cycletime", "production_CycleTime": "production_cycletime",
 }
 LINE = Query(pattern=r"^line_no\d{1,2}$")
+SHOT_COLS = ", ".join(sorted({"casting_id", "date", "production_count", "passorfail", *FEATURES.values()}))
+# 오늘·지금 = DB 서버 시계 기준 KST (date 칼럼 = 하루 안 시각 time, "timestamp" 칼럼 = 생산일 date)
+KST_NOW = "(now() AT TIME ZONE 'Asia/Seoul')"
+LIVE_FIRST = 200     # 실시간 첫 조회 = 최근 샷 수 (관리도·알람 맥락)
+LIVE_BATCH = 500     # 증분 1회 최대 샷 수
 
 
 def to_shot(r: dict, score: float) -> dict:
@@ -49,7 +55,8 @@ def dates(line: str = LINE) -> list[str]:
     try:
         with connect(DB) as conn:
             rows = conn.execute(
-                'SELECT DISTINCT "timestamp" AS d FROM mes.investment_casting WHERE line_unit = %s ORDER BY 1 DESC',
+                # 오늘 이후 날짜는 제외 (미리 넣은 목업 미래 날짜가 기본 선택되지 않게)
+                f'SELECT DISTINCT "timestamp" AS d FROM mes.investment_casting WHERE line_unit = %s AND "timestamp" <= {KST_NOW}::date ORDER BY 1 DESC',
                 (line,),
             ).fetchall()
     except Exception:
@@ -61,24 +68,60 @@ def dates(line: str = LINE) -> list[str]:
 @router.get("/predictions")
 def predictions(date: Date, line: str = LINE) -> list[dict]:
     """그날 샷 전체 (시간순)"""
-    cols = ", ".join(sorted({"casting_id", "date", "production_count", "passorfail", *FEATURES.values()}))
     try:
         with connect(DB) as conn:
             rows = conn.execute(
-                f'SELECT {cols} FROM mes.investment_casting WHERE line_unit = %s AND "timestamp" = %s '
+                f'SELECT {SHOT_COLS} FROM mes.investment_casting WHERE line_unit = %s AND "timestamp" = %s '
                 "ORDER BY date, production_count",
                 (line, date),
             ).fetchall()
     except Exception:
         log.exception("공정 샷 조회 실패 line=%s date=%s", line, date)
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
+    return _scored(rows, f"line={line} date={date}")
+
+
+@router.get("/live")
+def live(line: str = LINE, after: str | None = Query(None, pattern=r"^\d{6}_\d{6}_\d+$")) -> dict:
+    """실시간 따라가기 — 오늘(KST) 샷 중 현재 시각 이전만 (시간순).
+    after(마지막으로 받은 casting_id) 없음·오늘 샷이 아님 → 최근 LIVE_FIRST 샷 + reset=true (화면이 목록 교체)
+    after 있음 → 그 샷 이후만 + reset=false (화면이 뒤에 붙임)"""
+    try:
+        with connect(DB) as conn:
+            cur = after and conn.execute(
+                f'SELECT date, production_count FROM mes.investment_casting '
+                f'WHERE casting_id = %s AND line_unit = %s AND "timestamp" = {KST_NOW}::date',
+                (after, line),
+            ).fetchone()
+            base = (f'SELECT {SHOT_COLS} FROM mes.investment_casting WHERE line_unit = %s '
+                    f'AND "timestamp" = {KST_NOW}::date AND date <= {KST_NOW}::time')
+            if cur:
+                rows = conn.execute(
+                    base + " AND (date, production_count) > (%s, %s) ORDER BY date, production_count LIMIT %s",
+                    (line, cur["date"], cur["production_count"], LIVE_BATCH),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    base + " ORDER BY date DESC, production_count DESC LIMIT %s", (line, LIVE_FIRST)
+                ).fetchall()[::-1]
+            today = conn.execute(f"SELECT {KST_NOW}::date AS d").fetchone()["d"]
+    except Exception:
+        log.exception("실시간 샷 조회 실패 line=%s after=%s", line, after)
+        raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
+    return {"date": today.isoformat(), "reset": not cur, "shots": _scored(rows, f"live line={line}")}
+
+
+def _scored(rows: list[dict], ctx: str) -> list[dict]:
+    """샷 행 → 화면 Shot (1차 ML 점수 포함)"""
+    if not rows:
+        return []
     try:
         sc = model.scores(rows)
     except model.ModelError as e:   # 배포 모델 파일·형식 문제 — 무엇이 틀렸는지 화면에 그대로
         log.error("1차 검사 배포 모델 사용 불가: %s", e)
         raise HTTPException(503, str(e))
     except Exception:
-        log.exception("1차 검사 모델 점수 계산 실패 line=%s date=%s", line, date)
+        log.exception("1차 검사 모델 점수 계산 실패 %s", ctx)
         raise HTTPException(503, "1차 검사 모델을 실행하지 못했습니다.")
     return [to_shot(r, s) for r, s in zip(rows, sc)]
 
