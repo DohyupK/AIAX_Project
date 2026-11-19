@@ -1,4 +1,4 @@
-"""NIM/모델 전환 후 전 문서 재청킹·재임베딩 큐.
+"""전 문서 재청킹·재임베딩 큐 (NIM 전환·제목 메타 접두 반영 시).
 
   cwd=JH/api 에서:
     uv run python -m documents.requeue_all

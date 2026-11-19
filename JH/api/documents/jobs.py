@@ -39,11 +39,26 @@ def _next_ids(conn, table: str, pk: str, n: int) -> list[int]:
     return list(range(start, start + n))
 
 
+def _meta_prefix(title: str, file_name: str, category: str | None) -> str:
+    """임베딩용 제목·파일·분류 접두 (검색에 제목이 반영되도록)."""
+    lines = [
+        f"제목: {(title or '').strip() or '(제목 없음)'}",
+        f"파일: {(file_name or '').strip() or '(파일명 없음)'}",
+    ]
+    cat = (category or "").strip()
+    if cat:
+        lines.append(f"분류: {cat}")
+    return "\n".join(lines)
+
+
 def run_chunk_once(doc_idx: int) -> None:
-    """한 번 시도: 추출→청크→DB→임베딩. 텍스트 없으면 청크 0으로 ok 처리."""
+    """한 번 시도: 추출→청크→DB→임베딩(제목 메타 접두). 본문 없으면 메타 1청크."""
     with connect(DB) as conn:
         doc = conn.execute(
-            "SELECT company_document_idx, file_path, file_name FROM org.company_document WHERE company_document_idx = %s",
+            """
+            SELECT company_document_idx, file_path, file_name, title, category
+            FROM org.company_document WHERE company_document_idx = %s
+            """,
             [doc_idx],
         ).fetchone()
         if not doc:
@@ -71,10 +86,15 @@ def run_chunk_once(doc_idx: int) -> None:
     if time.monotonic() - t0 > JOB_TIMEOUT_SEC:
         raise TimeoutError("청킹 2분 초과 (분할)")
 
+    prefix = _meta_prefix(doc.get("title") or "", doc["file_name"], doc.get("category"))
+    # 본문 없으면 메타만 1청크(이미지 등) — DB content에도 메타 저장
     if not parts:
-        set_job_status(doc_idx, "ok", 0, None)
-        log.info("문서 %s 청크 0건 (텍스트 없음) → ok", doc_idx)
-        return
+        parts = [prefix]
+        embed_inputs = [prefix]
+        log.info("문서 %s 본문 없음 → 제목 메타 1청크", doc_idx)
+    else:
+        # DB에는 본문만, 임베딩 입력에만 제목 접두
+        embed_inputs = [f"{prefix}\n\n{p}" for p in parts]
 
     with connect(DB) as conn:
         ids = _next_ids(conn, "org.document_chunk", "document_chunk_idx", len(parts))
@@ -87,7 +107,7 @@ def run_chunk_once(doc_idx: int) -> None:
             [(cid, doc_idx, i, content) for i, (cid, content) in enumerate(zip(ids, parts), start=1)],
         )
 
-    vectors = embed_texts(parts, input_type="passage")
+    vectors = embed_texts(embed_inputs, input_type="passage")
     if time.monotonic() - t0 > JOB_TIMEOUT_SEC:
         raise TimeoutError("청킹 2분 초과 (임베딩)")
 
@@ -104,7 +124,7 @@ def run_chunk_once(doc_idx: int) -> None:
         )
 
     set_job_status(doc_idx, "ok", 0, None)
-    log.info("문서 %s 청크 %d건·임베딩 완료", doc_idx, len(parts))
+    log.info("문서 %s 청크 %d건·임베딩 완료 (제목 메타 접두)", doc_idx, len(parts))
 
 
 def _try_twice(doc_idx: int) -> bool:
