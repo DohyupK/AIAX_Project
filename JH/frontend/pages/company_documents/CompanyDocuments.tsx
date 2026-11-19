@@ -5,7 +5,7 @@ import {
   buildDocMeta, canDelete, extOf, formatDateTime, formatSize, nextDocNo, sortDocs, validateUpload,
   type Category, type DocMeta, type Grade, type UploadDraft,
 } from './docs';
-import { addDoc, deleteDoc, getDocBlob, listDocs } from './docStore';
+import { addDoc, deleteDoc, getDocBlob, listDocs, searchDocs, type SearchHit } from './docStore';
 import { getCurrentUser } from '../../common/currentUser';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import s from './CompanyDocuments.module.css';
@@ -15,8 +15,8 @@ const GRADE = Object.fromEntries(GRADES.map(g => [g.key, g])) as Record<Grade, (
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label])) as Record<Category, string>;
 
 /**
- * 사내 문서함 — 카테고리 필터 + 문서 카드 목록, 우측 상단 ＋ 로 업로드, 카드 클릭 시 상세·다운로드
- * 저장: 목업 IndexedDB (docStore.ts). 보안 등급은 표시용 (로그인·권한 관리 도입 전)
+ * 사내 문서함 — 카테고리 필터 + 목록/업로드/의미검색
+ * 저장: JH API → DOCUMENT_ROOT + org.company_document (청크·임베딩 BG)
  */
 export default function CompanyDocuments() {
   const [uploaded, setUploaded] = useState<DocMeta[]>([]);
@@ -24,11 +24,30 @@ export default function CompanyDocuments() {
   const [filter, setFilter] = useState<Filter>('all');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [opened, setOpened] = useState<DocMeta | null>(null);
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
-  // 업로드한 문서는 브라우저 저장소에서 읽음 (마운트 후)
   useEffect(() => {
     listDocs().then(setUploaded).catch((e: Error) => setLoadError(e.message));
   }, []);
+
+  async function runSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const query = q.trim();
+    if (!query) { setHits(null); setSearchError(null); return; }
+    setSearching(true);
+    setSearchError(null);
+    try {
+      setHits(await searchDocs(query));
+    } catch (err) {
+      setSearchError((err as Error).message);
+      setHits([]);
+    } finally {
+      setSearching(false);
+    }
+  }
 
   const docs = useMemo(() => sortDocs([...uploaded, ...SAMPLE_DOCS]), [uploaded]);
   const counts = useMemo(() => {
@@ -53,9 +72,32 @@ export default function CompanyDocuments() {
       </header>
 
       <div className={po.banner}>
-        목업: 업로드한 문서는 이 브라우저에만 저장되며 다른 사람과 공유되지 않습니다. 보안 등급은 현재 표시용이며, 등급별 열람 제한은 로그인·권한 관리 도입 후 적용됩니다.
+        서버 저장: 파일은 DOCUMENT_ROOT, 메타는 org.company_document. 업로드 후 백그라운드에서 청크·OpenAI 임베딩을 만듭니다.
+        임베딩·의미검색에는 프로젝트 루트 <code>.env</code>의 <code>OPENAI_API_KEY</code>(sk-…)가 필요합니다. 비어 있으면 업로드만 되고 검색은 실패합니다.
       </div>
-      {loadError && <div className={po.errorBox} role="alert">업로드한 문서를 불러오지 못했습니다: {loadError}</div>}
+      {loadError && <div className={po.errorBox} role="alert">문서를 불러오지 못했습니다: {loadError}</div>}
+
+      <form className={s.searchRow} onSubmit={runSearch}>
+        <input className={s.searchInput} value={q} onChange={e => setQ(e.target.value)}
+          placeholder="문서 내용 의미 검색 (임베딩)" aria-label="문서 검색" />
+        <button type="submit" className={s.primaryBtn} disabled={searching}>{searching ? '검색 중…' : '검색'}</button>
+        {hits && <button type="button" className={po.btn} onClick={() => { setHits(null); setQ(''); }}>검색 닫기</button>}
+      </form>
+      {searchError && <div className={po.errorBox} role="alert">{searchError}</div>}
+      {hits && (
+        <section className={po.panel} aria-label="검색 결과">
+          {hits.length === 0 ? <p className={po.sub}>검색 결과가 없습니다.</p> : (
+            <ul className={s.hitList}>
+              {hits.map(h => (
+                <li key={`${h.company_document_idx}-${h.chunk_no}`}>
+                  <b>{h.title}</b> <span className={po.sub}>{h.doc_no} · chunk {h.chunk_no} · score {h.score}</span>
+                  <p className={s.hitBody}>{h.content}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <div className={s.categories} role="group" aria-label="카테고리 필터">
         {([{ key: 'all', label: '전체' }, ...CATEGORIES] as { key: Filter; label: string }[]).map(c => (
@@ -166,8 +208,8 @@ function UploadDialog({ existing, defaultCategory, onClose, onUploaded }: {
     setSaving(true);
     setSaveError(null);
     try {
-      await addDoc(meta, file);
-      onUploaded(meta);
+      const saved = await addDoc(meta, file);
+      onUploaded(saved);
     } catch (err) {
       setSaveError((err as Error).message); // 실패해도 입력값 유지 (다시 시도 가능)
     } finally {
@@ -269,7 +311,8 @@ function DetailDialog({ doc, onClose, onDeleted }: { doc: DocMeta; onClose: () =
     setError(null);
     setDeleting(true);
     try {
-      await deleteDoc(doc.doc_no);
+      const key = doc.company_document_idx ?? doc.doc_no;
+      await deleteDoc(key);
       onDeleted(doc.doc_no);
     } catch (e) {
       setError(`삭제하지 못했습니다: ${(e as Error).message}`);

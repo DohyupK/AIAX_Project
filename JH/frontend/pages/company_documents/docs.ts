@@ -29,20 +29,22 @@ export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB — 브라우저 저장 
 export const TITLE_MAX = 100;
 export const DESC_MAX = 500;
 
-/** 문서 정보 (이후 DB 문서 테이블과 같은 모양) */
+/** 문서 정보 — 서버 org.company_document + 화면용 보조 필드 */
 export interface DocMeta {
-  doc_no: string;          // DOC-2026-0001
+  company_document_idx?: number; // 서버 PK
+  doc_no: string;          // DOC-{idx} 또는 예시 DOC-YYYY-NNNN
   title: string;
   description: string;
   category: Category;
   grade: Grade;
   department: string;
-  uploader_id: string;     // 업로드한 로그인 계정 ID (자동)
-  uploader: string;        // 업로드한 로그인 계정 이름 (자동)
-  created_at: string;      // 등록 일시 ISO 8601 (등록 버튼 누른 시각, 자동)
+  uploader_id: string;     // org.employee.employee_no
+  uploader: string;
+  created_at: string;
   file_name: string;
-  file_size: number;       // bytes
-  sample?: boolean;        // 예시 문서 (실제 파일 없음)
+  file_size: number;
+  sample?: boolean;
+  chunk_status?: string;   // pending|ok|retry_5m|midnight_pending
 }
 
 export const extOf = (fileName: string) => {
