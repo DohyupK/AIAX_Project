@@ -1,6 +1,6 @@
 """JH API 서버 — 실행: cd JH/api && uv run uvicorn main:app --host 127.0.0.1 --port 8000
 
-라우터: hr (인사, app_hr) · casting (공정 mes 읽기, app_lake) · ppe (보호구 ai·org 읽기, app_lake) · models (모델 레지스트리 ai 읽기, app_lake) · report (경영 리포트 mes 읽기, app_lake)
+라우터: hr · casting · ppe · models · report · documents (사내 문서함, app_docs)
 ponytail: 로그인 전이라 개인정보 API가 열려 있음 → 반드시 127.0.0.1 로만 실행 (외부 공개 금지).
 루트 단일 서버로 합칠 때는 이 파일 대신 루트 진입점이 hr.router 를 include (DH 결정).
 """
@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from casting.router import router as casting_router
+from documents.router import router as documents_router
 from hr.router import router as hr_router
 from models.router import router as models_router
 from ppe.router import router as ppe_router
@@ -30,3 +31,4 @@ app.include_router(casting_router)
 app.include_router(ppe_router)
 app.include_router(models_router)
 app.include_router(report_router)
+app.include_router(documents_router)
