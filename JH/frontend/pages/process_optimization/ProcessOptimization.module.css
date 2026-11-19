@@ -64,6 +64,7 @@
 .lgWatch { width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); }
 .lgCl { width: 18px; border-top: 1.5px solid var(--ink); opacity: 0.6; }
 .lgLimit { width: 18px; border-top: 1.5px dashed var(--muted); }
+.lgFlow { width: 12px; height: 3px; border-radius: 2px; }
 .spcBox { margin: 0; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 10px 10px 4px; }
 .spcCaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
 .spcTrend { color: var(--warn); }
