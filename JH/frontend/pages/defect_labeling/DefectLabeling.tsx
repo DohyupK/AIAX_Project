@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import MockShotImage from '../../common/casting/MockShotImage';
+import { LINES, type Line } from '../../common/casting/api';
 import {
   DEFECT_TYPES, fetchDefectDates, fetchDefects, sortByStatus, toggleType, typesOf,
   type DefectCode, type DefectShot, type LabelStatus,
@@ -8,8 +9,6 @@ import {
 import po from '../process_optimization/ProcessOptimization.module.css';
 import s from './DefectLabeling.module.css';
 
-/** lake 에는 라인 칼럼이 없음 (원본이 전부 line_no1) */
-const LINE = 'line_no1';
 type Filter = 'all' | LabelStatus;
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: '전체' },
@@ -25,6 +24,7 @@ const LOAD_ERROR = 'JH API 서버(127.0.0.1:8000)를 확인해 주세요.';
  * 라벨 상태는 ai.defect_label·ai.defect_discard 에서 읽음. 저장은 ai 쓰기 계정 연결 전이라 막혀 있음 (labels.ts)
  */
 export default function DefectLabeling() {
+  const [line, setLine] = useState<Line>('line_no1'); // 기본 line_no1, 공정 최적화·품질 검사와 같은 라인 목록
   const [dates, setDates] = useState<string[]>([]);
   const [date, setDate] = useState('');
   const [shots, setShots] = useState<DefectShot[] | null>(null); // null = 불러오는 중
@@ -32,19 +32,26 @@ export default function DefectLabeling() {
   const [filter, setFilter] = useState<Filter>('all');
   const [openId, setOpenId] = useState<string | null>(null);     // 팝업을 연 샷 casting_id
 
-  // 처음: 불량 샷이 있는 날짜 → 가장 최근 날
+  // 라인을 고를 때마다: 그 라인의 불량 샷이 있는 날짜 → 가장 최근 날
   useEffect(() => {
-    fetchDefectDates()
+    let alive = true; // 라인을 빠르게 바꿀 때 이전 응답 무시
+    setDates([]);
+    setDate('');
+    setShots(null);
+    setError(null);
+    fetchDefectDates(line)
       .then(d => {
+        if (!alive) return;
         setDates(d);
         if (d[0]) setDate(d[0]);
         else setShots([]);
       })
       .catch((e: Error) => {
-        console.error('[defect_labeling] 날짜 조회 실패', e);
-        setError(`${e.message} — ${LOAD_ERROR}`);
+        console.error('[defect_labeling] 날짜 조회 실패', line, e);
+        if (alive) setError(`${e.message} — ${LOAD_ERROR}`);
       });
-  }, []);
+    return () => { alive = false; };
+  }, [line]);
 
   useEffect(() => {
     if (!date) return;
@@ -52,14 +59,14 @@ export default function DefectLabeling() {
     setShots(null);
     setError(null);
     setOpenId(null);
-    fetchDefects(date)
+    fetchDefects(line, date)
       .then(sh => { if (alive) setShots(sh); })
       .catch((e: Error) => {
-        console.error('[defect_labeling] 불량 샷 조회 실패', date, e);
+        console.error('[defect_labeling] 불량 샷 조회 실패', line, date, e);
         if (alive) setError(`${e.message} — ${LOAD_ERROR}`);
       });
     return () => { alive = false; };
-  }, [date]);
+  }, [line, date]);
 
   const defects = useMemo(() => shots ?? [], [shots]);
   const counts = useMemo(() => {
@@ -79,7 +86,12 @@ export default function DefectLabeling() {
           <h2 className={po.title}>불량 유형 라벨링</h2>
         </div>
         <div className={po.chips}>
-          <span className={po.chip}>라인 <b>{LINE}</b></span>
+          <label className={po.chip}>
+            라인
+            <select className={po.chipSelect} value={line} aria-label="라인 선택" onChange={e => setLine(e.target.value as Line)}>
+              {LINES.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
           <label className={po.chip}>
             일자
             <select className={po.chipSelect} value={date} aria-label="일자 선택" onChange={e => setDate(e.target.value)}>
@@ -98,7 +110,7 @@ export default function DefectLabeling() {
       {!shots && !error && <div className={po.panel}>데이터를 불러오는 중입니다…</div>}
       {shots && !shots.length && !error && (
         <div className={`${po.panel} ${po.emptyLine}`} role="status">
-          <b>{date || LINE}</b> 불량 샷이 없습니다.
+          <b>{line}{date && ` · ${date}`}</b> 불량 샷이 없습니다.
         </div>
       )}
 
@@ -142,13 +154,13 @@ export default function DefectLabeling() {
         </section>
       )}
 
-      {opened && <LabelDialog key={opened.castingId} shot={opened} onClose={() => setOpenId(null)} />}
+      {opened && <LabelDialog key={opened.castingId} line={line} shot={opened} onClose={() => setOpenId(null)} />}
     </div>
   );
 }
 
 /** 라벨링 팝업 — 샷 이미지 + 저장된 유형 표시. 유형은 골라 볼 수 있지만 저장(완료)은 쓰기 계정 연결 전이라 막힘 */
-function LabelDialog({ shot, onClose }: { shot: DefectShot; onClose: () => void }) {
+function LabelDialog({ line, shot, onClose }: { line: Line; shot: DefectShot; onClose: () => void }) {
   const [selected, setSelected] = useState<DefectCode[]>(() => typesOf(shot));
   const status = shot.status;
 
@@ -168,7 +180,7 @@ function LabelDialog({ shot, onClose }: { shot: DefectShot; onClose: () => void 
           <span className={`${s.badge} ${s[`badge_${status}`]}`}>{STATUS_TEXT[status]}</span>
           <button type="button" className={po.closeBtn} onClick={onClose} aria-label="닫기">×</button>
         </div>
-        <p className={po.sub}>{LINE} · {shot.time} · <span className={po.num}>{shot.castingId}</span> · 실제 판정 불량</p>
+        <p className={po.sub}>{line} · {shot.time} · <span className={po.num}>{shot.castingId}</span> · 실제 판정 불량</p>
 
         <div className={s.body}>
           <div className={s.left}>

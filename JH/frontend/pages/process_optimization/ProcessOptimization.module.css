@@ -54,17 +54,21 @@
 
 /* charts */
 .chart { width: 100%; height: auto; display: block; }
-/* 관리도 2개 나란히 (같은 크기) */
-.spcPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+/* 관리도: 왼쪽 위 I · 왼쪽 아래 MR · 오른쪽 EWMA (세로 2칸) */
+.spcGrid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); grid-template-areas: "i ew" "mr ew"; gap: 12px; }
+.spcI { grid-area: i; } .spcMr { grid-area: mr; } .spcEw { grid-area: ew; }
+.spcLegend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+.spcLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.lgDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); opacity: 0.8; }
+.lgWarn { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid #e8743b; }
+.lgWatch { width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); }
+.lgCl { width: 18px; border-top: 1.5px solid var(--ink); opacity: 0.6; }
+.lgLimit { width: 18px; border-top: 1.5px dashed var(--muted); }
 .spcBox { margin: 0; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 10px 10px 4px; }
 .spcCaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
-.spcOut { color: var(--bad); }
 .spcTrend { color: var(--warn); }
-.dotBad, .dotWarn { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: 0; }
-.dotBad { background: var(--bad); }
-.dotWarn { background: var(--warn); }
 .page svg text.tipTrend { fill: #ffd38a; font-size: 11px; font-weight: 600; }
-@media (max-width: 1180px) { .spcPair { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1180px) { .spcGrid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "i" "mr" "ew"; } }
 
 /* pills */
 .pill { display: inline-block; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; margin-right: 4px; }
@@ -104,7 +108,6 @@ div.sensor { cursor: default; }
 .sensorSelected { box-shadow: 0 0 0 2px var(--accent); }
 
 /* SPC */
-.page svg text.limitText { fill: var(--bad); font-size: 11px; font-weight: 600; }
 .page svg text.tipText { fill: #fff; font-size: 11px; }
 .page svg text.tipRule { fill: #ffb4b4; font-size: 11px; font-weight: 600; }
 .page svg text.clText { fill: var(--muted); font-size: 11px; }
