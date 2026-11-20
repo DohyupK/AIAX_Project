@@ -16,4 +16,4 @@
 ## 관련
 
 - [`DH/전달사항/2026-11-20_MS_aluminum_price_CSV적재.md`](../DH/전달사항/2026-11-20_MS_aluminum_price_CSV적재.md)
-- 페이지: `/al-price`
+- 페이지: `/al-price` — 브라우저 `GET /api/al-price/prices` → serve :8766 → `org.aluminum_price`
