@@ -30,16 +30,21 @@ assert.deepEqual(
 // 공정별 지표: 품질 1차 = PR-AUC·Recall·Precision·F1 (DB ai.model_metric_cast_qc1), 나머지 = Accuracy·Recall·Precision·F1
 assert.deepEqual(PROCESS_METRICS.qc1, ["prAuc", "recall", "precision", "f1"]);
 assert.deepEqual(PROCESS_METRICS.qc2, ["accuracy", "recall", "precision", "f1"]);
-assert.deepEqual(PROCESS_METRICS.ppe, ["accuracy", "recall", "precision", "f1"]);
+assert.deepEqual(PROCESS_METRICS.ppe, ["map50", "recall", "precision", "f1"]);
+// 모델명 앞부분 = 등록된 모델 이름과 같게 (DieCasting_XGB…, DieCasting_CNXV2T…, PPE_YOLO26s…)
+assert.deepEqual([PROCESS.qc1.prefix, PROCESS.qc2.prefix, PROCESS.ppe.prefix], ["DieCasting", "DieCasting", "PPE"]);
 
 // 입력 검사: 고른 공정의 지표 4개만 검사
-const ok: Draft = { name: "XGB", version: "v1", process: "qc2", description: "", accuracy: "0.9", prAuc: "", recall: "1", precision: "0", f1: "0.5" };
+const ok: Draft = { name: "XGB", version: "v1", process: "qc2", description: "", accuracy: "0.9", prAuc: "", map50: "", recall: "1", precision: "0", f1: "0.5" };
 assert.deepEqual(validateDraft(ok, PROCESS, PROCESS_METRICS), {}, "품질 2차는 PR-AUC 비어도 통과");
 assert.deepEqual(Object.keys(validateDraft({ ...ok, process: "qc1" }, PROCESS, PROCESS_METRICS)), ["prAuc"], "품질 1차는 PR-AUC 필수");
 assert.deepEqual(validateDraft({ ...ok, process: "qc1", prAuc: "0.83", accuracy: "" }, PROCESS, PROCESS_METRICS), {}, "품질 1차는 Accuracy 안 받음");
 const bad = validateDraft({ ...ok, name: " ", accuracy: "1.2", recall: "", f1: "abc" }, PROCESS, PROCESS_METRICS);
 assert.deepEqual(Object.keys(bad).sort(), ["accuracy", "f1", "name", "recall"]);
 assert.deepEqual(Object.keys(validateDraft({ ...ok, process: "toString" }, PROCESS, PROCESS_METRICS)), ["process"]);
+// 보호구(검출) 모델은 mAP50 필수·Accuracy 안 받음, 알고리즘 이름 YOLO26s 통과
+assert.deepEqual(Object.keys(validateDraft({ ...ok, process: "ppe" }, PROCESS, PROCESS_METRICS)), ["map50"], "보호구는 mAP50 필수");
+assert.deepEqual(validateDraft({ ...ok, process: "ppe", name: "YOLO26s", accuracy: "", map50: "0.85" }, PROCESS, PROCESS_METRICS), {});
 
 // 알고리즘: 영문 시작, 대문자 허용 (XGB, CatB)
 assert.deepEqual(validateDraft({ ...ok, name: "CatB" }, PROCESS, PROCESS_METRICS), {});
