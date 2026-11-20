@@ -4,9 +4,7 @@ import styles from "./ModelManagement.module.css";
 import ModelForm from "./ModelForm";
 import RobustnessDialog from "./RobustnessDialog";
 import { METRIC_LABEL, PROCESS, PROCESS_METRICS, fetchAccess, fetchModels, fetchRobustness, type AccessLevel, type Model, type Process, type RobustnessRow } from "./data";
-import { ACCOUNT_KEY, DEFAULT_ACCOUNT, hrApi, type MockAccount } from "../hr_management/hrApi";
 import po from "../process_optimization/ProcessOptimization.module.css";
-import hr from "../hr_management/HrManagement.module.css";
 import { averageRobustness, orderRobustness, sortModels, type SortKey } from "./logic";
 
 type Tab = "all" | Process;
@@ -33,11 +31,9 @@ const ACCESS_LABEL: Record<AccessLevel, string> = { none: "접근 불가", read:
 /**
  * Model Management — 공정별 모델 목록·성과지표 조회 (서버 DB, 읽기 전용)
  * 공정별 배포 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차 → 품질 검사 1차 판정 등). 등록·배포 저장은 쓰기 계정 연결 후
- * 목업 계정(인사 관리와 같은 선택값) → 서버 페이지 권한: none 화면 차단 / read 보기만 / edit 등록(+)·배포 안내 보임
+ * 로그인 계정의 사번 → 서버 페이지 권한(관리자 = edit): none 화면 차단 / read 보기만 / edit 등록(+)·배포 안내 보임
  */
 export default function ModelManagement() {
-  const [accounts, setAccounts] = useState<MockAccount[]>([]);
-  const [who, setWho] = useState("");
   const [access, setAccess] = useState<AccessLevel | null>(null); // null = 확인 중
   const [models, setModels] = useState<Model[] | null>(null); // null = 불러오는 중
   const [loadError, setLoadError] = useState("");
@@ -51,28 +47,15 @@ export default function ModelManagement() {
   // 팝업 Esc 리스너가 매 렌더 다시 붙지 않도록 같은 함수 유지
   const closeRobust = useCallback(() => setRobustOpen(false), []);
 
+  // 로그인 계정 권한 → (보기 권한이면) 모델 목록
   useEffect(() => {
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(ACCOUNT_KEY); } catch { /* 저장소 막힘 → 기본 계정 */ }
-    setWho(saved && /^e\d{4}$/.test(saved) ? saved : DEFAULT_ACCOUNT);
-    hrApi.mockAccounts().then(setAccounts).catch((e: Error) => console.error("[model_management] 목업 계정 목록 조회 실패", e));
-  }, []);
-
-  // 계정이 바뀌면 권한 → (보기 권한이면) 모델 목록
-  useEffect(() => {
-    if (!who) return;
-    let alive = true; // 계정을 빨리 바꿀 때 늦게 온 이전 계정 응답은 버림
-    setAccess(null);
-    setModels(null);
-    setLoadError("");
-    setFormOpen(false);
-    setRobustOpen(false);
-    fetchAccess(who)
+    let alive = true; // 화면을 떠난 뒤 늦게 온 응답은 버림
+    fetchAccess()
       .then((level) => {
         if (!alive) return;
         setAccess(level);
         if (level === "none") return setModels([]);
-        return fetchModels(who).then((m) => alive && setModels(m));
+        return fetchModels().then((m) => alive && setModels(m));
       })
       .catch((e: unknown) => {
         console.error("[model_management] 권한·모델 목록 조회 실패", e);
@@ -81,13 +64,7 @@ export default function ModelManagement() {
         setModels([]);
       });
     return () => { alive = false; };
-  }, [who]);
-
-  function changeAccount(no: string) {
-    setWho(no);
-    setSelectedId(null);
-    try { localStorage.setItem(ACCOUNT_KEY, no); } catch { /* 무시 */ }
-  }
+  }, []);
   const canEdit = access === "edit";
 
   const visible = sortModels(
@@ -103,17 +80,17 @@ export default function ModelManagement() {
   // 품질 2차 모델을 고르면 강건성 1회 조회 (다른 공정은 데이터 없음)
   const robustId = selected?.process === "qc2" ? selected.id : null;
   useEffect(() => {
-    if (robustId == null || !who) return setRobust(null);
+    if (robustId == null) return setRobust(null);
     let alive = true; // 모델을 빨리 바꿀 때 늦게 온 이전 모델 응답은 버림
     setRobust({ id: robustId, rows: null, error: "" });
-    fetchRobustness(who, robustId)
+    fetchRobustness(robustId)
       .then((r) => alive && setRobust({ id: robustId, rows: orderRobustness(r), error: "" }))
       .catch((e: unknown) => {
         console.error("[model_management] 강건성 조회 실패", e);
         if (alive) setRobust({ id: robustId, rows: [], error: "강건성 데이터를 불러오지 못했습니다. JH API 서버를 확인해 주세요." });
       });
     return () => { alive = false; };
-  }, [robustId, who]);
+  }, [robustId]);
   const robustAvg = robust?.id === robustId && robust.rows ? averageRobustness(robust.rows) : null;
 
   function changeTab(t: Tab) {
@@ -129,17 +106,6 @@ export default function ModelManagement() {
     <div className={styles.page}>
       <div className={styles.accountRow}>
         {access && <span className={styles.muted}>권한: {ACCESS_LABEL[access]}</span>}
-        <label className={po.chip}>
-          <span>목업 계정</span>
-          <select className={hr.account} value={who} onChange={(e) => changeAccount(e.target.value)} aria-label="목업 로그인 계정">
-            {!accounts.some((a) => a.employee_no === who) && who && <option value={who}>{who}</option>}
-            {accounts.map((a) => (
-              <option key={a.employee_no} value={a.employee_no}>
-                {a.employee_no} · {a.dept_name} {a.position_name} · {a.team_name ?? "팀 없음"}{a.is_team_rep ? " (팀 대표)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
       {access === "none" ? (

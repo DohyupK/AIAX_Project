@@ -23,10 +23,6 @@ export function loadCurrentUser(): Promise<CurrentUser | null> {
     .finally(() => { pending = null; }));
 }
 
-/** 이미 불러온 값 (아직이면 null) — 렌더 밖(요청 헤더 등)에서 사용 */
-export function getCurrentUser(): CurrentUser | null {
-  return cached;
-}
 
 /** 화면용 — 불러오면 다시 그림 */
 export function useCurrentUser(): CurrentUser | null {

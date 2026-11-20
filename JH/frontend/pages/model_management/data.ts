@@ -47,11 +47,11 @@ export interface Model {
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
-async function get<T>(path: string, who?: string): Promise<T> {
+async function get<T>(path: string): Promise<T> {
   // 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지
   try {
     const res = await fetch(`${BASE}/api/models${path}`, {
-      cache: "no-store", signal: AbortSignal.timeout(10_000), headers: who ? { "X-Employee-No": who } : undefined,
+      cache: "no-store", signal: AbortSignal.timeout(10_000),   // 권한 = 로그인 세션 쿠키 (서버 판단)
     });
     if (!res.ok) throw new Error(`/api/models${path} 요청 실패 (HTTP ${res.status})`);
     return (await res.json()) as T;
@@ -65,8 +65,8 @@ async function get<T>(path: string, who?: string): Promise<T> {
 
 /** Model Management 권한 — none: 접근 불가 / read: 보기 / edit: 보기 + 등록·배포 */
 export type AccessLevel = "none" | "read" | "edit";
-export async function fetchAccess(who: string): Promise<AccessLevel> {
-  return (await get<{ accessLevel: AccessLevel }>("/me", who)).accessLevel;
+export async function fetchAccess(): Promise<AccessLevel> {
+  return (await get<{ accessLevel: AccessLevel }>("/me")).accessLevel;
 }
 
 type ModelRow = Omit<Model, "process"> & { processCode: string };
@@ -75,8 +75,8 @@ const toModels = (rows: ModelRow[]): Model[] =>
   rows.flatMap(({ processCode, ...r }) => (BY_CODE[processCode] ? [{ ...r, process: BY_CODE[processCode] }] : []));
 
 /** 전체 모델 목록 (DB, read 권한 필요) */
-export async function fetchModels(who: string): Promise<Model[]> {
-  return toModels(await get<ModelRow[]>("", who));
+export async function fetchModels(): Promise<Model[]> {
+  return toModels(await get<ModelRow[]>(""));
 }
 
 /** 강건성 1줄 — 손상 조건별 지표 (DB ai.model_robustness) */
@@ -89,8 +89,8 @@ export interface RobustnessRow {
 }
 
 /** 모델 1개의 조건별 강건성 (품질 2차 「강건성」 팝업). 데이터가 없으면 빈 배열 */
-export async function fetchRobustness(who: string, modelId: number): Promise<RobustnessRow[]> {
-  return get<RobustnessRow[]>(`/${modelId}/robustness`, who);
+export async function fetchRobustness(modelId: number): Promise<RobustnessRow[]> {
+  return get<RobustnessRow[]>(`/${modelId}/robustness`);
 }
 
 /** 공정의 배포 모델 (없으면 null) — 보호구 화면 표시용, 계정 불필요 */

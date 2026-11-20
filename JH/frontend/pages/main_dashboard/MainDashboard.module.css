@@ -13,37 +13,10 @@
   font-size: 13px;
 }
 
-.header {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  padding: 10px 0 4px;
-}
-
 .sub {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 12px;
-}
-
-.user {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #dbe7fb;
-  color: #2a5db0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
 }
 
 .card {

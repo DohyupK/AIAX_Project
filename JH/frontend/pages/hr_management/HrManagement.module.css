@@ -1,8 +1,6 @@
 /* 인사 관리 — 색상 토큰은 공정 최적화 .page 변수, 버튼·폼은 사내 문서함 스타일 재사용 */
 
 .headRight { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.account { font: inherit; font-size: 12.5px; border: 0; background: transparent; color: var(--ink); max-width: 320px; }
-.account:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* 정보 카드 (누르면 명단 팝업) */
 .card { font: inherit; color: inherit; text-align: left; width: 100%; cursor: pointer; }
