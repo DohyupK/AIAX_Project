@@ -50,6 +50,7 @@ export interface SecondCheck {
   model: { name: string; version: string; source: 'registry' | 'default'; threshold: number };
   results: SecondResult[];  // 지금 모델로 판정이 끝난 샷만
   pending: number;          // 아직 판정 안 된 이미지 샷 수 (백그라운드 작업이 채우는 중)
+  pendingIds: string[];     // 그 샷들의 castingId — 「판정 대기」 표시용
 }
 
 /** 현재 배포된 모델 정보 (Model Management와 공유) */

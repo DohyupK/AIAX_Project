@@ -194,7 +194,7 @@ def model_info() -> dict:
 # ---- 2차(DL) 검사 — mes.casting_image 이미지가 있는 샷만. 판정은 백그라운드 작업이 미리 저장 (dl_model.start_worker) ----
 @router.get("/second")
 def second(date: Date, line: str = LINE) -> dict:
-    """그날 그 라인의 이미지 샷 중 지금 모델로 판정이 끝난 결과 + 판정 대기 수. 1차 양품만 2차 대상인 건 화면이 거름"""
+    """그날 그 라인의 이미지 샷 중 지금 모델로 판정이 끝난 결과 + 판정 대기 샷. 1차 양품만 2차 대상인 건 화면이 거름"""
     try:
         model_meta = dl_model.info()
     except dl_model.ModelError as e:
@@ -217,7 +217,7 @@ def second(date: Date, line: str = LINE) -> dict:
     except Exception:
         log.exception("2차 검사 결과 조회 실패 line=%s date=%s", line, date)
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
-    results, pending = [], 0
+    results, pending = [], []
     for r in rows:
         done = (r["result"] is not None and r["model_name"] == model_meta["name"]
                 and r["version"] == model_meta["version"] and r["predicted_at"] >= r["updated_at"])
@@ -227,9 +227,10 @@ def second(date: Date, line: str = LINE) -> dict:
                 "result": r["result"], "confidenceScore": float(r["confidence_score"]),
                 "predictedAt": r["predicted_at"].isoformat(),
             })
-        elif r["qc1_result"] != "fail":   # 1차 불량은 2차 대상 아님 — 대기에 세지 않음
-            pending += 1
-    return {"model": model_meta, "results": results, "pending": pending}
+        elif r["qc1_result"] != "fail":   # 1차 불량은 2차 대상 아님 — 대기에 넣지 않음
+            pending.append(r["casting_id"])
+    # pendingIds = 사진은 있는데 아직 판정 전 (화면에서 「이미지 없음」과 구분)
+    return {"model": model_meta, "results": results, "pending": len(pending), "pendingIds": pending}
 
 
 # ---- 불량 유형 라벨링 (2차 판정 + ai 라벨) ----
