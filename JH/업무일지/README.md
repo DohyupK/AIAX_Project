@@ -4,6 +4,7 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-20 | 품질 검사 1차(ML): 판정 결과 DB 저장(ai.quality_prediction qc1_*), 2차는 1차 양품만 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-20 | 교대 인수인계 리포트: 3교대 구간 경보·전체 불량 집계, 전역 「인수인계 실행」·전환 후 자동 팝업·PDF 출력 (DH 구현·JH 승인, app/layout 마운트) | [shift_handover](../기능표.md#교대-인수인계-리포트-shift_handover) |
 | 2026-11-20 | 품질 검사 2차: 「판정 대기」와 「이미지 없음」 구분, 샷 목록 팝업에 촬영 사진 표시 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-20 | 품질 검사 2차(DL): 서버가 사진을 미리 판정해 DB(ai.quality_prediction)에 저장, 화면은 DB만 읽음(시간 초과 해결)·「판정 대기 N장」 표시 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |

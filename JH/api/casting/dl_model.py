@@ -5,7 +5,7 @@
 모델 형식(TM 평가 문서 DieCasting_CNXV2T_20261117_01_METRICS.md):
   입력 image = 사진 픽셀 그대로 uint8 [N,H,W,3] RGB (크기 조정·정규화는 모델 안) / 출력 prob = 불량 확률 [N,1], 0.5 이상 불량.
 이미지 = mes.casting_image.image_base64 (Kafka→Flink 수집). 결과 형식은 ai.quality_prediction 칼럼과 같게.
-판정은 백그라운드 작업(start_worker, 서버 시작 시 1회 실행)이 미리 해서 ai.quality_prediction 2차 칸에 저장
+판정은 백그라운드 작업(start_worker, 서버 시작 시 1회 실행)이 1차(casting/model.run_batch) → 2차 순서로 미리 해서 ai.quality_prediction 에 저장
 (계정 app_ai = 루트 .env AI_DATABASE_URL). 화면 API(/second)는 저장된 결과만 읽음 — 요청 중 추론 없음.
 ponytail: uvicorn 프로세스 1개 기준. 여러 프로세스로 띄우면 같은 사진을 중복 판정함(결과는 UPSERT 라 틀리진 않음) → 그때 pg advisory lock 추가.
 """
@@ -25,6 +25,7 @@ import numpy as np
 import onnxruntime as ort
 from PIL import Image
 
+from casting import model
 from common.db import connect
 
 log = logging.getLogger("jh.casting.dl_model")
@@ -144,12 +145,13 @@ def save(results: list[dict]) -> None:
     log.info("2차 판정 저장 %d건 (%s %s)", len(results), results[0]["modelName"], results[0]["version"])
 
 
-# 판정할 사진: 2차 결과 없음 / 지금 모델과 다른 모델로 판정 / 판정 뒤 사진이 바뀜. 1차 불량 줄은 2차 대상 아님. 최근 사진부터
+# 판정할 사진: 1차 양품으로 저장된 샷 중 2차 결과 없음 / 지금 모델과 다른 모델로 판정 / 판정 뒤 사진이 바뀜. 최근 사진부터
+# ponytail: 1차가 미등록 기본 모델이면 1차 저장이 안 돼 2차도 멈춤 (경고 로그) — 1차 모델을 레지스트리에 배포해 둘 것
 PENDING_SQL = """
 SELECT i.casting_id, i.updated_at, i.image_base64, i.content_type
 FROM mes.casting_image i
-LEFT JOIN ai.quality_prediction q USING (casting_id)
-WHERE q.qc1_result IS DISTINCT FROM 'fail'
+JOIN ai.quality_prediction q USING (casting_id)
+WHERE q.qc1_result = 'pass'
   AND (q.result IS NULL OR q.model_name <> %(name)s OR q.version <> %(version)s OR q.predicted_at < i.updated_at)
   AND NOT (i.casting_id = ANY(%(bad)s))
 ORDER BY i.updated_at DESC
@@ -185,20 +187,26 @@ def run_batch() -> int:
 
 
 def _loop() -> None:
+    """1차 먼저(2차 대상 = 1차 양품) → 2차. 둘 다 밀린 게 없으면 IDLE_SEC 쉼. 한쪽이 실패해도 다른 쪽은 계속"""
     while True:
         try:
-            n = run_batch()
-        except Exception:   # DB 끊김·모델 파일 문제 — 로그 남기고 잠시 뒤 다시 시도 (작업이 죽지 않게)
+            n1 = model.run_batch()
+        except Exception:   # DB 끊김·모델 파일 문제 — 로그 남기고 다음 차례에 다시 시도 (작업이 죽지 않게)
+            log.exception("1차 판정 작업 실패 — %d초 뒤 다시 시도", IDLE_SEC)
+            n1 = 0
+        try:
+            n2 = run_batch()
+        except Exception:
             log.exception("2차 판정 작업 실패 — %d초 뒤 다시 시도", IDLE_SEC)
-            n = 0
-        if n < BATCH:
+            n2 = 0
+        if n1 < model.BATCH and n2 < BATCH:
             time.sleep(IDLE_SEC)
 
 
 def start_worker() -> None:
     """서버 시작 시 1회 — 백그라운드 판정 작업 (데몬 스레드라 서버 종료 시 같이 끝남)"""
-    threading.Thread(target=_loop, name="qc2-judge", daemon=True).start()
-    log.info("2차 판정 작업 시작 (%d장씩, 대기 %d초)", BATCH, IDLE_SEC)
+    threading.Thread(target=_loop, name="qc-judge", daemon=True).start()
+    log.info("1차·2차 판정 작업 시작 (1차 %d샷·2차 %d장씩, 대기 %d초)", model.BATCH, BATCH, IDLE_SEC)
 
 
 def info() -> dict:
