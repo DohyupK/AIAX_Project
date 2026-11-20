@@ -46,6 +46,9 @@ button.modelCard:focus-visible { outline: 2px solid var(--accent); outline-offse
 .varTop > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .varRow > span:last-child { font-size: 11px; } /* 정상 범위 */
 
+/* 선택 샷 2차 사진 (MS 이미지 API) */
+.shotImage { display: block; width: 100%; max-width: 320px; height: auto; border-radius: 6px; }
+
 @media (max-width: 860px) {
   .kpis3, .models, .split, .analysis { grid-template-columns: minmax(0, 1fr); }
   .list { height: 260px; }

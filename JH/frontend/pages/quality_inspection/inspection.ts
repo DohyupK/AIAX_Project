@@ -5,31 +5,34 @@ export const firstFail = (s: Shot, th: number) => s.prob >= th;
 
 /**
  * 2차(DL) 상태 — 2차는 1차 양품 샷만 대상 (ML 이 놓친 불량을 이미지로 재검)
- * first = 1차 불량 확정(대상 아님) / noImage = 대상이지만 샷 이미지 없음 / 그 외 = DL 판정 결과
+ * first = 1차 불량 확정(대상 아님) / noImage = 대상이지만 샷 이미지 없음 / pending = 사진 있음·서버 판정 전 / 그 외 = DL 판정 결과
  */
-export type SecondState = 'first' | 'noImage' | SecondResult;
+export type SecondState = 'first' | 'noImage' | 'pending' | SecondResult;
+/** castingId → 2차 결과, 또는 'pending'(사진은 있는데 아직 판정 전) */
+export type SecondMap = ReadonlyMap<string, SecondResult | 'pending'>;
 
-export function secondOf(s: Shot, th: number, results: ReadonlyMap<string, SecondResult>): SecondState {
+export function secondOf(s: Shot, th: number, results: SecondMap): SecondState {
   if (firstFail(s, th)) return 'first';
   return (s.castingId && results.get(s.castingId)) || 'noImage';
 }
 
-/** 최종 불량 = 1차 불량 + 2차 불량. 2차 불량률 분모 = 실제로 검사한 샷(이미지 있는 1차 양품) */
+/** 최종 불량 = 1차 불량 + 2차 불량. 2차 불량률 분모 = 판정이 끝난 샷(이미지 있는 1차 양품). pending = 판정 대기 */
 export interface InspectionSummary {
-  total: number; first: number; secondTargets: number; inspected: number; second: number; final: number;
+  total: number; first: number; secondTargets: number; inspected: number; pending: number; second: number; final: number;
 }
 
-export function summarize(shots: Shot[], th: number, results: ReadonlyMap<string, SecondResult>): InspectionSummary {
-  let first = 0, inspected = 0, second = 0;
+export function summarize(shots: Shot[], th: number, results: SecondMap): InspectionSummary {
+  let first = 0, inspected = 0, pending = 0, second = 0;
   for (const s of shots) {
     const st = secondOf(s, th, results);
     if (st === 'first') first++;
+    else if (st === 'pending') pending++;
     else if (st !== 'noImage') {
       inspected++;
       if (st.result === 'fail') second++;
     }
   }
-  return { total: shots.length, first, secondTargets: shots.length - first, inspected, second, final: first + second };
+  return { total: shots.length, first, secondTargets: shots.length - first, inspected, pending, second, final: first + second };
 }
 
 /** 분모 0이면 null */
