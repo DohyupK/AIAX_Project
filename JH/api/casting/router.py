@@ -6,14 +6,17 @@ prob = 1차(ML) 불량 점수 (Model Management 「품질 1차 검사」 배포 
 /limits = 알림 판정용 관리선·기준 기간 (spc.py 표 그대로, 판정은 프런트 common/casting/alerts.ts).
 /live = 실시간 따라가기 (오늘 KST, 현재 시각 이전 샷만 — 증분 조회).
 /second = 2차(DL) 판정 (「품질 2차 검사」 배포 모델, 없으면 기본 모델 — casting/dl_model.py, 이미지 mes.casting_image).
+POST /defects/{casting_id}/label = 불량 유형 라벨 저장 — 이 API만 쓰기 계정 app_ai 사용 (edit 권한).
 """
 from __future__ import annotations
 
 import logging
 from datetime import date as Date
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel
 
+from auth.core import acting_employee
 from casting import dl_model, model, spc
 from common.db import connect
 
@@ -288,3 +291,66 @@ def defects(date: Date, line: str = LINE) -> list[dict]:
             "types": [k.upper() for k in DEFECT_TYPES if r[k]] if status == "labeled" else [],
         })
     return out
+
+
+class LabelIn(BaseModel):
+    types: list[str]   # 화면 코드 대문자 (BLOWHOLE·EDGE_BURR·SURFACE_ROUGH 여러 개, 또는 UNDECIDABLE 단독)
+
+
+# 사번 → 접근 코드 → 불량 유형 라벨링 권한 (org 원본, models/router.py 와 같은 방식)
+LABEL_ACCESS_SQL = """
+SELECT p.access_level FROM org.access_code a
+JOIN org.defect_labeling_page p ON p.access_code = a.access_code
+WHERE a.employee_no = %s
+"""
+
+
+@router.post("/defects/{casting_id}/label")
+def save_label(casting_id: str, body: LabelIn, request: Request) -> dict:
+    """라벨 저장 — 기존 라벨·폐기 행을 지우고 새로 넣음 (한 트랜잭션). edit 권한(관리자 포함)만
+    UNDECIDABLE → ai.defect_discard, 그 외 → ai.defect_label 해당 칸 true. 쓰기 = app_ai (AI_DATABASE_URL)
+    """
+    codes = {t.lower() for t in body.types}
+    discard = codes == {"undecidable"}
+    if not discard and (not codes or not codes <= set(DEFECT_TYPES)):
+        raise HTTPException(422, "유형을 1개 이상 고르거나, 판정 불가(UNDECIDABLE)만 단독으로 고르세요.")
+
+    emp, admin = acting_employee(request)   # 로그인 세션 사번 (없으면 401)
+    try:
+        with connect(DB) as conn:   # app_lake — 권한·대상 샷 확인 (읽기)
+            level = "edit" if admin else (conn.execute(LABEL_ACCESS_SQL, (emp,)).fetchone() or {}).get("access_level")
+            target = conn.execute(
+                "SELECT 1 FROM ai.quality_prediction WHERE casting_id = %s AND result = 'fail'", (casting_id,)
+            ).fetchone()
+    except Exception:
+        log.exception("라벨 저장 전 확인 실패 casting_id=%s", casting_id)
+        raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
+    if level != "edit":
+        raise HTTPException(403, "라벨 저장 권한이 없습니다. (불량 유형 라벨링 수정 권한 필요)")
+    if not target:
+        raise HTTPException(404, "2차 판정 불량 샷이 아닙니다.")
+
+    try:
+        with connect("AI_DATABASE_URL") as conn:   # app_ai — defect_label·defect_discard SELECT·INSERT·DELETE (MS init 17)
+            # _idx 칸은 기본값이 없어 max+1 — 동시 저장 시 번호 충돌을 막으려고 트랜잭션 잠금
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext('ai.defect_label_discard'))")
+            conn.execute("DELETE FROM ai.defect_label WHERE casting_id = %s", (casting_id,))
+            conn.execute("DELETE FROM ai.defect_discard WHERE casting_id = %s", (casting_id,))
+            if discard:
+                conn.execute(
+                    "INSERT INTO ai.defect_discard (defect_discard_idx, casting_id) "
+                    "SELECT COALESCE(max(defect_discard_idx), 0) + 1, %s FROM ai.defect_discard",
+                    (casting_id,),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO ai.defect_label (defect_label_idx, casting_id, blowhole, edge_burr, surface_rough) "
+                    "SELECT COALESCE(max(defect_label_idx), 0) + 1, %s, %s, %s, %s FROM ai.defect_label",
+                    (casting_id, *(k in codes for k in DEFECT_TYPES)),
+                )
+    except Exception:
+        log.exception("라벨 저장 실패 casting_id=%s types=%s", casting_id, sorted(codes))
+        raise HTTPException(503, "라벨 저장에 실패했습니다.")
+    log.info("불량 유형 라벨 저장 %s %s by %s", casting_id, sorted(codes), "admin" if admin else emp)
+    status = "discarded" if discard else "labeled"
+    return {"status": status, "types": [] if discard else [k.upper() for k in DEFECT_TYPES if k in codes]}

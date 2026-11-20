@@ -1,6 +1,6 @@
 // 불량 유형 라벨링 — 유형 정의·선택 규칙·DB 조회 (화면·CSS import 없음) — 자체 점검: labels.check.ts
 // 데이터: JH API /api/casting/defects (샷 = lake.lake_investment_casting, 라벨 = ai.defect_label·ai.defect_discard)
-// ponytail: 라벨 저장은 ai 쓰기 계정이 생기기 전까지 막음 (지금 계정 app_lake 는 읽기만). 계정이 생기면 저장 API 추가
+// 저장: POST /api/casting/defects/{casting_id}/label (서버가 쓰기 계정 app_ai 사용, 불량 유형 라벨링 edit 권한 필요)
 
 /** 불량 유형 — code 는 화면 표시 값(= ai.defect_label 칼럼 대문자), ko 는 전문가용 보조 설명 */
 export const DEFECT_TYPES = [
@@ -42,7 +42,7 @@ export function sortByStatus<T extends { status: LabelStatus }>(items: T[]): T[]
   return [...items].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
 }
 
-// ---- 조회 (JH API, 계정 app_lake 읽기 전용) ----
+// ---- 조회·저장 (JH API) ----
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
 async function get<T>(path: string): Promise<T> {
@@ -64,3 +64,20 @@ export const fetchDefectDates = (line: string) => get<string[]>(`/api/casting/de
 /** 그 라인·그날 불량 샷 + 라벨 상태 (최신순) */
 export const fetchDefects = (line: string, date: string) =>
   get<DefectShot[]>(`/api/casting/defects?${new URLSearchParams({ line, date })}`);
+
+/** 라벨 저장 — 서버가 기존 라벨·폐기를 지우고 새로 넣음. 실패 시 서버 안내 문구(detail)를 그대로 던짐 */
+export async function saveLabel(castingId: string, types: DefectCode[]): Promise<Pick<DefectShot, 'status' | 'types'>> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api/casting/defects/${encodeURIComponent(castingId)}/label`, {
+      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10_000),
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ types }),
+    });
+  } catch (e) {
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error('저장 요청 시간 초과 (10초)');
+    throw new Error('JH API 서버에 연결할 수 없습니다.');
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(typeof body?.detail === 'string' ? body.detail : `저장 실패 (HTTP ${res.status})`);
+  return body as Pick<DefectShot, 'status' | 'types'>;
+}
