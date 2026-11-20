@@ -41,6 +41,9 @@ async function get<T>(path: string): Promise<T> {
   }
 }
 
+/** 판정 1건의 검색대 사진 (MS image_api — ai.ppe_check_image, 키 불필요). 사진 없으면 404 */
+export const ppePhotoUrl = (checkIdx: number) => `${BASE}/api/images/ppe/${checkIdx}`;
+
 /** 검사 기록이 있는 날짜 (최근 날짜가 먼저) */
 export const fetchScanDates = () => get<string[]>("/api/ppe/dates");
 

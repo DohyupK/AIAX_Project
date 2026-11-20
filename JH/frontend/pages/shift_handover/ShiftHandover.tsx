@@ -9,6 +9,13 @@ import { autoHandoverWindow, currentShiftWindow, type ShiftWindow } from './shif
 import s from './ShiftHandover.module.css';
 
 const STORE_KEY = 'jh.shift_handover.autoShown';
+// 사이드바 「인수인계 실행」 → 전역 마운트된 팝업에 여는 신호 (같은 탭 안 window 이벤트)
+const OPEN_EVENT = 'jh:shift-handover-open';
+
+/** 사이드바 버튼용 — 현재 교대 인수인계 팝업 열기 */
+export function openShiftHandover() {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
 
 function loadShown(): Set<string> {
   try {
@@ -38,7 +45,7 @@ export default function ShiftHandover() {
 
 /**
  * 교대 인수인계 — app/layout 전역 마운트
- * · 좌하단 「인수인계 실행」: 현재 교대(미완료면 시작~지금) 집계
+ * · 사이드바 「인수인계 실행」(openShiftHandover): 현재 교대(미완료면 시작~지금) 집계
  * · 교대 전환 후 30분: 직전 완료 교대 자동 팝업 (세션당 교대 키 1회)
  */
 function ShiftHandoverInner() {
@@ -79,7 +86,6 @@ function ShiftHandoverInner() {
     }
   }, []);
 
-  const onManual = () => { void run(currentShiftWindow()); };
   const onRetry = () => {
     const w = targetRef.current ?? currentShiftWindow();
     void run(w);
@@ -88,6 +94,13 @@ function ShiftHandoverInner() {
     setOpen(false);
     setError('');
   };
+
+  // 사이드바 버튼 신호 — 집계 중 다시 눌러도 run 이 마지막 요청 결과만 반영
+  useEffect(() => {
+    const onOpen = () => { void run(currentShiftWindow()); };
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_EVENT, onOpen);
+  }, [run]);
 
   // 교대 전환 직후 자동 오픈 — 마운트 시 + 1분마다 경계 창 확인
   useEffect(() => {
@@ -107,15 +120,6 @@ function ShiftHandoverInner() {
 
   return (
     <div className={s.wrap}>
-      <button
-        type="button"
-        className={s.fab}
-        onClick={onManual}
-        disabled={open && loading}
-        aria-haspopup="dialog"
-      >
-        인수인계 실행
-      </button>
       {open && createPortal(
         <HandoverDialog
           report={report}

@@ -360,12 +360,9 @@ function Detail({ row, rows, orgs, depts, org, dept, onOrgChange, onDeptChange }
           <span>Gate {row.gate} 검색대</span>
           <span>{row.date} {row.time}</span>
         </div>
-        <ScanView gears={gears} caption={`GATE ${row.gate} · 정문`} />
-        <div className={styles.legend}>
-          <span><i className={styles.ok} /> 충족</span>
-          <span><i className={styles.bad} /> 미충족</span>
-          <span><i className={styles.grey} /> 선택 · 판정 불가</span>
-        </div>
+        {/* 판정 사진 (없으면 실루엣 + 범례) — 판정이 바뀌면 key 로 사진 상태 초기화 */}
+        <ScanView key={row.id} checkIdx={row.id} gears={gears} caption={`GATE ${row.gate} · 정문`}
+          title={`Gate ${row.gate} 검색대 · ${row.date} ${row.time} · 판정 #${row.id}`} />
       </div>
 
       <div className={styles.info}>
