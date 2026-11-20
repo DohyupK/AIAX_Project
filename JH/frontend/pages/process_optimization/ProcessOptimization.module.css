@@ -1,6 +1,4 @@
-/* JH 공용(이식 전 페이지용) — 품질 검사·불량 라벨링·사내 문서함·인사·경영 리포트·모델 관리가 `po` 로 import.
-   공정 최적화 페이지 자체는 Tailwind(JH/frontend/common/ui.ts)로 이식됨 (2026-11-21) — 이식이 끝난 페이지가 늘면 여기서 줄여 나감.
-   색상 토큰은 .page 범위 변수 */
+/* 색상 토큰은 .page 범위 변수. 플랫폼 공통 토큰이 있으면 여기 값만 교체 */
 .page {
   --bg: #eef1f5; --panel: #ffffff; --ink: #0f1b2d; --muted: #5b6779; --line: #dde3ea; --soft: #f4f6f9;
   --accent: #2563c9; --ok: #16875b; --warn: #b97707; --bad: #cf2f2f;
@@ -13,6 +11,7 @@
 .page svg text { fill: var(--muted); font-family: var(--mono); font-size: 10px; }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .sub { color: var(--muted); font-size: 12px; }
+.note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
 
 /* header */
 .head { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; }
@@ -37,6 +36,8 @@
 
 /* grid + panel */
 .grid { display: grid; gap: 16px; }
+.top { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
 .panelHead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -53,6 +54,27 @@
 
 /* charts */
 .chart { width: 100%; height: auto; display: block; }
+/* 관리도: 왼쪽 위 I · 왼쪽 아래 MR · 오른쪽 EWMA (세로 2칸) */
+.spcGrid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); grid-template-areas: "i ew" "mr ew"; gap: 12px; }
+.spcI { grid-area: i; } .spcMr { grid-area: mr; } .spcEw { grid-area: ew; }
+.spcLegend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+.spcLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.lgDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); opacity: 0.8; }
+.lgWarn { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid #e8743b; }
+.lgWatch { width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); }
+.lgCl { width: 18px; border-top: 1.5px dashed var(--muted); }
+.lgLimit { width: 18px; border-top: 1.5px solid var(--bad); }
+.lgFlow { width: 12px; height: 3px; border-radius: 2px; }
+/* 관리도 툴팁 — HTML 상자라 그래프 크기와 무관하게 같은 글자 크기 */
+.spcPlot { position: relative; }
+.spcTip { position: absolute; z-index: 2; pointer-events: none; white-space: nowrap; background: rgba(15, 27, 45, 0.92); color: #fff;
+  border-radius: 5px; padding: 6px 10px; font-family: var(--mono); font-size: 12px; line-height: 1.55; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.spcTipRule { color: #ffb4b4; font-weight: 600; }
+.spcTipTrend { color: #ffd38a; font-weight: 600; }
+.spcBox { margin: 0; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 10px 10px 4px; }
+.spcCaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
+.spcTrend { color: var(--warn); }
+@media (max-width: 1180px) { .spcGrid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "i" "mr" "ew"; } }
 
 /* pills */
 .pill { display: inline-block; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; margin-right: 4px; }
@@ -60,20 +82,87 @@
 .pill_warn, .pill_na { background: var(--warn-bg); color: var(--warn); }
 .pill_bad { background: var(--bad-bg); color: var(--bad); }
 
-/* 팝업 */
+/* sensors — 공정 단계 묶음 3개 (1열 · 1열 · 2열 = 4열×3행) */
+.groups { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); gap: 10px; }
+.group { display: flex; flex-direction: column; gap: 8px; min-width: 0; border-radius: 8px; padding: 0 0 2px; }
+.groupHead { display: flex; align-items: center; gap: 8px; padding: 6px 4px 6px; border-top: 3px solid var(--line); font-size: 13px; }
+.group0 .groupHead { border-top-color: #d9534f; }
+.group1 .groupHead { border-top-color: #e0a030; }
+.group2 .groupHead { border-top-color: #4a9fe0; }
+.groupNo { display: inline-grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.groupActive { background: var(--soft); }
+.groupLive { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--warn); font-weight: 600; }
+.groupLive::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.sensors { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.group2 .sensors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cycleLegend { margin-left: 8px; font-size: 11px; color: var(--muted); font-weight: 400; font-family: var(--mono); }
+.spark { display: block; width: 100%; height: 30px; margin-top: 2px; }
+.sparkBand { fill: var(--band); opacity: 0.6; }
+.sparkMid { stroke: #c3ccd6; stroke-width: 0.8; }
+.sparkLine { fill: none; stroke: #5b6779; stroke-width: 1.3; }
+.sparkDash { stroke: var(--accent); stroke-dasharray: 3 3; }
+.sparkWarn { fill: var(--warn); }
+.sparkBad { fill: var(--bad); }
+.sensor { font: inherit; color: inherit; text-align: left; background: var(--panel); cursor: pointer; border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.sensor_warn, .sensor_na { border-left-color: var(--warn); }
+.sensor_bad { border-left-color: var(--bad); background: var(--bad-bg); }
+.sensorTop { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.sensorValue { font-size: 20px; font-weight: 600; }
+button.sensor:hover { border-color: var(--accent); }
+div.sensor { cursor: default; }
+.sensor:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sensorSelected { box-shadow: 0 0 0 2px var(--accent); }
+
+/* SPC */
+.page svg text.limitText { fill: var(--bad); font-size: 11px; font-weight: 600; }
+.page svg text.clText { fill: var(--muted); font-size: 11px; }
+
+/* 관리도 알림 — 경보 빨강 · 주의 주황 · 관찰 파랑 (명세 3장) */
+.gAlarm { --g: var(--bad); --g-bg: var(--bad-bg); }
+.gCaution { --g: #c2560c; --g-bg: #fdecdc; }
+.gWatch { --g: var(--accent); --g-bg: #e5eefb; }
+.alertSummary { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 6px; }
+.alertSummary th, .alertSummary td { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+.alertSummary th[scope="row"], .alertSummary thead th:first-child { text-align: left; font-weight: 500; color: var(--muted); }
+.alertSummary thead th.gAlarm, .alertSummary thead th.gCaution, .alertSummary thead th.gWatch { color: var(--g); }
+/* 알림 약 3개 높이까지만 — 넘치면 스크롤 (알림이 늘어도 오른쪽 열이 공정 그림보다 길어지지 않게) */
+.alertList { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 214px; overflow-y: auto; }
+.alertCard { font: inherit; color: inherit; text-align: left; width: 100%; cursor: pointer; display: flex; flex-direction: column; gap: 2px;
+  background: var(--g-bg); border: 1px solid transparent; border-left: 4px solid var(--g); border-radius: 6px; padding: 6px 10px; }
+.alertCard:hover { border-color: var(--g); }
+.alertCard:focus-visible, .closeBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.alertTitle { font-size: 13px; font-weight: 600; }
+.gradePill { display: inline-block; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; background: var(--g-bg); color: var(--g); }
+.alertValues { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+.alertExtra { margin: 8px 0 0; padding: 6px 10px; background: var(--soft); border-radius: 6px; font-size: 13px; }
+.closeForm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.closeForm p { margin: 0; width: 100%; }
+
+/* 알람 팝업 — 메인 대시보드 공지 팝업과 같은 형태 */
 .backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.4); }
 .dialog { width: min(480px, 100%); max-height: 80vh; overflow-y: auto; background: var(--panel); border-radius: 10px; padding: 16px 18px 18px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
 .dialogHead { display: flex; align-items: center; gap: 8px; }
+/* 관리도 알림 전체 팝업 */
+.headBtn { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
+.headBtn:hover { text-decoration: underline; }
+.headBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dialogWide { width: min(640px, 100%); }
+.alertListAll { max-height: none; }
+.alertDone { opacity: 0.55; }
 .closeBtn { margin-left: auto; font: inherit; font-size: 20px; line-height: 1; width: 28px; height: 28px; border: none; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
 .closeBtn:hover { background: var(--soft); }
-.closeBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dialogTitle { margin: 12px 0 8px; font-size: 15px; }
 .dialogBody { margin: 8px 0 0; white-space: pre-line; line-height: 1.6; }
 
+@media (max-width: 1180px) {
+  .groups { grid-template-columns: minmax(0, 1fr); }
+  .sensors, .group2 .sensors { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .top { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 860px) {
   .page { padding: 16px; }
 }
 @media (max-width: 460px) {
-  .kpis { grid-template-columns: minmax(0, 1fr); }
+  .sensors, .group2 .sensors, .kpis { grid-template-columns: minmax(0, 1fr); }
   .kpiValue { font-size: 22px; }
 }

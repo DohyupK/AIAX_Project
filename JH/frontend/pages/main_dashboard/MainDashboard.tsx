@@ -2,9 +2,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { CURRENT_USER, EVENTS, NOTICES, type EventTone, type Notice, type NoticeTag } from "./data";
 import { fetchDailyNotice } from "./noticeApi";
-import {
-  BADGE, BTN_PRIMARY, CARD, CARD_HEAD, CARD_TITLE, CLOSE_BTN, FIELD, FOCUS, H1, MODAL_BACKDROP, MODAL_PANEL, PAGE, TONE,
-} from "../../common/ui";
 
 // 메모 저장소: 백엔드 전까지 브라우저 쿠키 (같은 PC·브라우저에서만 유지)
 // ponytail: 쿠키 1개(약 4KB) 한도 — 메모가 많아지면 DB/API로 옮길 것
@@ -14,8 +11,19 @@ const TITLE_MAX = 50;
 const CONTENT_MAX = 200;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-const TAG_CLASS: Record<NoticeTag, string> = { 필독: TONE.bad, 안전: TONE.warn, 일반: TONE.info };
-const EVENT_CLASS: Record<EventTone, string> = { red: TONE.bad, orange: TONE.warn, blue: TONE.info, green: TONE.ok };
+// Mosaic 스타일 — 상태색 배지(옅은 바탕 + 진한 글자), 카드, 입력창
+const BADGE = "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium";
+const TAG_CLASS: Record<NoticeTag, string> = {
+  필독: "bg-red-500/20 text-red-700 dark:text-red-400",
+  안전: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
+  일반: "bg-sky-500/20 text-sky-700 dark:text-sky-400",
+};
+const EVENT_CLASS: Record<EventTone, string> = {
+  red: "bg-red-500/20 text-red-700 dark:text-red-400",
+  orange: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
+  blue: "bg-sky-500/20 text-sky-700 dark:text-sky-400",
+  green: "bg-green-500/20 text-green-700 dark:text-green-400",
+};
 // 폰(460px 이하) 달력 칸은 일정 글자 대신 색 점
 const EVENT_DOT: Record<EventTone, string> = {
   red: "bg-red-500",
@@ -23,6 +31,14 @@ const EVENT_DOT: Record<EventTone, string> = {
   blue: "bg-sky-500",
   green: "bg-green-500",
 };
+const CARD = "min-w-0 rounded-xl bg-white shadow-sm dark:bg-gray-800";
+const CARD_HEAD = "flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-700/60 phone:px-4";
+const CARD_TITLE = "font-semibold text-gray-800 dark:text-gray-100";
+const FIELD =
+  "w-full rounded-lg border-gray-200 bg-white text-sm text-gray-800 shadow-sm placeholder:text-gray-400 hover:border-gray-300 focus:border-brand-500 focus:ring-0 dark:border-gray-700/60 dark:bg-gray-900/30 dark:text-gray-100 dark:placeholder:text-gray-500 dark:hover:border-gray-600 phone:py-3";
+const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
+// 폰 아래 여백 — 전역 떠 있는 버튼(인수인계·챗봇)에 마지막 입력란이 가리지 않게
+const PAGE = "mx-auto w-full max-w-[96rem] px-4 py-8 sm:px-6 lg:px-8 phone:px-3 phone:pt-5 phone:pb-24";
 
 type Memo = { id: string; title: string; content: string };
 type Memos = Record<string, Memo[]>; // 'YYYY-MM-DD' → 그날 메모 목록
@@ -179,7 +195,7 @@ export default function MainDashboard() {
     <div className={PAGE}>
       {/* 제목 줄 — 오른쪽 사용자 (로그인 연동 전 표시용) */}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3 phone:mb-5">
-        <h1 className={H1}>메인 대시보드</h1>
+        <h1 className="text-2xl font-bold text-gray-800 md:text-3xl dark:text-gray-100">메인 대시보드</h1>
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <span
             className="grid size-8 place-items-center rounded-full bg-brand-50 font-semibold text-brand-700 dark:bg-brand-400/20 dark:text-brand-400"
@@ -347,7 +363,7 @@ export default function MainDashboard() {
             <button
               type="button"
               onClick={saveMemo}
-              className={BTN_PRIMARY}
+              className={`inline-flex items-center justify-center rounded-lg bg-brand-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-900 dark:bg-brand-500 dark:hover:bg-brand-400 phone:py-3 ${FOCUS}`}
             >
               메모 저장
             </button>
@@ -386,9 +402,13 @@ export default function MainDashboard() {
 
       {/* 공지 상세 팝업 — 폰은 아래에서 올라오는 시트 */}
       {openNotice && (
-        <div className={MODAL_BACKDROP} onClick={() => setOpenNotice(null)}>
+        <div
+          // z-65: 전역 떠 있는 버튼(인수인계 55·챗봇 60) 위, 인수인계 팝업(70) 아래
+          className="fixed inset-0 z-[65] flex items-center justify-center bg-gray-900/30 p-4 phone:items-end phone:p-0"
+          onClick={() => setOpenNotice(null)}
+        >
           <div
-            className={MODAL_PANEL}
+            className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-lg dark:bg-gray-800 phone:max-w-none phone:rounded-b-none"
             role="dialog"
             aria-modal="true"
             aria-labelledby="notice-dialog-title"
@@ -402,7 +422,7 @@ export default function MainDashboard() {
                 type="button"
                 aria-label="닫기"
                 onClick={() => setOpenNotice(null)}
-                className={CLOSE_BTN}
+                className={`ml-auto flex size-8 items-center justify-center rounded-full text-xl leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700/50 phone:size-10 ${FOCUS}`}
               >
                 ×
               </button>
