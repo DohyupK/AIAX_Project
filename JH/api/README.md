@@ -15,9 +15,10 @@ uv run uvicorn main:app --host 127.0.0.1 --port 8000
 | 키 | 용도 |
 |----|------|
 | `NOTION_TOKEN` | Integration 시크릿 (`ntn_…`) |
-| `NOTION_PARENT_PAGE_ID` | 경영·보호구 리포트가 붙는 공통 부모 페이지 |
+| `NOTION_PARENT_PAGE_ID` | 공통 부모 페이지 **ID** (32자 hex). URL 전체가 아니라 ID만. 링크를 넣어도 서버가 ID로 정규화함 |
 
-Integration을 위 부모 페이지에 연결해야 합니다.
+Integration을 위 부모 페이지에 **연결**해야 합니다.  
+프론트가 `NEXT_PUBLIC_API_BASE_URL`(원격)을 쓰면 **서버** `.env`에도 같은 값을 넣고 JH API를 재시작해야 합니다.
 
 ### 일일 경영 리포트 (자동)
 

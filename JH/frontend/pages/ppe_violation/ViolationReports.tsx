@@ -115,9 +115,18 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
         body: JSON.stringify({ month: r.month }),
         signal: AbortSignal.timeout(30_000),
       });
-      const data = (await res.json().catch(() => ({}))) as { detail?: string; url?: string; created?: boolean };
+      const data = (await res.json().catch(() => ({}))) as {
+        detail?: unknown; url?: string; created?: boolean;
+      };
       if (!res.ok) {
-        const detail = typeof data.detail === "string" ? data.detail : "노션 전송에 실패했습니다.";
+        // FastAPI detail = 문자열 | 검증 오류 배열 | 객체 — 그대로 보이게
+        const d = data.detail;
+        let detail = "노션 전송에 실패했습니다.";
+        if (typeof d === "string") detail = d;
+        else if (Array.isArray(d)) {
+          detail = d.map((x) => (typeof x === "object" && x && "msg" in x ? String((x as { msg: string }).msg) : JSON.stringify(x))).join("; ") || detail;
+        } else if (d != null) detail = JSON.stringify(d);
+        else detail = `노션 전송에 실패했습니다. (HTTP ${res.status})`;
         throw new Error(detail);
       }
       setNotionMsg(data.created === false ? "노션 페이지를 갱신했습니다." : "노션 페이지를 만들었습니다.");
