@@ -1,8 +1,12 @@
 """이미지 수집 Flink job — DH/api/image_pipeline/flink_role_a.py (모드 A) 를 Flink 로 이전 (2026-11-19, DH·MS 승인)
 
-흐름 (DH 와 동일):
-  aiax.image.ingest (E1a JSON) → 형식 검사(parse_ingest) → mes.casting_image UPSERT (app_mes)
-  → 성공한 건만 aiax.image.spark_sync 에 {"casting_id": ..., "op": "upsert"} (키 = casting_id)
+흐름:
+  aiax.image.ingest (E1a JSON) → 형식 검사(parse_ingest) → 저장 → 성공한 건만 aiax.image.spark_sync 에 {"casting_id": ..., "op": "upsert"}
+저장 방법 2가지 (2026-11-20 추가, MS):
+  - API (.env 에 IMAGE_API_KEY 가 있으면, 주소 기본값 https://gknushift.freemyip.com/api/images): 서버 이미지 API 로 POST — 서버가 /root/images 에 jpg 저장 + mes.casting_image 기록
+      보내는 JSON: casting_id, image_base64, image_label(ok/defect), content_type, original_uri / 헤더 X-API-Key: IMAGE_API_KEY
+      응답: 200 성공(같은 casting_id 재전송은 덮어쓰기) / 400·409·422 형식·데이터 오류 → 건너뜀 / 그 밖(401·403 키, 404 주소, 5xx, 연결 실패) → job 재시작해 재시도
+  - DB (키가 없으면): 예전처럼 mes.casting_image 에 직접 UPSERT (app_mes)
 
 DH 와 일부러 다른 점 (승인됨):
   - DB 연결 끊김 등 일시 오류: DH 는 로그만 남기고 다음 메시지로 넘어가 유실 → 여기서는 job 이 재시작해 같은 메시지부터 재시도
@@ -35,6 +39,10 @@ log = logging.getLogger("ms.flink.image_ingest")
 TOPIC_INGEST = os.environ.get("AIAX_TOPIC_IMAGE_INGEST", "aiax.image.ingest")
 TOPIC_SPARK_SYNC = os.environ.get("AIAX_TOPIC_IMAGE_SPARK_SYNC", "aiax.image.spark_sync")
 CONSUMER_GROUP_FLINK = os.environ.get("AIAX_IMAGE_CG_FLINK", "dh.image.flink_role_a")
+IMAGE_API_KEY = os.environ.get("IMAGE_API_KEY", "").strip()      # 키가 있으면 서버 API 로 보냄, 없으면 DB 직접
+IMAGE_API_URL = (os.environ.get("AIAX_IMAGE_API_URL", "").strip()
+                 or "https://gknushift.freemyip.com/api/images") if IMAGE_API_KEY else ""
+IMAGE_API_TIMEOUT = float(os.environ.get("AIAX_IMAGE_API_TIMEOUT", "30"))
 KAFKA_BOOTSTRAP = os.environ.get("AIAX_KAFKA_BOOTSTRAP", "kafka:9092")
 
 
@@ -63,6 +71,7 @@ class ImageIngestPayload:
     image_base64: str
     original_uri: str | None = None
     content_type: str = "image/jpeg"
+    image_label: str | None = None     # ok / defect (붙인 사진의 정답, image_sender 가 넣음)
 
 
 def parse_ingest(data: dict[str, Any]) -> ImageIngestPayload:
@@ -85,7 +94,39 @@ def parse_ingest(data: dict[str, Any]) -> ImageIngestPayload:
     ct = str(data.get("content_type") or "image/jpeg")
     uri = data.get("original_uri")
     uri_s = str(uri).strip() if uri else None
-    return ImageIngestPayload(casting_id=cid, image_base64=b64, original_uri=uri_s, content_type=ct)
+    label = data.get("image_label")
+    label_s = str(label).strip().lower() if label else None
+    if label_s is not None and label_s not in ("ok", "defect"):
+        raise ValueError(f"image_label 은 ok / defect 만 가능: {label_s}")
+    return ImageIngestPayload(casting_id=cid, image_base64=b64, original_uri=uri_s, content_type=ct, image_label=label_s)
+
+
+class ApiDataError(Exception):
+    """API 가 400 등으로 거절 — 다시 보내도 안 되는 건 (건너뜀)"""
+
+
+def post_to_api(payload: ImageIngestPayload, url: str = "", key: str = "", timeout: float = 0) -> int:
+    """서버 이미지 API 로 1건 POST. 성공 시 상태 코드, 데이터 오류는 ApiDataError, 나머지(키·서버·연결)는 RuntimeError/OSError"""
+    import urllib.error
+    import urllib.request
+
+    url = url or IMAGE_API_URL
+    key = key or IMAGE_API_KEY
+    body = json.dumps({"casting_id": payload.casting_id, "image_base64": payload.image_base64,
+                       "image_label": payload.image_label, "content_type": payload.content_type,
+                       "original_uri": payload.original_uri}, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST",
+                                 headers={"Content-Type": "application/json", "X-API-Key": key})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout or IMAGE_API_TIMEOUT) as res:
+            return res.status
+    except urllib.error.HTTPError as e:
+        detail = e.read(300).decode("utf-8", "replace")
+        if e.code in (401, 403):
+            raise RuntimeError(f"이미지 API 키 오류 HTTP {e.code} — .env IMAGE_API_KEY 확인: {detail}") from e
+        if e.code in (400, 409, 422):      # 이 사진 자체의 문제 → 건너뜀. 404(주소 틀림) 등은 버리지 않고 재시도
+            raise ApiDataError(f"HTTP {e.code}: {detail}") from e
+        raise RuntimeError(f"이미지 API 일시 오류 HTTP {e.code}: {detail}") from e
 
 
 # mes INSERT 용 SQL (app_mes) — DH payload.UPSERT_MES_SQL 그대로
@@ -109,10 +150,11 @@ class IngestToMes(MapFunction):
 
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
         self._psycopg = psycopg
-        self._conn = psycopg.connect(mes_database_url(), connect_timeout=15)
+        self._conn = None if IMAGE_API_URL else psycopg.connect(mes_database_url(), connect_timeout=15)
         # DH kafka_io.make_producer 와 같은 설정
         self._producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP, "acks": "all", "linger.ms": 5})
-        log.info("이미지 수집 job 시작 topic=%s → %s group=%s", TOPIC_INGEST, TOPIC_SPARK_SYNC, CONSUMER_GROUP_FLINK)
+        log.info("이미지 수집 job 시작 topic=%s → %s group=%s 저장=%s", TOPIC_INGEST, TOPIC_SPARK_SYNC,
+                 CONSUMER_GROUP_FLINK, "API " + IMAGE_API_URL if IMAGE_API_URL else "DB 직접")
 
     def close(self) -> None:
         # 재시작·취소 때 커넥션이 남지 않게
@@ -132,17 +174,25 @@ class IngestToMes(MapFunction):
             log.exception("형식 오류 — 건너뜀 value_len=%s", len(value))
             return "skip:format"
 
-        # 2) mes UPSERT — DH db.mes_upsert_image. 데이터 오류(FK 등)는 건너뜀, 그 외(연결 끊김 등)는 예외 → job 재시작·재시도
-        errors = self._psycopg.errors
-        try:
-            self._conn.execute(UPSERT_MES_SQL, (payload.casting_id, payload.original_uri,
-                                                payload.content_type, payload.image_base64))
-            self._conn.commit()
-        except (errors.IntegrityError, errors.DataError):
-            self._conn.rollback()
-            log.exception("mes 데이터 오류 — 건너뜀 casting_id=%s", payload.casting_id)
-            return f"skip:data:{payload.casting_id}"
-        log.info("mes UPSERT ok casting_id=%s", payload.casting_id)
+        # 2) 저장 — 데이터 오류는 건너뜀, 그 외(키·연결 끊김 등)는 예외 → job 재시작·재시도
+        if IMAGE_API_URL:
+            try:
+                status = post_to_api(payload)
+            except ApiDataError:
+                log.exception("API 데이터 오류 — 건너뜀 casting_id=%s", payload.casting_id)
+                return f"skip:data:{payload.casting_id}"
+            log.info("API 저장 ok HTTP %s casting_id=%s label=%s", status, payload.casting_id, payload.image_label)
+        else:
+            errors = self._psycopg.errors
+            try:
+                self._conn.execute(UPSERT_MES_SQL, (payload.casting_id, payload.original_uri,
+                                                    payload.content_type, payload.image_base64))
+                self._conn.commit()
+            except (errors.IntegrityError, errors.DataError):
+                self._conn.rollback()
+                log.exception("mes 데이터 오류 — 건너뜀 casting_id=%s", payload.casting_id)
+                return f"skip:data:{payload.casting_id}"
+            log.info("mes UPSERT ok casting_id=%s", payload.casting_id)
 
         # 3) spark_sync 신호 — DH kafka_io.publish_json (동기 flush, 실패 시 예외 → 재시도. lake UPSERT 는 같은 건 반복해도 결과 동일)
         body = json.dumps({"casting_id": payload.casting_id, "op": "upsert"}, ensure_ascii=False).encode("utf-8")
@@ -180,7 +230,7 @@ def main() -> None:
         .build()
     )
     (env.from_source(source, WatermarkStrategy.no_watermarks(), "kafka:" + TOPIC_INGEST)
-        .map(IngestToMes(), output_type=Types.STRING()).name("ingest→mes→spark_sync")
+        .map(IngestToMes(), output_type=Types.STRING()).name("ingest→저장→spark_sync")
         .print().name("결과 로그"))
     env.execute("image_ingest (DH flink_role_a 이전)")
 

@@ -7,7 +7,7 @@ mes 를 주기적으로 확인해 「양품(passorfail = 0)인데 이미지 없�
       → Flink image_ingest (MS/db/flink/jobs/image_ingest.py) → mes.casting_image
 
 사진: --image-dir 아래 ok_front(양품 사진) / def_front(불량 사진), 불량 사진 비율 --defect-image-rate (기본 5%)
-      같은 사진 재사용 허용. 메시지의 image_label(ok / defect) = 붙인 사진의 정답 (지금 Flink 는 무시, 테이블 변경 때 저장)
+      같은 사진 재사용 허용. 메시지의 image_label(ok / defect) = 붙인 사진의 정답 (Flink 가 서버 API 로 같이 보냄 → mes.casting_image.image_label)
 
 실행 (MS/db/apps 에서)
   uv run python -m apps.image_sender                    # 지금부터 들어오는 샷만, 10초마다 확인
