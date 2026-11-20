@@ -9,6 +9,10 @@
 /* 다크 모드: <html class="dark"> 기준 (JH/frontend/common/theme) */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* 모바일 규격(JH/frontend/모바일_페이지_규격.md) 끊음 — 해당 폭 포함. Tailwind max-[N]: 은 「N 미만」이라 N 자체가 빠짐 */
+@custom-variant tablet (@media (max-width: 860px));
+@custom-variant phone (@media (max-width: 460px));
+
 @theme {
   /* 한글은 Inter에 없으므로 기존 한글 폰트로 대체 표시 */
   --font-sans: var(--font-inter), "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
@@ -78,9 +82,4 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentColor);
   }
-}
-
-/* 기존 페이지 호환 — MainDashboard.module.css가 참조. 페이지 이식 후 제거 */
-:root {
-  --hyundai-navy: var(--color-brand-700);
 }
