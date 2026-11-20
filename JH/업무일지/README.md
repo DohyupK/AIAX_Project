@@ -4,9 +4,13 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-20 | 품질 검사 1차(ML): 판정 결과 DB 저장(ai.quality_prediction qc1_*), 2차는 1차 양품만 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
+| 2026-11-20 | 교대 인수인계 리포트: 3교대 구간 경보·전체 불량 집계, 전역 「인수인계 실행」·전환 후 자동 팝업·PDF 출력 (DH 구현·JH 승인, app/layout 마운트) | [shift_handover](../기능표.md#교대-인수인계-리포트-shift_handover) |
+| 2026-11-20 | 품질 검사 2차: 「판정 대기」와 「이미지 없음」 구분, 샷 목록 팝업에 촬영 사진 표시 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-20 | 품질 검사 2차(DL): 서버가 사진을 미리 판정해 DB(ai.quality_prediction)에 저장, 화면은 DB만 읽음(시간 초과 해결)·「판정 대기 N장」 표시 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-20 | 불량 유형 라벨링: 목록 = 2차 판정 불량(result='fail'), 실제 사진 연결(MS 이미지 API) | [defect_labeling](../기능표.md#불량-유형-라벨링-defect_labeling) |
 | 2026-11-20 | 공정 최적화: 「관리도 알림」 제목 클릭 → 그날 알림 전체 팝업(닫힌 알림 포함), 줄 클릭 → 상세 | [process_optimization](../기능표.md#공정-최적화-대시보드-process_optimization) |
+| 2026-11-20 | 슬랙 연동 + 일일 경영 노션/슬랙 수동 · 크론 `push/daily`(노션+슬랙) · 보호구 슬랙 보내기 | [management_report](../기능표.md#경영-관리자-리포트-management_report) · [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |
 | 2026-11-20 | 노션 연동: 일일 경영 리포트 자동(`POST /api/report/notion/daily`) · 보호구 위반 보고서 「노션으로 보내기」 | [management_report](../기능표.md#경영-관리자-리포트-management_report) · [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |
 | 2026-11-20 | 메인 대시보드: 전날 관리도 알람 AI 일일 공지 (`/api/main/daily-notice` → org 캐시, 공지 맨 앞) | [main_dashboard](../기능표.md#메인-대시보드-main_dashboard) |
 | 2026-11-18 | Model Management: 탭 이름 품질 1차 검사·품질 2차 검사·보호구 착용 위반, 세 탭 DB 연결. 배포 모델 = 실제 사용 모델 (품질 검사 1차 판정 모델 교체, 2차·보호구는 이름 표시) | [model_management](../기능표.md#model-management-model_management) |

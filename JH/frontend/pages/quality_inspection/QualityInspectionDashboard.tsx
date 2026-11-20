@@ -2,11 +2,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LINES, fetchActiveModel, fetchDates, fetchMlModel, fetchSecond, type Line } from '../../common/casting/api';
 import { useShotStream } from '../../common/casting/useShotStream';
+import ShotImage from '../../common/casting/ShotImage';
 import type { MlModel, ModelInfo, SecondCheck, SecondResult, Shot } from '../../common/casting/types';
 import SensorMonitor from '../process_optimization/SensorMonitor';
 import KeyVariables from './KeyVariables';
 import ProbChart from './ProbChart';
-import { confusion, firstFail, rate, secondOf, summarize, type InspectionSummary } from './inspection';
+import { confusion, firstFail, rate, secondOf, summarize, type InspectionSummary, type SecondMap } from './inspection';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import s from './QualityInspection.module.css';
 
@@ -15,7 +16,7 @@ const pct = (v: number | null) => (v == null ? '—' : v.toFixed(1));
 const pct1 = (v: number | null | undefined) => (v == null ? '—' : (v * 100).toFixed(1));
 /** 모델 학습 라인 — 다른 라인은 학습한 적 없는 데이터라 안내 */
 const TRAINED_LINE = 'line_no1';
-const NO_RESULTS: ReadonlyMap<string, SecondResult> = new Map();
+const NO_RESULTS: SecondMap = new Map();
 /** 2차 결과 한 줄 — 「불량 0.835」 */
 const secondLabel = (r: SecondResult) => `${r.result === 'fail' ? '불량' : '양품'} ${r.confidenceScore.toFixed(3)}`;
 /** 샷 고유키 — shotId(생산번호)는 하루 안에서 중복될 수 있어 casting_id 우선 */
@@ -96,7 +97,13 @@ export default function QualityInspectionDashboard() {
   };
 
   const th = ml?.threshold ?? 1;
-  const results = useMemo(() => (second ? new Map(second.results.map(r => [r.castingId, r])) : NO_RESULTS), [second]);
+  // castingId → 판정 결과 / 'pending'(사진 있음·서버 판정 전) — 「이미지 없음」과 구분
+  const results: SecondMap = useMemo(() => (second
+    ? new Map<string, SecondResult | 'pending'>([
+        ...second.pendingIds.map(id => [id, 'pending'] as const),
+        ...second.results.map(r => [r.castingId, r] as const),
+      ])
+    : NO_RESULTS), [second]);
   // 집계는 하루 전체 기준 — 재생 초반에 1차 불량이 아직 안 나와 0으로 보이는 문제 방지
   const sum = useMemo(() => summarize(day, th, results), [day, th, results]);
   const first = sum.first;
@@ -174,7 +181,7 @@ export default function QualityInspectionDashboard() {
           <section className={`${po.grid} ${s.kpis3}`} aria-label="품질 요약 지표">
             <Kpi label="전체 생산 샷 (하루)" value={day.length.toLocaleString()} unit="샷" note={`재생 ${shots.length.toLocaleString()}샷`} />
             <Kpi label="최종 불량률 (1차 + 2차)" value={pct(rate(sum.final, day.length))} unit="%" bad={sum.final > 0}
-              note={second ? `하루 전체 기준 · 2차는 이미지 있는 ${sum.inspected}샷만` : '하루 전체 기준 · 2차 조회 중이면 1차만'} />
+              note={second ? `하루 전체 기준 · 2차는 판정 끝난 ${sum.inspected}샷만${sum.pending ? ` (판정 대기 ${sum.pending}샷)` : ''}` : '하루 전체 기준 · 2차 조회 중이면 1차만'} />
             <Kpi label="전체 불량 개수 (1차 + 2차)" value={String(sum.final)} unit="개" bad={sum.final > 0}
               note={`1차 ${first} + 2차 ${sum.second} · ${replayNote}`} />
           </section>
@@ -207,8 +214,8 @@ export default function QualityInspectionDashboard() {
             </button>
             <div className={`${po.panel} ${s.modelCard}`}>
               <span className={s.modelHead}><b>DL 모델 · 2차 검사</b><span className={po.sub}>1차 양품 샷만 검사</span></span>
-              <ModelStats label="2차" n={sum.second} rateV={rate(sum.second, sum.inspected)}
-                base={`1차 양품 ${sum.secondTargets.toLocaleString()}샷 중 이미지 있는 ${sum.inspected}샷 검사 · 이미지 없음 ${(sum.secondTargets - sum.inspected).toLocaleString()}샷`} />
+              <ModelStats label="2차" n={sum.second} rateV={rate(sum.second, sum.inspected)} waiting={sum.pending}
+                base={`1차 양품 ${sum.secondTargets.toLocaleString()}샷 중 판정 ${sum.inspected.toLocaleString()}샷 · 판정 대기 ${sum.pending.toLocaleString()}샷 · 이미지 없음 ${(sum.secondTargets - sum.inspected - sum.pending).toLocaleString()}샷`} />
               <span className={po.sub}>
                 {secondError ? <span role="alert">2차 검사를 불러오지 못했습니다: {secondError}</span>
                   : !second ? '2차 검사 결과 불러오는 중…'
@@ -221,8 +228,15 @@ export default function QualityInspectionDashboard() {
                 {recentSecondFails.length === 0
                   ? <span className={s.slot}>{second ? '2차 불량 샷이 없습니다' : '—'}</span>
                   : <span className={s.stats}>
+                      {/* 썸네일 = 촬영 사진 미리보기 (크게 보기는 샷 목록 팝업) */}
                       {recentSecondFails.map(({ shot, r }) => (
-                        <Stat key={r.castingId} label={`#${shot.shotId} · ${shot.time}`} value={secondLabel(r)} />
+                        <span key={r.castingId} className={`${s.stat} ${s.statThumb}`}>
+                          <ShotImage castingId={r.castingId} className={s.thumb} />
+                          <span className={s.statText}>
+                            <span className={po.sub}>#{shot.shotId} · {shot.time}</span>
+                            <b className={po.num}>{secondLabel(r)}</b>
+                          </span>
+                        </span>
                       ))}
                     </span>}
               </span>
@@ -249,12 +263,14 @@ function Kpi({ label, value, unit, bad, note }: { label: string; value: string; 
   );
 }
 
-function ModelStats({ label, n, rateV, base }: { label: string; n: number; rateV: number | null; base: string }) {
+/** waiting = 판정 대기 수 — 판정 끝난 샷이 없고 대기만 있으면 「— %」 대신 「판정 대기」 */
+function ModelStats({ label, n, rateV, base, waiting = 0 }: { label: string; n: number; rateV: number | null; base: string; waiting?: number }) {
+  const onlyWaiting = rateV == null && waiting > 0;
   return (
     <span className={s.modelBody}>
       <span className={s.stats}>
-        <Stat label={`${label} 불량률`} value={`${pct(rateV)} %`} />
-        <Stat label={`${label} 불량 개수`} value={`${n} 개`} />
+        <Stat label={`${label} 불량률`} value={onlyWaiting ? '판정 대기' : `${pct(rateV)} %`} />
+        <Stat label={`${label} 불량 개수`} value={onlyWaiting ? `대기 ${waiting.toLocaleString()}장` : `${n} 개`} />
       </span>
       <span className={po.sub}>{base}</span>
     </span>
@@ -272,7 +288,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 /** 샷 목록 팝업 (하루 전체 샷) — 좌: 1차 점수·판정과 실제 판정 / 우: 선택 샷의 2차(DL) 칸 + 주요 변수 */
 function MlDialog({ shots, model, ml, sum, results, onClose }: {
-  shots: Shot[]; model: ModelInfo; ml: MlModel; sum: InspectionSummary; results: ReadonlyMap<string, SecondResult>; onClose: () => void;
+  shots: Shot[]; model: ModelInfo; ml: MlModel; sum: InspectionSummary; results: SecondMap; onClose: () => void;
 }) {
   const th = ml.threshold;
   const first = sum.first;
@@ -338,7 +354,7 @@ function MlDialog({ shots, model, ml, sum, results, onClose }: {
                         <td>
                           {typeof st === 'object'
                             ? <span className={`${po.pill} ${st.result === 'fail' ? po.pill_bad : po.pill_ok}`}>{st.result === 'fail' ? '불량' : '양품'}</span>
-                            : <span className={po.sub}>{st === 'first' ? '대상 아님' : '이미지 없음'}</span>}
+                            : <span className={po.sub}>{st === 'first' ? '대상 아님' : st === 'pending' ? '판정 대기' : '이미지 없음'}</span>}
                         </td>
                         <td>
                           {x.actual == null
@@ -355,7 +371,7 @@ function MlDialog({ shots, model, ml, sum, results, onClose }: {
 
           <section className={s.col}>
             <div className={s.stats}>
-              <Stat label={`2차 불량률 (검사 ${sum.inspected}샷)`} value={`${pct(rate(sum.second, sum.inspected))} %`} />
+              <Stat label={`2차 불량률 (검사 ${sum.inspected}샷${sum.pending ? ` · 대기 ${sum.pending}샷` : ''})`} value={`${pct(rate(sum.second, sum.inspected))} %`} />
               <Stat label="2차 불량 개수" value={`${sum.second} 개`} />
             </div>
             {selected ? <ShotAnalysis shot={selected} model={model} th={th} results={results} /> : <div className={s.slot}>샷을 선택하세요</div>}
@@ -368,21 +384,26 @@ function MlDialog({ shots, model, ml, sum, results, onClose }: {
 
 /** 선택 샷 — 1차 결과 + 2차(DL) 칸 + 주요 변수 */
 function ShotAnalysis({ shot, model, th, results }: {
-  shot: Shot; model: ModelInfo; th: number; results: ReadonlyMap<string, SecondResult>;
+  shot: Shot; model: ModelInfo; th: number; results: SecondMap;
 }) {
   const st = secondOf(shot, th, results);
+  const imageId = st !== 'first' && st !== 'noImage' ? shot.castingId : undefined;   // 판정 대기·판정 결과 = 사진 있음
   return (
     <>
       <span className={po.sub}>
         #{shot.shotId} · {shot.time} · 1차 점수 <span className={po.num}>{shot.prob.toFixed(3)}</span> ({st === 'first' ? '불량' : '양품'})
         {' '}· 실제 {shot.actual === 1 ? '불량' : shot.actual === 0 ? '양품' : '미판정'}
       </span>
-      <div className={s.slot}>
-        {st === 'first' ? `#${shot.shotId} · 1차 불량 확정 — 2차 검사 대상 아님`
-          : st === 'noImage' ? '2차(DL) 검사 대상 · 샷 이미지 없음 (이미지 수집 전)'
-          // slot 이 flex 라 조각 사이 공백이 사라짐 → 한 span 으로 묶음
-          : <span>2차(DL) <b>{st.result === 'fail' ? '불량' : '양품'}</b> · 불량 확률 <span className={po.num}>{st.confidenceScore.toFixed(3)}</span> · {st.modelName}</span>}
-      </div>
+      {/* 사진 없는 경우만 안내 박스. 사진 있는 샷은 박스 없이 결과 한 줄 + 사진 */}
+      {st === 'first' && <div className={s.slot}>#{shot.shotId} · 1차 불량 확정 — 2차 검사 대상 아님</div>}
+      {st === 'noImage' && <div className={s.slot}>2차(DL) 검사 대상 · 샷 이미지 없음 (이미지 수집 전)</div>}
+      {typeof st === 'object' && (
+        <span className={po.sub}>
+          2차(DL) <b>{st.result === 'fail' ? '불량' : '양품'}</b> · 불량 확률 <span className={po.num}>{st.confidenceScore.toFixed(3)}</span> · {st.modelName}
+        </span>
+      )}
+      {/* key: 샷을 바꾸면 「이미지 없음」 상태 초기화 */}
+      {imageId && <ShotImage key={imageId} castingId={imageId} className={s.shotImage} />}
       <KeyVariables shot={shot} model={model} />
     </>
   );

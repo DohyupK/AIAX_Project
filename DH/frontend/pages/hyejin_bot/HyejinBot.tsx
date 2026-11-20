@@ -1,13 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { askHyejinBot } from "./chatApi";
+import { askShiftBot } from "./chatApi";
 import type { ChatTurn } from "./sources";
 import s from "./HyejinBot.module.css";
 
 /**
- * 혜진봇 Phase B — 전역 우하단 FAB + 패널 (app/layout 마운트).
- * JH /api/documents/ask (OpenAI Chat + 출처). casting은 sources.ts stub
+ * Shift 봇 — 전역 우하단 FAB (app/layout).
+ * JH /api/documents/ask: 사내 문서 + 관리도 알림 + Chat
  */
 export default function HyejinBot() {
   const [open, setOpen] = useState(false);
@@ -26,7 +26,7 @@ export default function HyejinBot() {
     setTurns((t) => [...t, { role: "user", content: text, sources: [] }]);
     setBusy(true);
     try {
-      const res = await askHyejinBot(text);
+      const res = await askShiftBot(text);
       setTurns((t) => [...t, { role: "assistant", content: res.answer, sources: res.sources }]);
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     } catch (err) {
@@ -39,16 +39,16 @@ export default function HyejinBot() {
   return (
     <div className={s.page}>
       {open && (
-        <div className={s.panel} role="dialog" aria-label="혜진봇 채팅">
+        <div className={s.panel} role="dialog" aria-label="Shift 채팅">
           <header className={s.panelHead}>
             <div>
-              <div className={s.panelTitle}>혜진봇</div>
-              <p className={s.panelSub}>사내 문서 근거로 답합니다</p>
+              <div className={s.panelTitle}>Shift</div>
+              <p className={s.panelSub}>사내 문서·관리도 알림을 근거로 답합니다</p>
             </div>
             <button
               type="button"
               className={s.closeBtn}
-              aria-label="혜진봇 닫기"
+              aria-label="Shift 닫기"
               onClick={() => setOpen(false)}
             >
               ×
@@ -63,7 +63,7 @@ export default function HyejinBot() {
 
           <div className={s.thread} aria-live="polite">
             {turns.length === 0 && (
-              <p className={s.empty}>질문을 입력하면 사내 문서를 검색해 답합니다.</p>
+              <p className={s.empty}>문서함·공정 관리도 알림을 검색해 답합니다.</p>
             )}
             {turns.map((turn, i) =>
               turn.role === "user" ? (
@@ -72,25 +72,50 @@ export default function HyejinBot() {
                 </div>
               ) : (
                 <div key={i} className={s.bubbleBot}>
-                  <div className={s.botLabel}>혜진봇</div>
+                  <div className={s.botLabel}>Shift</div>
                   <p className={s.answer}>{turn.content}</p>
                   {turn.sources.length > 0 && (
                     <ul className={s.sources} aria-label="출처">
                       {turn.sources.map((src) => (
-                        <li key={`${src.kind}-${src.company_document_idx}-${src.chunk_no}`}>
+                        <li key={`${src.kind}-${src.doc_no}-${src.chunk_no}-${src.file_name}`}>
                           <div className={s.srcTitle}>
                             {src.doc_no} · {src.title}
                           </div>
                           <div className={s.srcMeta}>
-                            {src.file_name}
-                            {src.category ? ` · ${src.category}` : ""} · chunk {src.chunk_no} · score{" "}
-                            {src.score}
-                            {src.kind !== "company_document" ? ` · ${src.kind}` : ""}
+                            {src.kind === "process_alert" ? (
+                              <>
+                                관리도 알림
+                                {src.category ? ` · ${src.category}` : ""}
+                                {src.file_name ? ` · ${src.file_name}` : ""}
+                              </>
+                            ) : src.kind === "quality_kpi" ? (
+                              <>
+                                품질 검사 KPI
+                                {src.line ? ` · ${src.line}` : ""}
+                                {src.file_name ? ` · ${src.file_name}` : ""}
+                              </>
+                            ) : (
+                              <>
+                                {src.file_name}
+                                {src.category ? ` · ${src.category}` : ""} · chunk {src.chunk_no} ·
+                                score {src.score}
+                              </>
+                            )}
                           </div>
                           {src.snippet && <p className={s.snippet}>{src.snippet}</p>}
-                          <a className={s.fileLink} href={src.file_url} target="_blank" rel="noreferrer">
-                            원문 다운로드
-                          </a>
+                          {src.kind === "company_document" && src.file_url ? (
+                            <a className={s.fileLink} href={src.file_url} target="_blank" rel="noreferrer">
+                              원문 다운로드
+                            </a>
+                          ) : src.kind === "process_alert" ? (
+                            <a className={s.fileLink} href="/casting/process-optimization">
+                              공정 최적화 · 관리도 알림
+                            </a>
+                          ) : src.kind === "quality_kpi" ? (
+                            <a className={s.fileLink} href="/casting/quality-inspection">
+                              품질 검사 대시보드
+                            </a>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
@@ -106,8 +131,8 @@ export default function HyejinBot() {
               className={s.input}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="사내 문서에 대해 질문하세요"
-              aria-label="혜진봇 질문"
+              placeholder="문서·관리도 알림에 대해 질문하세요"
+              aria-label="Shift 질문"
               disabled={busy}
             />
             <button type="submit" className={s.send} disabled={busy || !q.trim()}>
@@ -120,11 +145,11 @@ export default function HyejinBot() {
       <button
         type="button"
         className={s.fab}
-        aria-label={open ? "혜진봇 닫기" : "혜진봇 열기"}
+        aria-label={open ? "Shift 닫기" : "Shift 열기"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        {open ? "×" : "혜"}
+        {open ? "×" : "S"}
       </button>
     </div>
   );

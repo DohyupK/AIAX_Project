@@ -12,10 +12,12 @@ from __future__ import annotations
 import logging
 from datetime import date as Date
 from datetime import timedelta
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from notion_client.errors import APIResponseError
 from pydantic import BaseModel
+from slack_sdk.errors import SlackApiError
 
 from casting.router import FEATURES
 from casting.spc import _TABLE as SPC_TABLE
@@ -23,6 +25,8 @@ from common.db import connect
 from notion_export.client import notion_http_error, require_notion, upsert_page
 from notion_export.mgmt_daily import assemble_source, build_daily_payload, target_date
 from ppe.router import CHECKS, GEARS, VIOLATION
+from slack_export.client import post_report, require_slack, slack_http_error
+from slack_export.mgmt_daily import build_daily_slack
 
 router = APIRouter(prefix="/api/report")
 log = logging.getLogger("jh.report")
@@ -30,9 +34,14 @@ DB = "DATABASE_URL"   # app_lake — mes·ai·org 읽기만
 MAX_RANGE_DAYS = 220  # 월간 목록(7개월) 한 번에 조회
 
 
-class NotionDailyBody(BaseModel):
-    """date 를 주면 그 날, 없으면 어제(KST). 크론은 body 없이 POST."""
+class DailyPushBody(BaseModel):
+    """date 를 주면 그 날, 없으면 어제(KST). target = 보낼 곳(기본 노션)."""
     date: Date | None = None
+    target: Literal["notion", "slack"] = "notion"
+
+
+# 하위 호환 별칭
+NotionDailyBody = DailyPushBody
 
 
 def _check_range(start: Date, end: Date) -> None:
@@ -150,29 +159,25 @@ def attendance(start: Date = Query(alias="from"), end: Date = Query(alias="to"))
     return [{"date": r["d"].isoformat(), "scheduled": r["scheduled"], "present": r["present"]} for r in rows]
 
 
-@router.post("/notion/daily")
-def notion_daily(body: NotionDailyBody = NotionDailyBody()) -> dict:
-    """어제(또는 body.date) 일일 경영 리포트를 노션 부모 페이지 아래에 생성·갱신 (멱등).
-
-    서버 크론 예: curl -X POST http://127.0.0.1:8000/api/report/notion/daily
-    """
-    day = body.date if body.date else target_date()
+def _daily_src(day: Date):
+    """전일 대비용으로 이틀치 원자료."""
     prev = day - timedelta(days=1)
+    return assemble_source(
+        daily(start=prev, end=day),
+        safety(start=prev, end=day),
+        spc_alarms(start=prev, end=day),
+        attendance(start=prev, end=day),
+        fixed(),
+    )
+
+
+def _push_notion_daily(day: Date) -> dict:
     try:
         notion, parent = require_notion("NOTION_PARENT_PAGE_ID")
     except RuntimeError as e:
         raise HTTPException(503, str(e)) from e
-
     try:
-        # 전일 대비용으로 이틀치 원자료
-        src = assemble_source(
-            daily(start=prev, end=day),
-            safety(start=prev, end=day),
-            spc_alarms(start=prev, end=day),
-            attendance(start=prev, end=day),
-            fixed(),
-        )
-        title, children = build_daily_payload(src, day)
+        title, children = build_daily_payload(_daily_src(day), day)
         result = upsert_page(notion, parent, title, children)
     except APIResponseError as e:
         log.exception("일일 경영 리포트 노션 전송 실패 day=%s", day)
@@ -182,6 +187,50 @@ def notion_daily(body: NotionDailyBody = NotionDailyBody()) -> dict:
     except Exception:
         log.exception("일일 경영 리포트 노션 전송 실패 day=%s", day)
         raise HTTPException(503, "일일 경영 리포트 노션 전송에 실패했습니다.") from None
-
     log.info("일일 경영 리포트 노션 %s day=%s page=%s", "생성" if result["created"] else "갱신", day, result["page_id"])
     return {"ok": True, "date": day.isoformat(), "title": title, **result}
+
+
+def _push_slack_daily(day: Date) -> dict:
+    try:
+        client, channel = require_slack()
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+    try:
+        title, body = build_daily_slack(_daily_src(day), day)
+        result = post_report(client, channel, title, body)
+    except SlackApiError as e:
+        log.exception("일일 경영 리포트 슬랙 전송 실패 day=%s", day)
+        raise HTTPException(502, slack_http_error(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("일일 경영 리포트 슬랙 전송 실패 day=%s", day)
+        raise HTTPException(503, "일일 경영 리포트 슬랙 전송에 실패했습니다.") from None
+    log.info("일일 경영 리포트 슬랙 게시 day=%s ts=%s", day, result["ts"])
+    return {"ok": True, "date": day.isoformat(), "title": title, **result}
+
+
+@router.post("/notion/daily")
+def notion_daily(body: DailyPushBody = DailyPushBody()) -> dict:
+    """어제(또는 body.date) 일일 경영 리포트 → 노션 (멱등)."""
+    return _push_notion_daily(body.date if body.date else target_date())
+
+
+@router.post("/slack/daily")
+def slack_daily(body: DailyPushBody = DailyPushBody()) -> dict:
+    """어제(또는 body.date) 일일 경영 리포트 → 슬랙 「보고」채널."""
+    return _push_slack_daily(body.date if body.date else target_date())
+
+
+@router.post("/push/daily")
+def push_daily(body: DailyPushBody = DailyPushBody()) -> dict:
+    """크론용 — target 한 곳만 (기본 notion). 슬랙은 target=slack.
+
+    예: curl -X POST http://127.0.0.1:8000/api/report/push/daily
+         curl -X POST …/push/daily -H 'Content-Type: application/json' -d '{"target":"slack"}'
+    """
+    day = body.date if body.date else target_date()
+    if body.target == "slack":
+        return _push_slack_daily(day)
+    return _push_notion_daily(day)

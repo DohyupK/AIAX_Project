@@ -14,10 +14,13 @@ from datetime import date as Date
 from fastapi import APIRouter, HTTPException, Query
 from notion_client.errors import APIResponseError
 from pydantic import BaseModel, Field
+from slack_sdk.errors import SlackApiError
 
 from common.db import connect
 from notion_export.client import notion_http_error, require_notion, upsert_page
 from notion_export.ppe_monthly import build_ppe_payload
+from slack_export.client import post_report, require_slack, slack_http_error
+from slack_export.ppe_monthly import build_ppe_slack
 
 router = APIRouter(prefix="/api/ppe")
 log = logging.getLogger("jh.ppe")
@@ -27,6 +30,10 @@ _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 
 
 class NotionPpeBody(BaseModel):
+    month: str = Field(..., description="YYYY-MM")
+
+
+class SlackPpeBody(BaseModel):
     month: str = Field(..., description="YYYY-MM")
 
 # 판정 1건 = 1행. 사원은 출입 로그의 게이트, 하청은 카드에 열린 게이트(a 또는 b 하나)
@@ -181,4 +188,33 @@ def notion_ppe(body: NotionPpeBody) -> dict:
         raise HTTPException(503, "보호구 보고서 노션 전송에 실패했습니다.") from None
 
     log.info("보호구 보고서 노션 %s month=%s page=%s", "생성" if result["created"] else "갱신", body.month, result["page_id"])
+    return {"ok": True, "month": body.month, "title": title, **result}
+
+
+@router.post("/slack")
+def slack_ppe(body: SlackPpeBody) -> dict:
+    """선택한 월의 보호구 착용 위반 보고서를 슬랙 「보고」채널에 게시."""
+    if not _MONTH_RE.match(body.month):
+        raise HTTPException(400, "month 는 YYYY-MM 형식이어야 합니다.")
+    try:
+        client, channel = require_slack()
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+
+    try:
+        all_raw = monthly()
+        if not any(r["month"] == body.month for r in all_raw):
+            raise HTTPException(404, f"{body.month} 월 보고서 원자료가 없습니다.")
+        title, text = build_ppe_slack(body.month, all_raw)
+        result = post_report(client, channel, title, text)
+    except HTTPException:
+        raise
+    except SlackApiError as e:
+        log.exception("보호구 보고서 슬랙 전송 실패 month=%s", body.month)
+        raise HTTPException(502, slack_http_error(e)) from e
+    except Exception:
+        log.exception("보호구 보고서 슬랙 전송 실패 month=%s", body.month)
+        raise HTTPException(503, "보호구 보고서 슬랙 전송에 실패했습니다.") from None
+
+    log.info("보호구 보고서 슬랙 게시 month=%s ts=%s", body.month, result["ts"])
     return {"ok": True, "month": body.month, "title": title, **result}

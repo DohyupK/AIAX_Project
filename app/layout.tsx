@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 // 화면 셸: JH 플랫폼 인덱스 (서버 PlatformLayout + 클라이언트 사이드바 아일랜드)
 import { PlatformLayout } from "@/JH/main";
-// 혜진봇 — 전역 우하단 FAB (DH)
+// 교대 인수인계 — 전역 팝업·「인수인계 실행」(JH, DH 마운트)
+import { ShiftHandover } from "@/JH/main/shift_handover";
+// Shift 봇 — 전역 우하단 FAB (DH, 모듈 id hyejin_bot)
 import { HyejinBot } from "@/DH/main/hyejin_bot";
 
 export const metadata: Metadata = {
@@ -19,6 +21,7 @@ export default function RootLayout({
     <html lang="ko">
       <body>
         <PlatformLayout>{children}</PlatformLayout>
+        <ShiftHandover />
         <HyejinBot />
       </body>
     </html>

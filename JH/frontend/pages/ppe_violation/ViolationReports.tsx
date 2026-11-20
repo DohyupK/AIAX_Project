@@ -94,8 +94,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
 /** 출력본 양식 그대로의 월간 보고서 */
 function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void }) {
   const docTitle = `보호구_착용_위반_보고서_${r.title.replace(/\s/g, "")}`;
-  const [notionMsg, setNotionMsg] = useState("");
-  const [notionBusy, setNotionBusy] = useState(false);
+  const [target, setTarget] = useState<"notion" | "slack">("notion");
+  const [exportMsg, setExportMsg] = useState("");
+  const [busy, setBusy] = useState(false);
 
   function printPdf() {
     // PDF 기본 파일명 = 문서 제목 → 인쇄 동안만 보고서 제목으로 바꿈
@@ -105,28 +106,50 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
     document.title = prevTitle;
   }
 
-  async function sendNotion() {
-    setNotionBusy(true);
-    setNotionMsg("");
+  function parseDetail(detail: unknown, status: number, fallback: string): string {
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((x) => (typeof x === "object" && x && "msg" in x ? String((x as { msg: string }).msg) : JSON.stringify(x)))
+        .join("; ") || fallback;
+    }
+    if (detail != null) return JSON.stringify(detail);
+    return `${fallback} (HTTP ${status})`;
+  }
+
+  async function sendExport() {
+    setBusy(true);
+    setExportMsg("");
+    const path = target === "notion" ? "/api/ppe/notion" : "/api/ppe/slack";
     try {
-      const res = await fetch(`${API_BASE}/api/ppe/notion`, {
+      const res = await fetch(`${API_BASE}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ month: r.month }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(60_000),
       });
-      const data = (await res.json().catch(() => ({}))) as { detail?: string; url?: string; created?: boolean };
+      const data = (await res.json().catch(() => ({}))) as {
+        detail?: unknown; url?: string; permalink?: string; created?: boolean;
+      };
       if (!res.ok) {
-        const detail = typeof data.detail === "string" ? data.detail : "노션 전송에 실패했습니다.";
-        throw new Error(detail);
+        throw new Error(parseDetail(
+          data.detail,
+          res.status,
+          target === "notion" ? "노션 전송에 실패했습니다." : "슬랙 전송에 실패했습니다.",
+        ));
       }
-      setNotionMsg(data.created === false ? "노션 페이지를 갱신했습니다." : "노션 페이지를 만들었습니다.");
-      if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+      if (target === "notion") {
+        setExportMsg(data.created === false ? "노션 페이지를 갱신했습니다." : "노션 페이지를 만들었습니다.");
+        if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+      } else {
+        setExportMsg("슬랙 「보고」채널에 올렸습니다.");
+        if (data.permalink) window.open(data.permalink, "_blank", "noopener,noreferrer");
+      }
     } catch (e: unknown) {
-      console.error("[ppe_violation] 노션 전송 실패", e);
-      setNotionMsg(e instanceof Error ? e.message : "노션 전송에 실패했습니다.");
+      console.error(`[ppe_violation] ${target} 전송 실패`, e);
+      setExportMsg(e instanceof Error ? e.message : "전송에 실패했습니다.");
     } finally {
-      setNotionBusy(false);
+      setBusy(false);
     }
   }
 
@@ -137,12 +160,25 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
       <div className={s.toolbar} data-print-hide>
         <button type="button" className={s.backBtn} onClick={onClose}>← 목록</button>
         <button type="button" className={s.printBtn} onClick={printPdf}>PDF 출력</button>
-        <button type="button" className={s.notionBtn} onClick={sendNotion} disabled={notionBusy}>
-          {notionBusy ? "전송 중…" : "노션으로 보내기"}
+        <fieldset className={s.exportTarget} aria-label="보낼 곳">
+          <legend className={s.exportLegend}>보낼 곳</legend>
+          <label className={s.exportRadio}>
+            <input type="radio" name="ppe-export-target" value="notion" checked={target === "notion"}
+              onChange={() => setTarget("notion")} disabled={busy} />
+            노션
+          </label>
+          <label className={s.exportRadio}>
+            <input type="radio" name="ppe-export-target" value="slack" checked={target === "slack"}
+              onChange={() => setTarget("slack")} disabled={busy} />
+            슬랙
+          </label>
+        </fieldset>
+        <button type="button" className={s.notionBtn} onClick={sendExport} disabled={busy}>
+          {busy ? "전송 중…" : "보내기"}
         </button>
         <button type="button" className={s.closeBtn} onClick={onClose} aria-label="닫기" autoFocus>×</button>
       </div>
-      {notionMsg && <p className={s.notionMsg} data-print-hide role="status">{notionMsg}</p>}
+      {exportMsg && <p className={s.notionMsg} data-print-hide role="status">{exportMsg}</p>}
 
       <div className={s.paper}>
         {/* 결재란 — 출력본 수기 서명용 */}
