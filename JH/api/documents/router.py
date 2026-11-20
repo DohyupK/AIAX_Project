@@ -342,7 +342,7 @@ def ask_documents(body: SearchBody):
     from documents.alert_context import collect_alert_context
     from documents.doc_catalog import (
         collect_catalog_text,
-        lexical_chunk_hits,
+        ensure_live_bodies,
         wants_doc_catalog,
     )
     from documents.quality_context import collect_quality_context
@@ -357,18 +357,8 @@ def ask_documents(body: SearchBody):
     catalog_text = ""
     if wants_doc_catalog(q, path):
         catalog_text = collect_catalog_text(q)
-        if len(hits) < 2:
-            lex = lexical_chunk_hits(q)
-            if lex:
-                # 벡터 hits 뒤에 제목검색 청크 보충 (중복 DOC 제외)
-                seen = {h.get("company_document_idx") for h in hits}
-                for h in lex:
-                    if h.get("company_document_idx") in seen:
-                        continue
-                    hits.append(h)
-                    seen.add(h.get("company_document_idx"))
-                    if len(hits) >= body.limit:
-                        break
+        # 제목검색·메타만 청크 → 파일 즉시 추출 + 재청킹 예약
+        hits = ensure_live_bodies(q, hits, limit=body.limit)
     alert_sources, alert_text = collect_alert_context(query=q, ui_context=ui_dict)
     if _wants_quality_kpi(q, path):
         quality_sources, quality_text = collect_quality_context()
