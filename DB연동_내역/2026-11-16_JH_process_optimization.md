@@ -24,3 +24,5 @@
 **2026-11-19 실시간 따라가기** — 날짜가 오늘(KST)이면 `/api/casting/live` 를 5초마다 증분 조회. 조건 `"timestamp" = 오늘 AND date <= 지금`(DB 서버 시계 `now() AT TIME ZONE 'Asia/Seoul'`) — 미리 넣은 목업으로도 시각이 지날 때마다 샷이 나타나고, Kafka·Flink 가 실제 샷을 mes 에 넣으면 코드 변경 없이 그대로 동작. `/dates` 는 오늘 이후 날짜 제외. DB 쓰기 없음.
 
 **2026-11-20 관리도(SPC) 서버 계산** — `GET /api/casting/spc?line=&key=&first=&last=` (`JH/api/casting/spc.py`). `mes.investment_casting` 에서 보이는 구간 끝 샷 이전 최대 8,100샷(앞쪽 문맥 6,000 + 구간 최대 2,100)을 `"timestamp", date, production_count` 순으로 읽어 생산 흐름(생산번호 +1 이어짐)·생산 런(흐름 안 생산번호 감소 = 재가동)별로 EWMA·MR·넬슨 2·3 계산. 기준선 = 라인별 고정 표(코드 상수). 읽기만(app_lake), DB 쓰기 없음. 응답 0.26~0.33초(실데이터 확인).
+
+**2026-11-20 시연 배속(×20 ↔ 샷 생성)** — `GET|PUT /api/casting/demo-speed` → `mes.shot_generator_control` (init 28). app_lake 가 이 표만 UPDATE. 공정최적화 **오늘(live)** 에서 ×20 ON=20 / OFF·페이지 이탈=1. MS `shot_generator` run 이 폴링해 벽시계 대기÷speed, 배속>1 이면 INSERT 시각을 벽시계로 찍어 `/live`가 받게 함. 기록 [2026-11-20_DH_shot_generator_demo_speed.md](./2026-11-20_DH_shot_generator_demo_speed.md).

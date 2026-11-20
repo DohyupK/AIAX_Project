@@ -5,7 +5,8 @@
 ## 무엇인가
 
 - TM 규칙(실시간용 규칙 1~6)으로 라인 3개의 샷을 만들어 **`mes.investment_casting`에 바로 저장**해요. Kafka는 거치지 않아요.
-- 라인마다 약 150초에 1샷을 만들어요. 켜지면 **DB의 라인별 마지막 샷에서 이어서** 만들어요.
+- 라인마다 약 150초에 1샷을 만들어요(1배속). 켜지면 **DB의 라인별 마지막 샷에서 이어서** 만들어요.
+- 시연 배속: `mes.shot_generator_control.speed`(1 또는 20). JH 공정최적화 실시간 ×20 → `PUT /api/casting/demo-speed`. 20배면 벽시계 기준 약 7.5초마다 INSERT하고, DB에 넣는 시각은 벽시계로 찍어요(`/live`가 받게).
 - 꺼져 있던 동안의 샷은 다시 켜질 때 한꺼번에 채워요. 그래서 공백이 생기지 않아요.
 - DB가 끊기면 같은 샷을 10초마다 다시 시도해요. 샷을 버리지 않아요.
 - 이미지는 다루지 않아요. MS PC의 `MS/db/apps` 안에 있는 `apps.image_sender`가 따로 붙여요.
@@ -29,7 +30,13 @@ pip install -r requirements.txt                       # 파이썬 3.10 이상
 
 python shot_generator.py --mode test --speed 50 --shots 10   # 시험: 화면에만 출력, DB 안 씀
 python shot_generator.py --mode fast --shots 20000 --out fast.csv   # 검증: CSV + 규칙 비교표
-python shot_generator.py --mode run                   # 운영: mes에 저장
+python shot_generator.py --mode run                   # 운영: mes에 저장 (배속은 control 표·--speed)
+python shot_generator.py --mode run --speed 20        # 운영 초기 20배 (표가 있으면 표 값 우선)
+```
+
+배속 제어 표(서버에 한 번 적용):
+```bash
+# MS/db/init/28_shot_generator_control.sql
 ```
 
 `.env` 예시 (같은 폴더):

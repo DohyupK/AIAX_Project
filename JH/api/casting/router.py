@@ -5,14 +5,17 @@ prob = 1차(ML) 불량 점수 (Model Management 「품질 1차 검사」 배포 
 /spc = 관리도 — 생산 흐름·생산 런 기준 EWMA·MR·넬슨 (casting/spc.py).
 /limits = 알림 판정용 관리선·기준 기간 (spc.py 표 그대로, 판정은 프런트 common/casting/alerts.ts).
 /live = 실시간 따라가기 (오늘 KST, 현재 시각 이전 샷만 — 증분 조회).
+/demo-speed = 시연 배속(1|20) — mes.shot_generator_control ↔ MS shot_generator (공정최적화 ×20).
 /second = 2차(DL) 판정 (「품질 2차 검사」 배포 모델, 없으면 기본 모델 — casting/dl_model.py, 이미지 mes.casting_image).
 """
 from __future__ import annotations
 
 import logging
 from datetime import date as Date
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from casting import dl_model, model, spc
 from common.db import connect
@@ -112,6 +115,48 @@ def live(line: str = LINE, after: str | None = Query(None, pattern=CASTING_ID)) 
         log.exception("실시간 샷 조회 실패 line=%s after=%s", line, after)
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
     return {"date": today.isoformat(), "reset": not cur, "shots": _scored(rows, f"live line={line}")}
+
+
+class DemoSpeedBody(BaseModel):
+    """시연 배속 — 1=실시간(~150초/샷), 20=20배속 (JH ×20 ↔ MS shot_generator)"""
+    speed: Literal[1, 20] = Field(description="1 또는 20")
+
+
+@router.get("/demo-speed")
+def get_demo_speed() -> dict:
+    """MS shot_generator 가 읽는 시연 배속 (mes.shot_generator_control)"""
+    try:
+        with connect(DB) as conn:
+            row = conn.execute(
+                "SELECT speed, updated_at FROM mes.shot_generator_control WHERE id = 1"
+            ).fetchone()
+    except Exception:
+        log.exception("시연 배속 조회 실패")
+        raise HTTPException(503, "시연 배속 조회에 실패했습니다. (init 28 적용 여부 확인)")
+    if not row:
+        raise HTTPException(503, "시연 배속 행이 없습니다. (mes.shot_generator_control)")
+    return {"speed": int(row["speed"]), "updatedAt": row["updated_at"].isoformat()}
+
+
+@router.put("/demo-speed")
+def put_demo_speed(body: DemoSpeedBody) -> dict:
+    """공정최적화 live ×20 — app_lake 가 control 행만 UPDATE (그 외 mes 쓰기는 없음)"""
+    try:
+        with connect(DB) as conn:
+            row = conn.execute(
+                "UPDATE mes.shot_generator_control SET speed = %s, updated_at = now() "
+                "WHERE id = 1 RETURNING speed, updated_at",
+                (body.speed,),
+            ).fetchone()
+            if not row:
+                raise HTTPException(503, "시연 배속 행이 없습니다. (mes.shot_generator_control)")
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("시연 배속 저장 실패 speed=%s", body.speed)
+        raise HTTPException(503, "시연 배속 저장에 실패했습니다. (권한·init 28 확인)")
+    log.info("시연 배속 → %s", body.speed)
+    return {"speed": int(row["speed"]), "updatedAt": row["updated_at"].isoformat()}
 
 
 def _scored(rows: list[dict], ctx: str) -> list[dict]:

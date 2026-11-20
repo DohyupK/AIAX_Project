@@ -9,6 +9,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/aiax/shot_generator
 EnvironmentFile=/opt/aiax/shot_generator/.env
+# 배속 기본 1. JH ×20 은 mes.shot_generator_control (init 28) 로 바꿈
 ExecStart=/opt/aiax/shot_generator/venv/bin/python -u shot_generator.py --mode run
 Restart=always
 RestartSec=10

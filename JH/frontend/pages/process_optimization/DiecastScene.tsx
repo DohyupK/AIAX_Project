@@ -59,7 +59,7 @@ export default function DiecastScene({ shots, model, playing, cycleSec, speed, o
       <div className={s.speed}>
         <span className={s.speedInfo}>1 사이클 {Math.round(cycleSec)}초{speed > 1 && ` → ${(cycleSec / speed).toFixed(1)}초`}</span>
         <button type="button" className={`${po.btn} ${speed > 1 ? s.speedOn : ''}`} aria-pressed={speed > 1}
-          title="설비 장면과 데이터 재생을 20배속으로" onClick={() => onSpeed(speed > 1 ? 1 : FAST)}>×{FAST}</button>
+          title="설비 장면·데이터 재생을 20배속 (실시간일 때 샷 생성도 함께)" onClick={() => onSpeed(speed > 1 ? 1 : FAST)}>×{FAST}</button>
       </div>
       <svg ref={svgRef} className={s.svg} viewBox="0 0 1200 770" preserveAspectRatio="xMidYMid meet"
         role="group" aria-label="다이캐스팅 설비 장면 — 센서 라벨을 누르면 공정 변수 모니터로 이동" />
