@@ -1,17 +1,18 @@
+/* 색 = 다른 본문 페이지와 같은 밝은 테마 (JH ProcessOptimization.module.css .page 변수와 같은 값, 2026-11-21 JH·DH 승인) */
 .page {
-  --al-bg: #0f1419;
-  --al-panel: #1a222c;
-  --al-line: #2c3a48;
-  --al-text: #e8eef4;
-  --al-muted: #8b9aab;
-  --al-accent: #3d8bfd;
-  --al-up: #3ecf8e;
-  --al-down: #f07178;
+  --al-bg: #eef1f5;
+  --al-panel: #ffffff;
+  --al-line: #dde3ea;
+  --al-text: #0f1b2d;
+  --al-muted: #5b6779;
+  --al-accent: #2563c9;
+  --al-up: #16875b;
+  --al-down: #cf2f2f;
+  --al-soft: #f4f6f9;
+  --al-on: #eaf1fe;
   min-height: 100%;
   padding: 1.5rem 1.75rem 2.5rem;
-  background:
-    radial-gradient(ellipse 80% 50% at 10% -10%, #1a3a5c55, transparent),
-    var(--al-bg);
+  background: var(--al-bg);
   color: var(--al-text);
   font-family: "Segoe UI", "Malgun Gothic", sans-serif;
 }
@@ -64,10 +65,9 @@
 .error {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  border: 1px solid #8b3a3a;
-  background: #2a1515;
-  border-radius: 4px;
-  color: #f0b4b4;
+  background: #fbe5e5;
+  border-radius: 6px;
+  color: var(--al-down);
 }
 
 .empty {
@@ -148,8 +148,8 @@
 }
 
 .tabOn {
-  background: #243044;
-  color: var(--al-text);
+  background: var(--al-on);
+  color: #1d4ed8;
   border-color: var(--al-accent);
 }
 
@@ -208,7 +208,7 @@
 .table th {
   color: var(--al-muted);
   font-weight: 600;
-  background: #151c24;
+  background: var(--al-soft);
   position: sticky;
   top: 0;
 }
@@ -219,7 +219,7 @@
 }
 
 .table tbody tr:hover {
-  background: #212b36;
+  background: var(--al-soft);
 }
 
 .pager {
@@ -243,7 +243,7 @@
 }
 
 .pageOn {
-  background: #243044;
-  color: var(--al-text);
+  background: var(--al-accent);
+  color: #fff;
   border-color: var(--al-accent);
 }
