@@ -9,23 +9,17 @@ import type { FeatureKey, ModelInfo } from '../../common/casting/types';
 import KpiCards from './KpiCards';
 import AlertLog from './AlertLog';
 import SensorMonitor, { SENSOR_MONITOR_ID } from './SensorMonitor';
-import { BTN, CARD, CRUMB, FOCUS, H1, PAGE } from '../../common/ui';
+import s from './ProcessOptimization.module.css';
 
-const LOADING = `${CARD} p-5 text-sm text-gray-500 dark:text-gray-400`;
 // 설비 장면·SPC는 초기 번들에서 분리 — 라우트 「페이지를 불러오는 중」노출 시간 단축
 const DiecastScene = dynamic(() => import('./DiecastScene'), {
   ssr: false,
-  loading: () => <div className={LOADING}>설비 장면 불러오는 중…</div>,
+  loading: () => <div className={s.panel}>설비 장면 불러오는 중…</div>,
 });
 const SpcChart = dynamic(() => import('./SpcChart'), {
   ssr: false,
-  loading: () => <div className={LOADING}>관리도 불러오는 중…</div>,
+  loading: () => <div className={s.panel}>관리도 불러오는 중…</div>,
 });
-
-// 상단 조작 칩 — 860px 이하는 2칸 격자로 꽉 차게, 폰은 터치 높이 확대
-const CHIP =
-  'inline-flex h-9 min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm whitespace-nowrap text-gray-500 shadow-sm dark:border-gray-700/60 dark:bg-gray-800 dark:text-gray-400 tablet:justify-between phone:h-11';
-const CHIP_SELECT = `form-select min-w-0 border-0 bg-transparent py-0 pr-7 pl-0 text-sm font-semibold text-gray-800 focus:ring-0 dark:text-gray-100 tablet:flex-1 ${FOCUS}`;
 
 const PRODUCT = 'CylinderHead';
 const DEFAULT_CYCLE = 155; // 사이클 값이 없을 때 (초)
@@ -124,51 +118,49 @@ export default function ProcessOptimizationDashboard() {
   };
 
   return (
-    <div className={`${PAGE} flex flex-col gap-6 phone:gap-4`}>
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className={s.page}>
+      <header className={s.head}>
         <div>
-          <div className={CRUMB}>주조 공정 대시보드 › 공정 최적화</div>
-          <h1 className={H1}>공정 최적화 대시보드</h1>
+          <div className={s.crumb}>주조 공정 대시보드 › 공정 최적화</div>
+          <h2 className={s.title}>공정 최적화 대시보드</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2 tablet:grid tablet:w-full tablet:grid-cols-2">
-          <label className={CHIP}>
+        <div className={s.chips}>
+          <label className={s.chip}>
             라인
-            <select className={CHIP_SELECT} value={line} aria-label="라인 선택"
+            <select className={s.chipSelect} value={line} aria-label="라인 선택"
               onChange={e => setLine(e.target.value as Line)}>
               {LINES.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </label>
-          <label className={CHIP}>
+          <label className={s.chip}>
             날짜
-            <select className={CHIP_SELECT} value={date} aria-label="날짜 선택" disabled={!dates?.length}
+            <select className={s.chipSelect} value={date} aria-label="날짜 선택" disabled={!dates?.length}
               onChange={e => { setDate(e.target.value); setPlaying(true); }}>
               {dates?.map(d => <option key={d} value={d}>{d === today ? `${d} (실시간)` : d}</option>)}
             </select>
           </label>
-          <span className={CHIP}>품목 <b className="font-semibold text-gray-800 dark:text-gray-100">{PRODUCT}</b></span>
-          <span className={`${CHIP} ${live ? 'tablet:col-span-2' : ''}`}>
-            <span className="flex items-center gap-2">
-              <span className={`size-2 shrink-0 rounded-full ${live || playing ? 'animate-pulse bg-green-500 motion-reduce:animate-none' : 'bg-gray-400'}`} />
-              <b className="font-semibold text-gray-800 dark:text-gray-100">{live ? '실시간' : playing ? '재생 중' : finished ? '재생 종료' : '일시정지'}</b>
-            </span>
-            {latest && <span className="truncate font-mono text-xs tabular-nums">{date} {latest.time}</span>}
+          <span className={s.chip}>품목 <b>{PRODUCT}</b></span>
+          <span className={s.chip}>
+            <span className={`${s.dot} ${live || playing ? s.dotLive : ''}`} />
+            <b>{live ? '실시간' : playing ? '재생 중' : finished ? '재생 종료' : '일시정지'}</b>
+            {latest && <span className={s.num}>· {date} {latest.time}</span>}
           </span>
           {/* 실시간은 새 샷이 오는 대로 따라가므로 재생·일시정지 없음 */}
-          {!live && <button type="button" className={`${BTN} h-9 phone:h-11 tablet:col-span-2`} onClick={togglePlay}>{playing ? '일시정지' : '재생'}</button>}
+          {!live && <button type="button" className={s.btn} onClick={togglePlay}>{playing ? '일시정지' : '재생'}</button>}
         </div>
       </header>
 
-      <p className="rounded-lg bg-sky-500/10 px-4 py-2.5 text-sm text-sky-800 dark:text-sky-300">
+      <div className={s.banner}>
         {live
           ? '실시간(공정 DB): 오늘 지금까지의 최근 샷을 보여 주고, 새 샷이 들어오면 5초 안에 이어 붙입니다. 시연 가속은 샷 생성기 --speed 20 (사이클·간격 ÷20).'
           : '실데이터(공정 DB): 고른 날짜의 샷을 처음부터 재생합니다. 1샷 = 평균 설비 사이클(×20 버튼으로 20배속).'}
         {' '}알림은 불량 예측과 별개로 고정 관리선(기준 기간 정상 양품 샷)으로 기준 기간 다음 날부터 판정합니다 — 경보(설비 한계) · 주의(관리선 밖) · 관찰(추세).
-      </p>
+      </div>
 
       {err && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400" role="alert">
-          <span className="min-w-0 flex-1">데이터를 불러오지 못했습니다: {err}</span>
-          <button type="button" className={BTN} onClick={() => {
+        <div className={s.errorBox} role="alert">
+          <span>데이터를 불러오지 못했습니다: {err}</span>
+          <button type="button" className={s.btn} onClick={() => {
             setMetaError(null);
             // 날짜 목록부터 다시
             setDates(null);
@@ -182,24 +174,23 @@ export default function ProcessOptimizationDashboard() {
       )}
 
       {/* 셸(헤더·배너)은 유지하고 데이터 영역만 상태 표시 */}
-      {dates === null && !err && <div className={LOADING}>날짜 목록을 불러오는 중입니다…</div>}
-      {loading && !!date && !shots.length && !err && <div className={LOADING}>데이터를 불러오는 중입니다…</div>}
+      {dates === null && !err && <div className={s.panel}>날짜 목록을 불러오는 중입니다…</div>}
+      {loading && !!date && !shots.length && !err && <div className={s.panel}>데이터를 불러오는 중입니다…</div>}
       {/* 해당 라인의 샷이 아직 없음 (목업: line_no1 만 데이터 있음 / 실제: 오늘 생산 전이거나 미연결) */}
       {(dates?.length === 0 || (!loading && date && !shots.length)) && !err && (
-        <div className={`${CARD} flex min-h-60 flex-col items-center justify-center gap-1.5 p-5 text-center text-sm text-gray-700 dark:text-gray-200`} role="status">
-          <span><b>{line}</b> 데이터가 아직 연결되지 않았습니다.</span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">라인 설비 데이터가 연결되면 설비 장면·공정 변수·관리도가 표시됩니다.</span>
+        <div className={`${s.panel} ${s.emptyLine}`} role="status">
+          <b>{line}</b> 데이터가 아직 연결되지 않았습니다.
+          <span className={s.sub}>라인 설비 데이터가 연결되면 설비 장면·공정 변수·관리도가 표시됩니다.</span>
         </div>
       )}
 
       {/* 모델만 있으면 골격 표시 — latest 대기 중에도 장면·패널 자리 확보 */}
       {model && (
         <>
-          {/* PC: 장면 | KPI + 알림. 1180px 이하: 장면 아래로 */}
-          <section className="grid gap-6 phone:gap-4 min-[1181px]:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <section className={`${s.grid} ${s.top}`}>
             <DiecastScene shots={shots} model={model} playing={live || playing} cycleSec={cycle}
               speed={speed} sceneSpeed={sceneSpeed} onSpeed={onSpeed} onPick={pickFromScene} onPhase={setActiveGroup} />
-            <div className="flex min-w-0 flex-col gap-6 phone:gap-4">
+            <div className={s.side}>
               <KpiCards shots={shots} model={model} />
               <AlertLog cards={cards} limits={limits && limits.line === line ? limits : null} date={date} />
             </div>
