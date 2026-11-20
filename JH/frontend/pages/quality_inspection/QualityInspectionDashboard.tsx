@@ -211,9 +211,10 @@ export default function QualityInspectionDashboard() {
                 base={`1차 양품 ${sum.secondTargets.toLocaleString()}샷 중 이미지 있는 ${sum.inspected}샷 검사 · 이미지 없음 ${(sum.secondTargets - sum.inspected).toLocaleString()}샷`} />
               <span className={po.sub}>
                 {secondError ? <span role="alert">2차 검사를 불러오지 못했습니다: {secondError}</span>
-                  : !second ? '2차 검사 중… (처음 조회는 이미지마다 모델을 실행해 몇 초 걸립니다)'
+                  : !second ? '2차 검사 결과 불러오는 중…'
                   : <>모델 <b>{second.model.name}{second.model.version && ` ${second.model.version}`}</b>
-                    {second.model.source === 'registry' ? ' · Model Management 「품질 2차 검사」 배포 모델' : ' · 레지스트리 미등록 — 기본 모델'}</>}
+                    {second.model.source === 'registry' ? ' · Model Management 「품질 2차 검사」 배포 모델' : ' · 레지스트리 미등록 — 기본 모델 (판정 저장 안 됨)'}
+                    {second.pending > 0 && <> · <b>판정 대기 {second.pending.toLocaleString()}장</b> (서버가 순서대로 판정 중 — 새로고침하면 반영)</>}</>}
               </span>
               <span className={s.cardSection}>
                 <span className={po.sub}>최근 2차 불량 샷 (하루 전체 · 불량 확률)</span>

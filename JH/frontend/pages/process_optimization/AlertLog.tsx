@@ -31,15 +31,19 @@ export default function AlertLog({ cards, limits, date }: {
 }) {
   const [closed, setClosed] = useState<Set<string>>(() => new Set());
   const [openId, setOpenId] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false); // 전체 알림 팝업
   const closeRef = useRef<HTMLButtonElement>(null);
+  const listCloseRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { setClosed(loadClosed()); }, []);
 
-  const open = useMemo(
-    () => cards.map((c, i) => ({ c, i })).filter(x => !closed.has(x.c.id))
+  // 등급 순 → 같은 등급은 최신 순 (cards 는 시간순)
+  const sorted = useMemo(
+    () => cards.map((c, i) => ({ c, i }))
       .sort((a, b) => GRADE_RANK[b.c.grade] - GRADE_RANK[a.c.grade] || b.i - a.i).map(x => x.c),
-    [cards, closed],
+    [cards],
   );
+  const open = useMemo(() => sorted.filter(c => !closed.has(c.id)), [sorted, closed]);
   const current = openId ? cards.find(c => c.id === openId) ?? null : null;
 
   // 기록 요약: 최근 4시간(마지막 샷 시각 기준)·불러온 날짜 전체, 등급별 건수 (닫힌 알림 포함)
@@ -52,14 +56,18 @@ export default function AlertLog({ cards, limits, date }: {
     ];
   }, [cards, date]);
 
-  // 팝업: 열리면 닫기 버튼에 포커스, Esc로 닫기
+  // 팝업: 열리면 닫기 버튼에 포커스, Esc로 닫기 (상세가 전체 목록 위에 떠 있으면 상세만 닫음)
   useEffect(() => {
-    if (!current) return;
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenId(null); };
+    if (!current && !listOpen) return;
+    (current ? closeRef : listCloseRef).current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (current) setOpenId(null);
+      else setListOpen(false);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current]);
+  }, [current, listOpen]);
 
   const closeAlert = (c: AlertCard) => {
     const next = new Set(closed).add(c.id);
@@ -77,7 +85,11 @@ export default function AlertLog({ cards, limits, date }: {
   return (
     <div className={s.panel}>
       <div className={s.panelHead}>
-        <h3>관리도 알림</h3>
+        <h3>
+          {judged
+            ? <button type="button" className={s.headBtn} onClick={() => setListOpen(true)}>관리도 알림 <span className={s.sub}>전체 보기 ›</span></button>
+            : '관리도 알림'}
+        </h3>
         {limits && <span className={s.sub}>기준선: {limits.baselineFrom} ~ {short(limits.baselineTo)} 정상 양품 샷 · 판정 {short(limits.judgeFrom)}부터</span>}
       </div>
 
@@ -115,6 +127,32 @@ export default function AlertLog({ cards, limits, date }: {
         </>
       )}
 
+      {listOpen && (
+        <div className={s.backdrop} onClick={() => setListOpen(false)}>
+          <div className={`${s.dialog} ${s.dialogWide}`} role="dialog" aria-modal="true" aria-labelledby="alert-list-title" onClick={e => e.stopPropagation()}>
+            <div className={s.dialogHead}>
+              <h3 id="alert-list-title" className={s.dialogTitle}>관리도 알림 전체 · {short(date)}</h3>
+              <button ref={listCloseRef} type="button" className={s.closeBtn} aria-label="전체 알림 닫기" onClick={() => setListOpen(false)}>×</button>
+            </div>
+            <p className={s.sub}>전체 <b className={s.num}>{cards.length}</b>건 (열림 {open.length} · 닫힘 {cards.length - open.length}) · 등급 순, 같은 등급은 최신 순</p>
+            <ul className={`${s.alertList} ${s.alertListAll}`}>
+              {sorted.length === 0 && <li className={s.sub}>알림 없음</li>}
+              {sorted.map(c => {
+                const done = closed.has(c.id);
+                return (
+                  <li key={c.id}>
+                    <button type="button" className={`${s.alertCard} ${GRADE_CLASS[c.grade]} ${done ? s.alertDone : ''}`} onClick={() => setOpenId(c.id)}>
+                      <span className={`${s.num} ${s.sub}`}>{c.head}{done && ' · 닫힘'}</span>
+                      <span className={s.alertTitle}>{c.title}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {current && (
         <div className={s.backdrop} onClick={() => setOpenId(null)}>
           <div className={s.dialog} role="dialog" aria-modal="true" aria-labelledby="alert-dialog-title" onClick={e => e.stopPropagation()}>
@@ -131,11 +169,15 @@ export default function AlertLog({ cards, limits, date }: {
             {current.extra && <p className={s.alertExtra}>{current.extra}</p>}
 
             <div className={s.closeForm}>
-              <p className={s.sub}>
-                {current.grade === 'watch' ? '관찰: 다음 점검 때 확인하세요.' : '경보·주의: 바로 설비에 가서 확인하세요.'}
-                {' '}「확인할 곳」을 직접 점검한 뒤 닫습니다.
-              </p>
-              <button type="button" className={s.btn} onClick={() => closeAlert(current)}>알림 닫기</button>
+              {closed.has(current.id) ? <p className={s.sub}>닫힌 알림입니다.</p> : (
+                <>
+                  <p className={s.sub}>
+                    {current.grade === 'watch' ? '관찰: 다음 점검 때 확인하세요.' : '경보·주의: 바로 설비에 가서 확인하세요.'}
+                    {' '}「확인할 곳」을 직접 점검한 뒤 닫습니다.
+                  </p>
+                  <button type="button" className={s.btn} onClick={() => closeAlert(current)}>알림 닫기</button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import MockShotImage from '../../common/casting/MockShotImage';
+import ShotImage from '../../common/casting/ShotImage';
 import { LINES, type Line } from '../../common/casting/api';
 import {
   DEFECT_TYPES, fetchDefectDates, fetchDefects, sortByStatus, toggleType, typesOf,
@@ -20,7 +20,7 @@ const STATUS_TEXT: Record<LabelStatus, string> = { unlabeled: '미라벨', label
 const LOAD_ERROR = 'JH API 서버(127.0.0.1:8000)를 확인해 주세요.';
 
 /**
- * 불량 유형 라벨링 — 그날 불량 샷 목록(lake), 클릭 시 전문가 라벨링 팝업
+ * 불량 유형 라벨링 — 그날 2차(DL) 판정 불량 샷 목록(ai.quality_prediction), 클릭 시 전문가 라벨링 팝업
  * 라벨 상태는 ai.defect_label·ai.defect_discard 에서 읽음. 저장은 ai 쓰기 계정 연결 전이라 막혀 있음 (labels.ts)
  */
 export default function DefectLabeling() {
@@ -102,7 +102,7 @@ export default function DefectLabeling() {
       </header>
 
       <div className={po.banner}>
-        불량 샷은 서버 lake 공정 데이터의 실제 판정(passorfail = 1)이며, 이미지는 목업입니다 (DL 모델 연결 전).
+        불량 샷은 2차(DL) 검사에서 불량으로 판정된 샷이며(품질 검사 화면에서 판정·저장), 사진은 서버 이미지 API에서 불러옵니다.
         라벨 상태는 DB에서 읽어 오고, <b>저장은 DB 쓰기 계정 연결 전이라 아직 할 수 없습니다.</b>
       </div>
 
@@ -135,7 +135,7 @@ export default function DefectLabeling() {
                   <li key={d.castingId}>
                     <button type="button" className={`${s.card} ${s[`card_${st}`]}`} onClick={() => setOpenId(d.castingId)}
                       aria-label={`#${d.shotId} ${d.time} ${STATUS_TEXT[st]} — 라벨링 열기`}>
-                      <MockShotImage shotId={d.shotId} defect className={s.thumb} />
+                      <ShotImage castingId={d.castingId} className={s.thumb} />
                       <span className={s.cardMeta}>
                         <b className={po.num}>#{d.shotId}</b>
                         <span className={`${po.sub} ${po.num}`}>{d.time}</span>
@@ -180,11 +180,11 @@ function LabelDialog({ line, shot, onClose }: { line: Line; shot: DefectShot; on
           <span className={`${s.badge} ${s[`badge_${status}`]}`}>{STATUS_TEXT[status]}</span>
           <button type="button" className={po.closeBtn} onClick={onClose} aria-label="닫기">×</button>
         </div>
-        <p className={po.sub}>{line} · {shot.time} · <span className={po.num}>{shot.castingId}</span> · 실제 판정 불량</p>
+        <p className={po.sub}>{line} · {shot.time} · <span className={po.num}>{shot.castingId}</span> · 2차 판정 불량</p>
 
         <div className={s.body}>
           <div className={s.left}>
-            <MockShotImage shotId={shot.shotId} defect className={s.image} />
+            <ShotImage castingId={shot.castingId} className={s.image} />
           </div>
           <fieldset className={s.types}>
             <legend>불량 유형 <span className={po.sub}>(여러 개 선택 가능 · UNDECIDABLE 은 단독)</span></legend>

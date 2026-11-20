@@ -13,6 +13,7 @@ import mockModel from './mock/model.json';
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false';
 // 기본: JH API 서버 (JH/api, 127.0.0.1:8000)
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+export const API_BASE = BASE;
 /** 정적 목업 샷 — Next public 경로 (번들 비포함) */
 const MOCK_SHOTS_URL = '/mocks/casting/shots.json';
 /** 브라우저 fetch 상한 — 무한 pending으로 「불러오는 중」고착 방지 */
@@ -98,7 +99,7 @@ export const todayKst = () => new Date().toLocaleDateString('sv-SE', { timeZone:
 
 /**
  * 2차(DL) 판정 — 그날 그 라인의 이미지가 있는 샷만 (1차 양품 거르기는 화면에서)
- * ponytail: 처음 조회 시 이미지마다 추론(장당 ~0.5초). 이미지가 수십 장 넘게 쌓이면 10초 제한에 걸리므로 추론 결과 DB 저장(ai.quality_prediction) 후 조회만 하도록 바꿀 것
+ * 서버가 미리 판정해 둔 DB 결과만 읽음 (요청 중 추론 없음). 아직 판정 안 된 샷 수 = pending
  */
 export function fetchSecond(line: string, date: string): Promise<SecondCheck> {
   return get<SecondCheck>(`/api/casting/second?line=${encodeURIComponent(line)}&date=${date}`);
