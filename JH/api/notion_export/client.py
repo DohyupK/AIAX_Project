@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -27,12 +28,27 @@ def _env(key: str) -> str:
     raise RuntimeError(f"루트 .env 에 {key} 가 없습니다.")
 
 
+def normalize_page_id(raw: str) -> str:
+    """URL 또는 UUID → 하이픈 있는 Notion page_id (8-4-4-4-12)."""
+    s = (raw or "").strip().split("?", 1)[0].split("#", 1)[0]
+    # 경로·하이픈 등 비-hex 제거 후 마지막 32자 (notion.com/p/<32hex> 포함)
+    hex_only = re.sub(r"[^0-9a-fA-F]", "", s)
+    if len(hex_only) < 32:
+        raise RuntimeError(
+            "노션 페이지 ID 형식이 아닙니다. 32자 ID 또는 페이지 링크를 넣으세요. "
+            f"(받은 값 앞부분: {raw[:48]!r})"
+        )
+    hex_id = hex_only[-32:].lower()
+    return f"{hex_id[0:8]}-{hex_id[8:12]}-{hex_id[12:16]}-{hex_id[16:20]}-{hex_id[20:32]}"
+
+
 def require_notion(parent_key: str) -> tuple[Client, str]:
     """(클라이언트, 부모 페이지 ID). 토큰·부모 ID 없으면 RuntimeError."""
     token = _env("NOTION_TOKEN")
-    parent = _env(parent_key)
-    if not token or not parent:
+    parent_raw = _env(parent_key)
+    if not token or not parent_raw:
         raise RuntimeError(f"루트 .env 의 NOTION_TOKEN / {parent_key} 를 채워 주세요.")
+    parent = normalize_page_id(parent_raw)
     return Client(auth=token), parent
 
 
