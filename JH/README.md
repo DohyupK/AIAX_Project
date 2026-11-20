@@ -27,7 +27,7 @@
 | 공정 최적화 대시보드 | `frontend/pages/process_optimization/`, `frontend/common/casting/` | 목업 데이터, `/casting/process-optimization` 연결 |
 | 메인 대시보드 | `frontend/pages/main_dashboard/`, `api/notice/` | 일정·예시 공지 하드코딩, 일일 공정알람 AI 공지 API, 메모 쿠키, `/` 연결 |
 | 보호구 착용 위반 대시보드 | `frontend/pages/ppe_violation/` | 목업 기록 하드코딩, 월별 위반 보고서 팝업, `/safety/ppe-violation` 연결 |
-| 교대 인수인계 리포트 | `frontend/pages/shift_handover/`, `main/shift_handover.ts` | 전역 FAB·자동 팝업·PDF. 루트 `app/layout` 마운트. casting API 재사용 |
+| 교대 인수인계 리포트 | `frontend/pages/shift_handover/`, `main/shift_handover.ts` | 사이드바 「인수인계 실행」·자동 팝업·PDF. 루트 `app/layout` 마운트. casting API 재사용 |
 
 ## 다른 폴더
 

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "../../common/theme/ThemeToggle";
 import { AUTH_PAGES } from "../../common/auth/token";
 import { UserMenu } from "./UserMenu";
+import { openShiftHandover } from "../shift_handover/ShiftHandover";
 
 type NavLeaf = { label: string; href: string };
 // icon = 24x24 SVG path(d). 하위 메뉴가 있으면 href 없이 펼침 그룹
@@ -43,6 +44,9 @@ const DOCS: NavItem = {
   href: "/documents",
   icon: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6",
 };
+
+// 인수인계 실행 — 페이지 이동 없이 전역 인수인계 팝업을 엶 (사내 문서함 바로 위)
+const HANDOVER_ICON = "M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3";
 
 const SETTINGS_ICON =
   "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z";
@@ -243,9 +247,25 @@ function PlatformShell() {
           <ul className="mt-3 space-y-1">{NAV.map(navItem)}</ul>
         </nav>
 
-        {/* 하단 고정: 사내 문서함 · 설정(표시만) · PC 접기 버튼 */}
+        {/* 하단 고정: 인수인계 실행 · 사내 문서함 · 설정(표시만) · PC 접기 버튼 */}
         <div className="mt-auto pt-6">
-          <ul>{navItem(DOCS)}</ul>
+          <ul className="space-y-1">
+            <li className="rounded-lg py-2 pl-4 pr-3">
+              <button
+                type="button"
+                className="block w-full text-left text-gray-800 transition hover:text-gray-900 dark:text-gray-100 dark:hover:text-white"
+                title="인수인계 실행"
+                aria-haspopup="dialog"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  openShiftHandover();
+                }}
+              >
+                {row({ label: "인수인계 실행", icon: HANDOVER_ICON }, false)}
+              </button>
+            </li>
+            {navItem(DOCS)}
+          </ul>
           <div className={`mt-3 flex gap-3 px-3 ${expanded ? "items-center justify-between" : "items-center justify-between lg:flex-col lg:px-0"}`}>
             <span className="text-gray-400 dark:text-gray-500" role="img" aria-label="설정">
               <Icon d={SETTINGS_ICON} />
