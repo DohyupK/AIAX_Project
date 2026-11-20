@@ -4,6 +4,8 @@
 배포 모델이 없으면 기본 모델(TM 배포 DieCasting_XGB_20261114_09)을 씀 — 레지스트리 등록 전까지 (사용자 결정 1a).
 pkl 형식: TM 최종 모델 형식(dict: model·features·threshold·thresholds). 명세: TM/기능표.md
 보안: pickle 은 불러올 때 코드가 실행되므로 TM/model_ml 폴더 안 .pkl 만 허용 (DB 값이라도 다른 경로·형식 거절).
+판정 저장: run_batch 가 샷을 미리 판정해 ai.quality_prediction 1차 칸(qc1_*)에 저장 — 백그라운드 작업(dl_model._loop)이 2차보다 먼저 호출.
+화면 API 는 지금처럼 요청 때 점수를 계산 (같은 모델이라 저장값과 같음).
 """
 from __future__ import annotations
 
@@ -12,6 +14,7 @@ import math
 import pickle
 import re
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +29,7 @@ DEFAULT_FILE = f"{DEFAULT_NAME}.pkl"
 PROCESS_CODE = "CAST-QC1"                              # DB 코드 = 화면 「품질 1차 검사」
 FILE_RE = re.compile(r"^[A-Za-z0-9_.-]+\.pkl$")        # 파일 이름만 (경로 구분자 금지)
 PRESSURE_LOW = 600                                     # pressure_low = injection_pressure < 600 (TM 전처리 규칙)
+BATCH = 2000                                           # 한 번에 판정·저장할 샷 수 (2,000샷 점수 계산 약 0.7초)
 
 _lock = threading.Lock()
 _current: dict = {}   # 메모리에는 지금 쓰는 모델 1개만 — {"key": (name, version, file), "obj": ..., "meta": ...}
@@ -97,6 +101,57 @@ def scores(rows: list[dict]) -> list[float]:
     m, _ = current()
     x = np.array([_row(r, m["features"]) for r in rows], dtype=float)
     return [float(v) for v in m["model"].predict_proba(x)[:, 1]]
+
+
+# 판정할 샷: 지금 시각 이전 샷 중 1차 결과 없음 / 지금 배포 모델과 다른 모델로 판정. 최근 샷부터
+PENDING_SQL = """
+SELECT m.* FROM mes.investment_casting m
+LEFT JOIN ai.quality_prediction q USING (casting_id)
+WHERE (m."timestamp" + m.date) <= (now() AT TIME ZONE 'Asia/Seoul')
+  AND (q.qc1_result IS NULL OR q.qc1_model_name <> %(name)s OR q.qc1_version <> %(version)s)
+ORDER BY m."timestamp" DESC, m.date DESC
+LIMIT %(n)s
+"""
+# 1차 칸 UPSERT. DB 규칙 23 「1차 불량이면 2차 없음」 — 1차 불량으로 쓰는 줄은 이미 있던 2차 칸을 같은 문장에서 비움
+SAVE_SQL = """
+INSERT INTO ai.quality_prediction (casting_id, qc1_model_name, qc1_version, qc1_result, qc1_score, qc1_predicted_at)
+VALUES (%(casting_id)s, %(name)s, %(version)s, %(result)s, %(score)s, %(at)s)
+ON CONFLICT (casting_id) DO UPDATE SET
+    qc1_model_name = EXCLUDED.qc1_model_name, qc1_version = EXCLUDED.qc1_version, qc1_result = EXCLUDED.qc1_result,
+    qc1_score = EXCLUDED.qc1_score, qc1_predicted_at = EXCLUDED.qc1_predicted_at,
+    model_name       = CASE WHEN EXCLUDED.qc1_result = 'fail' THEN NULL ELSE ai.quality_prediction.model_name END,
+    version          = CASE WHEN EXCLUDED.qc1_result = 'fail' THEN NULL ELSE ai.quality_prediction.version END,
+    result           = CASE WHEN EXCLUDED.qc1_result = 'fail' THEN NULL ELSE ai.quality_prediction.result END,
+    confidence_score = CASE WHEN EXCLUDED.qc1_result = 'fail' THEN NULL ELSE ai.quality_prediction.confidence_score END,
+    predicted_at     = CASE WHEN EXCLUDED.qc1_result = 'fail' THEN NULL ELSE ai.quality_prediction.predicted_at END
+"""
+_warned_default = False
+
+
+def run_batch() -> int:
+    """밀린 샷 최대 BATCH 개 1차 판정·저장 → 집은 샷 수 (BATCH 면 더 남아 있을 수 있음)"""
+    global _warned_default
+    m, meta = current()
+    if meta["source"] != "registry":   # 미등록 기본 모델은 외래키(qc1_model_name, qc1_version → registry) 때문에 저장 불가
+        if not _warned_default:
+            log.warning("1차 판정 저장 안 함 — Model Management 「품질 1차 검사」에 배포 모델이 없음 (기본 모델은 미등록)")
+            _warned_default = True
+        return 0
+    _warned_default = False
+    with connect("DATABASE_URL") as conn:   # app_lake — mes 읽기
+        rows = conn.execute(PENDING_SQL, {**meta, "n": BATCH}).fetchall()
+    if not rows:
+        return 0
+    th = float(m["threshold"])
+    at = datetime.now(timezone.utc)
+    out = [{"casting_id": r["casting_id"], **meta, "result": "fail" if s >= th else "pass", "score": s, "at": at}
+           for r, s in zip(rows, scores(rows))]   # 화면 firstFail 과 같은 기준 (점수 ≥ 기준값 = 불량)
+    with connect("AI_DATABASE_URL") as conn:   # app_ai — quality_prediction INSERT·UPDATE
+        with conn.cursor() as cur:
+            cur.executemany(SAVE_SQL, out)
+    log.info("1차 판정 저장 %d건 (%s %s, 불량 %d)", len(out), meta["name"], meta["version"],
+             sum(o["result"] == "fail" for o in out))
+    return len(rows)
 
 
 def info() -> dict:
