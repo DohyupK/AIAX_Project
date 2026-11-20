@@ -33,6 +33,12 @@ def require_slack() -> tuple[WebClient, str]:
     channel = _env("SLACK_REPORT_CHANNEL_ID")
     if not token or not channel:
         raise RuntimeError("루트 .env 의 SLACK_BOT_TOKEN / SLACK_REPORT_CHANNEL_ID 를 채워 주세요.")
+    # xapp- = App-Level Token (Socket Mode) — chat.postMessage 불가
+    if token.startswith("xapp-"):
+        raise RuntimeError(
+            "SLACK_BOT_TOKEN 에 xapp-(App-Level Token)은 쓸 수 없습니다. "
+            "api.slack.com/apps → OAuth & Permissions 의 Bot User OAuth Token(xoxb-)을 넣으세요."
+        )
     return WebClient(token=token), channel
 
 
@@ -73,6 +79,19 @@ def post_report(client: WebClient, channel: str, title: str, body: str) -> dict[
 
 def slack_http_error(exc: SlackApiError) -> str:
     err = ""
+    needed = ""
     if exc.response is not None:
         err = exc.response.get("error") or str(exc.response.data)
-    return f"Slack API 오류: {err or exc}"
+        # missing_scope 응답에 필요한 scope 이름이 있으면 붙임
+        needed = exc.response.get("needed") or ""
+        if isinstance(exc.response.data, dict) and not needed:
+            needed = exc.response.data.get("needed") or ""
+    msg = f"Slack API 오류: {err or exc}"
+    if err == "missing_scope":
+        scope_hint = needed or "chat:write"
+        msg += (
+            f" — 앱 OAuth에 `{scope_hint}` 추가 후 Reinstall, "
+            "토큰을 .env에 다시 넣고 「보고」채널에 봇/앱을 초대하세요. "
+            "권장: Bot Token(xoxb-) + Bot Token Scopes. 유저 토큰(xoxp)이면 User Token Scopes."
+        )
+    return msg

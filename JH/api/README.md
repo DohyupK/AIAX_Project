@@ -30,11 +30,26 @@ uv run uvicorn main:app --host 127.0.0.1 --port 8000
 |----|------|
 | `NOTION_TOKEN` | Integration 시크릿 (`ntn_…`) |
 | `NOTION_PARENT_PAGE_ID` | 공통 부모 페이지 **ID** (32자 hex). URL도 서버가 정규화 |
-| `SLACK_BOT_TOKEN` | Bot User OAuth Token (`xoxb-…`) |
+| `SLACK_BOT_TOKEN` | **Bot User OAuth Token (`xoxb-…`)** |
 | `SLACK_REPORT_CHANNEL_ID` | 「보고」채널 ID (예: `C0CK4R2M1FH`) |
 
+토큰 종류:
+
+| 앞글자 | 용도 | 채널 리포트 |
+|--------|------|-------------|
+| `xoxb-` | Bot User OAuth Token | **사용** |
+| `xoxp-` / `xoxe.xoxp-` | User OAuth Token | 가능(User scopes) |
+| `xapp-` | App-Level Token (Socket Mode) | **금지** |
+
 노션: Integration을 부모 페이지에 연결.  
-슬랙: 봇을 「보고」채널에 초대 (`chat:write`).  
+슬랙 ([api.slack.com/apps](https://api.slack.com/apps) → OAuth & Permissions):
+
+- 페이지 **위** OAuth Tokens → **Bot User OAuth Token** (`xoxb-`) 복사 (Basic Information의 App-Level/`xapp-` 아님)
+- **Bot Token Scopes**: `chat:write` (공개 채널 미참여 시 `chat:write.public`도)
+- scope 추가 후 **Reinstall to Workspace** → 새 `xoxb-`를 `.env`에 넣고 JH API 재시작
+- 「보고」채널에 봇 **초대**
+- `missing_scope` = scope 부족 · `xapp-` 넣으면 서버가 거부
+
 프론트가 원격 API를 쓰면 **서버** `.env`에도 같은 값을 넣고 JH API를 재시작.
 
 ### 일일 경영 리포트
