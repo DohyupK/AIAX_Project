@@ -3,14 +3,17 @@
 -- 이름: 명명규칙.md 2절(원본 이름 우선). 테이블 이름은 원본 파일 이름(Investment_Casting.csv)을 소문자로.
 -- (2026-11-07) 원본 CSV의 timestamp 연도를 2021 → 2026으로 변경 (CSV 파일 자체 수정, 그 외 값은 원본 그대로).
 -- (2026-11-07) raw_record(jsonb 백업) 삭제, cast_shot → investment_casting 으로 이름 변경, casting_id 추가.
+-- (2026-11-19) casting_id 앞에 라인 번호 추가 (L라인번호_). 라인이 3개가 되면서 line_no2·line_no3 에
+--              날짜·시각·생산번호가 같은 샷이 생겨 번호가 겹침. 서버는 MS/db/apps/src/apps/reload_casting.py 로 전환.
 
 -- 주조 원본 (제품 1개 생산 = 1행)
--- casting_id: 원본 값으로 자동 생성되는 행 식별자 = 생산일자(yymmdd)_생산시각(hhmmss)_생산번호
---   예) 2026-08-04, 7:04:11, production_count 1 → 260804_070411_1
+-- casting_id: 원본 값으로 자동 생성되는 행 식별자 = L라인번호_생산일자(yymmdd)_생산시각(hhmmss)_생산번호
+--   예) line_no1, 2026-08-04, 7:04:11, production_count 1 → L1_260804_070411_1
 --   원본 timestamp(날짜) 라벨이 실제 날짜와 달라 날짜+시각만으로는 302쌍이 겹침 → 생산번호까지 포함.
 --   DB가 계산하는 컬럼(GENERATED)이라 적재 시 넣지 않으며, 원본 23개 컬럼은 그대로 보관한다.
 CREATE TABLE mes.investment_casting (
     casting_id            text GENERATED ALWAYS AS (
+        'L' || regexp_replace(line_unit, '[^0-9]', '', 'g') || '_' ||
         lpad((extract(year  FROM "timestamp")::int % 100)::text, 2, '0') ||
         lpad( extract(month FROM "timestamp")::int::text, 2, '0') ||
         lpad( extract(day   FROM "timestamp")::int::text, 2, '0') || '_' ||
