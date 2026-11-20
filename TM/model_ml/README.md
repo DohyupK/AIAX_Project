@@ -78,6 +78,7 @@ DieCasting_{Algo}_{YYYYMMDD}_{NN}
 | `DieCasting_XGB_20261114_08` | `261114_XGB_08-12_untuned` | 2026-11-14 | 08 untuned |
 | `DieCasting_XGB_20261114_09` | `20261114_XGBoost_casting_v1.0.pkl` | 2026-11-14 | 배포용 최종(전체 100%) |
 | `DieCasting_XGB_20261114_10` | `20261114_XGBoost_casting_v1.0_validated.pkl` | 2026-11-14 | 성능 근거(앞 80%) |
+| `DieCasting_CatB_20261115_03` | `DieCasting_CatB_v2.0_deploy.pkl` | 2026-11-15 | 최종 v2.0 배포 후보(전체 100%, 12변수: 파생 top_mean·bottom_mean·mold_mean·tb_diff 포함, 결측은 중앙값 채움, 기준점 0.5552) |
 
 ## 경로
 
