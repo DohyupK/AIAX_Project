@@ -8,6 +8,20 @@ uv sync
 uv run uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
+## DB 접속 (루트 `.env`)
+
+모두 **DB 접속 주소** — `postgresql://계정:비밀번호@호스트:5432/aiax` (웹 주소 `https://…` 아님).
+호스트: 서버 `.env` = `127.0.0.1` / 개인 PC `.env` = 서버 IP.
+
+| 키 | 계정 | 쓰는 곳 |
+|----|------|---------|
+| `DATABASE_URL` | `app_lake` (읽기) | 공정·품질·보호구·리포트·모델 조회 |
+| `HR_DATABASE_URL` | `app_hr` | 인사 관리 |
+| `DOCS_DATABASE_URL` | `app_docs` | 사내 문서함 |
+| `AI_DATABASE_URL` | `app_ai` (쓰기) | 품질 2차(DL) 판정 저장 — 서버 시작 시 백그라운드 작업 (`casting/dl_model.py`). 비밀번호 = MS 가 만든 `app_ai` 비밀번호 |
+
+형식이 틀리면 로그에 `루트 .env 의 … 는 DB 접속 주소여야 합니다` (값은 출력하지 않음).
+
 ## 노션 리포트 연동
 
 루트 `.env`에 채울 값:

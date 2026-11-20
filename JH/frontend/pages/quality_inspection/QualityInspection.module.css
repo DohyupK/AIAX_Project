@@ -14,12 +14,17 @@ button.modelCard:focus-visible { outline: 2px solid var(--accent); outline-offse
 .slot { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 200px; border: 1px dashed var(--line); border-radius: 6px; background: var(--soft); color: var(--muted); font-size: 12.5px; }
 
 /* ML 팝업 */
-.dialog { width: min(1100px, 100%); max-height: 90vh; }
+/* po.dialog(공정 최적화 CSS, 480px)와 같이 씀 — 같은 우선순위면 CSS 적용 순서에 따라 좁아짐(공정 최적화 → 화면 이동 시). 클래스 두 번 = 우선순위 높여 순서 무관하게 이 폭 */
+.dialog.dialog { width: min(1100px, 100%); max-height: 90vh; }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; margin-top: 12px; }
 .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .stat { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
 .stat b { font-size: 18px; }
+/* 최근 2차 불량 샷 — 왼쪽 사진 썸네일 + 오른쪽 글자 */
+.statThumb { flex-direction: row; align-items: center; gap: 10px; }
+.statText { display: flex; flex-direction: column; min-width: 0; }
+.thumb { flex: none; width: 60px; height: 60px; object-fit: cover; border-radius: 4px; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; }
 
 /* 샷 목록 */
