@@ -3,6 +3,7 @@
 응답 형식은 프런트 JH/frontend/common/casting/types.ts 의 Shot 과 같음.
 prob = 1차(ML) 불량 점수 (Model Management 「품질 1차 검사」 배포 모델, 없으면 기본 모델 — casting/model.py), actual = 실제 판정(passorfail).
 /spc = 관리도 — 생산 흐름·생산 런 기준 EWMA·MR·넬슨 (casting/spc.py).
+/limits = 알림 판정용 관리선·기준 기간 (spc.py 표 그대로, 판정은 프런트 common/casting/alerts.ts).
 /live = 실시간 따라가기 (오늘 KST, 현재 시각 이전 샷만 — 증분 조회).
 /second = 2차(DL) 판정 (「품질 2차 검사」 배포 모델, 없으면 기본 모델 — casting/dl_model.py, 이미지 mes.casting_image).
 """
@@ -166,6 +167,15 @@ def spc_chart(line: str = LINE, key: str = SPC_KEYS,
     if start is None:
         raise HTTPException(400, f"관리도 구간이 너무 깁니다 (최대 {SPC_WINDOW_MAX}샷).")
     return {"baseline": base, "lambda": spc.LAMBDA, "shots": spc.compute(rows, start, base)}
+
+
+@router.get("/limits")
+def control_limits(line: str = LINE) -> dict:
+    """알림 판정용 관리선 — 라인별 고정 표(관리도와 같은 값) + 기준 기간. DB 조회 없음"""
+    out = spc.limits(line)
+    if out is None:
+        raise HTTPException(404, f"{line} 는 관리선이 없습니다.")
+    return out
 
 
 @router.get("/model")

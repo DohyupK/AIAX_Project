@@ -1,4 +1,5 @@
 import type { MlModel, ModelInfo, SecondCheck, Shot } from './types';
+import type { ControlLimits } from './alerts';
 import mockModel from './mock/model.json';
 
 /**
@@ -85,6 +86,11 @@ export interface SpcData { baseline: SpcBaseline; lambda: number; shots: SpcPoin
 /** 관리도 — 보이는 구간(first~last castingId). EWMA·MR·넬슨 2·3 은 서버가 생산 흐름·런 첫 샷부터 계산 */
 export function fetchSpc(line: string, key: string, first: string, last: string): Promise<SpcData> {
   return get<SpcData>(`/api/casting/spc?${new URLSearchParams({ line, key, first, last })}`);
+}
+
+/** 알림 판정용 관리선 + 기준 기간 (서버 casting/spc.py 고정 표 — 관리도와 같은 값, 판정은 alerts.ts) */
+export function fetchLimits(line: string): Promise<ControlLimits> {
+  return get<ControlLimits>(`/api/casting/limits?line=${encodeURIComponent(line)}`);
 }
 
 /** 오늘 날짜 (KST, 'YYYY-MM-DD') — 공정 최적화: 오늘이면 실시간, 지난 날짜면 재생 */

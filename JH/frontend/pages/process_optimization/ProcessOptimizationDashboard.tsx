@@ -1,8 +1,9 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LINES, fetchActiveModel, fetchDates, todayKst, type Line } from '../../common/casting/api';
-import { MONITOR_KEYS, buildAlerts } from '../../common/casting/analysis';
+import { LINES, fetchActiveModel, fetchDates, fetchLimits, todayKst, type Line } from '../../common/casting/api';
+import { buildAlertCards, type ControlLimits } from '../../common/casting/alerts';
+import { LABELS } from '../../common/casting/analysis';
 import { useShotStream } from '../../common/casting/useShotStream';
 import type { FeatureKey, ModelInfo } from '../../common/casting/types';
 import KpiCards from './KpiCards';
@@ -25,12 +26,14 @@ const DEFAULT_CYCLE = 155; // 사이클 값이 없을 때 (초)
 
 /**
  * 공정 최적화 대시보드 — 공정 관리장용
- * 설비 장면(라벨 클릭 → 변수 모니터·관리도), 샷별 공정 변수 모니터링, 알람 로그, 변수별 관리도(SPC)
+ * 설비 장면(라벨 클릭 → 변수 모니터·관리도), 샷별 공정 변수 모니터링, 관리도 알림(고정 관리선 판정), 변수별 관리도(SPC)
  * 데이터: 실데이터(mes.investment_casting, JH API) — 오늘을 고르면 실시간 따라가기(새 샷만 5초마다), 지난 날짜는 처음부터 재생.
  * ponytail: 모델 연결 전이라 불량 = 실제 판정(passorfail), 정상 범위는 목업 model.json. 모델 API가 생기면 교체
  */
 export default function ProcessOptimizationDashboard() {
   const [model, setModel] = useState<ModelInfo | null>(null);
+  const [limits, setLimits] = useState<ControlLimits | null>(null); // 알림 판정용 관리선 (라인별)
+  const [limitsTry, setLimitsTry] = useState(0); // 「다시 시도」 시 관리선도 다시 조회
   const [metaError, setMetaError] = useState<string | null>(null);
   const [spcKey, setSpcKey] = useState<FeatureKey>('sleeve_temperature');
   const [playing, setPlaying] = useState(true);
@@ -73,13 +76,25 @@ export default function ProcessOptimizationDashboard() {
     return () => { alive = false; };
   }, [line]);
 
+  // 라인이 바뀌면 그 라인 관리선 (서버 고정 표 — 관리도와 같은 값)
+  useEffect(() => {
+    let alive = true;
+    setLimits(null);
+    fetchLimits(line)
+      .then(l => { if (alive) setLimits(l); })
+      .catch((e: Error) => {
+        console.error('[process_optimization] 관리선 조회 실패', line, e);
+        if (alive) setMetaError(e.message);
+      });
+    return () => { alive = false; };
+  }, [line, limitsTry]);
+
   useEffect(() => { if (finished) setPlaying(false); }, [finished]);
 
-  const lastId = shots.length ? shots[shots.length - 1].shotId : 0;
-  // 알람 판정 — shots 참조 + lastId로 동일 틱 중복 계산 방지에 가깝게
-  const alerts = useMemo(
-    () => (model ? buildAlerts(shots, model, MONITOR_KEYS) : []),
-    [shots, model, lastId],
+  // 알림 판정 — 받은 샷 전체를 처음부터 (런 상태·중복 방지 규칙이 순서에 따라 정해지므로). 하루 수백 샷이라 매 샷 다시 계산해도 가벼움
+  const cards = useMemo(
+    () => (limits && limits.line === line && date ? buildAlertCards(shots, limits, date, LABELS) : []),
+    [shots, limits, line, date],
   );
 
   const latest = shots[shots.length - 1];
@@ -127,7 +142,7 @@ export default function ProcessOptimizationDashboard() {
         {live
           ? '실시간(공정 DB): 오늘 지금까지의 최근 샷을 보여 주고, 새 샷이 들어오면 5초 안에 이어 붙입니다. 설비는 샷마다 한 바퀴 돌고 다음 샷까지 기다립니다.'
           : '실데이터(공정 DB): 고른 날짜의 샷을 처음부터 재생합니다. 1샷 = 평균 설비 사이클(×20 버튼으로 20배속).'}
-        {' '}알람은 공정 변수 모니터에서 주의·이탈로 바뀌는 순간 울립니다.
+        {' '}알림은 불량 예측과 별개로 고정 관리선(기준 기간 정상 양품 샷)으로 기준 기간 다음 날부터 판정합니다 — 경보(설비 한계) · 주의(관리선 밖) · 관찰(추세).
       </div>
 
       {err && (
@@ -140,6 +155,7 @@ export default function ProcessOptimizationDashboard() {
             fetchDates(line)
               .then(ds => { setDates(ds); setDate(d => (ds.includes(d) ? d : ds[0] ?? '')); })
               .catch((e: Error) => setMetaError(e.message));
+            if (!limits) setLimitsTry(n => n + 1);
             retry();
           }}>다시 시도</button>
         </div>
@@ -163,7 +179,7 @@ export default function ProcessOptimizationDashboard() {
             <DiecastScene shots={shots} model={model} playing={live || playing} cycleSec={cycle} speed={speed} onSpeed={setSpeed} onPick={pickFromScene} onPhase={setActiveGroup} />
             <div className={s.side}>
               <KpiCards shots={shots} model={model} />
-              <AlertLog alerts={alerts} />
+              <AlertLog cards={cards} limits={limits && limits.line === line ? limits : null} date={date} />
             </div>
           </section>
           <SensorMonitor shots={shots} model={model} selected={spcKey} onSelect={setSpcKey} activeGroup={activeGroup} />

@@ -64,11 +64,29 @@ _TABLE: dict[str, dict[str, tuple[float, ...]]] = {
 }
 _FIELDS = ("cl", "sigma", "iLcl", "iUcl", "mrCl", "mrUcl", "ewmaLcl", "ewmaUcl")
 
+# (기준 기간 시작, 끝, 판정 시작). 기준 기간 = 표를 계산한 첫 7일 (정상 조건 양품 샷)
+# 알림은 판정 시작일(기준 기간 다음 날)부터 — 기준 기간·그 앞(라인1 원본 08-04~10-11)은 판정 안 함 (사용자 결정 2026-11-20)
+# 출처: 공정 최적화 알림 개발 명세 (2026-11-18) 2장
+PERIODS: dict[str, tuple[str, str, str]] = {
+    "line_no1": ("2026-10-12", "2026-10-18", "2026-10-19"),
+    "line_no2": ("2026-11-01", "2026-11-07", "2026-11-08"),
+    "line_no3": ("2026-11-01", "2026-11-07", "2026-11-08"),
+}
+
 
 def baseline(line: str, key: str) -> dict | None:
     """라인·변수의 기준선 (없으면 None)"""
     row = _TABLE.get(line, {}).get(key)
     return dict(zip(_FIELDS, row)) if row else None
+
+
+def limits(line: str) -> dict | None:
+    """알림 판정용 — 라인의 13개 변수 관리선 + 기준 기간 (없는 라인이면 None)"""
+    if line not in _TABLE or line not in PERIODS:
+        return None
+    start, end, judge = PERIODS[line]
+    return {"line": line, "baselineFrom": start, "baselineTo": end, "judgeFrom": judge, "lambda": LAMBDA,
+            "variables": {k: baseline(line, k) for k in _TABLE[line]}}
 
 
 def split_flows(counts: list[int]) -> list[int]:
