@@ -160,8 +160,11 @@ def _stored_file(doc_idx: int) -> tuple[Path, str]:
 
 
 @router.get("/{doc_idx}/file")
-def download_file(doc_idx: int):
+def download_file(doc_idx: int, inline: bool = False):
+    """원본 파일. inline=1 이면 브라우저에서 보기(다운로드 강제 안 함)."""
     path, name = _stored_file(doc_idx)
+    if inline:
+        return FileResponse(path, filename=name, content_disposition_type="inline")
     return FileResponse(path, filename=name)
 
 

@@ -18,7 +18,7 @@ DB = "DOCS_DATABASE_URL"
 MAX_LIST = 15
 MAX_LEXICAL_HITS = 8
 CONTENT_MAX = 1200
-LIVE_CHUNK_CAP = 4  # 즉시 추출 시 LLM에 넣을 청크 수
+LIVE_CHUNK_CAP = 8  # 즉시 추출 시 LLM에 넣을 청크 수 (인벤 요약용)
 
 _OWNERSHIP_KW = re.compile(
     r"담당|누가|기능|인벤|개발|만들었|인원|배정|각자|다른\s*사람|JH|HJ|TM|MS|DH|내용|요약|문서",

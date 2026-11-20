@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import DocPreviewModal from "./DocPreviewModal";
 import type { ChatSource } from "./sources";
 import s from "./HyejinBot.module.css";
 
@@ -35,7 +36,6 @@ function rowLabel(src: ChatSource): string {
 }
 
 function rowHref(src: ChatSource): string {
-  if (src.kind === "company_document" && src.file_url) return src.file_url;
   if (src.kind === "process_alert") return "/casting/process-optimization";
   if (src.kind === "quality_kpi") return "/casting/quality-inspection";
   return "";
@@ -47,6 +47,8 @@ function rowLinkText(src: ChatSource): string {
   if (src.kind === "quality_kpi") return "품질";
   return "열기";
 }
+
+type PreviewTarget = { idx: number; title: string; fileName: string };
 
 /** 출처 = 한 줄(제목+링크). 스니펫·펼침 없음 */
 export default function SourceList({
@@ -70,6 +72,7 @@ export default function SourceList({
   }, [sources]);
 
   const [panelOpen, setPanelOpen] = useState(false);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
 
   const ordered = useMemo(() => {
     const hit: ChatSource[] = [];
@@ -105,18 +108,28 @@ export default function SourceList({
         <ul className={s.sources} aria-label="출처">
           {ordered.map((src) => {
             const href = rowHref(src);
+            const isDoc = src.kind === "company_document" && src.company_document_idx > 0;
             return (
               <li key={`${src.kind}-${src.doc_no}-${src.chunk_no}-${src.file_name}`} className={s.srcRow}>
                 <span className={s.srcRowLabel} title={rowLabel(src)}>
                   {rowLabel(src)}
                 </span>
-                {href ? (
-                  <a
+                {isDoc ? (
+                  <button
+                    type="button"
                     className={s.srcRowLink}
-                    href={href}
-                    target={src.kind === "company_document" ? "_blank" : undefined}
-                    rel={src.kind === "company_document" ? "noreferrer" : undefined}
+                    onClick={() =>
+                      setPreview({
+                        idx: src.company_document_idx,
+                        title: src.title || src.doc_no,
+                        fileName: src.file_name || src.title,
+                      })
+                    }
                   >
+                    {rowLinkText(src)}
+                  </button>
+                ) : href ? (
+                  <a className={s.srcRowLink} href={href}>
                     {rowLinkText(src)}
                   </a>
                 ) : null}
@@ -124,6 +137,14 @@ export default function SourceList({
             );
           })}
         </ul>
+      )}
+      {preview && (
+        <DocPreviewModal
+          idx={preview.idx}
+          title={preview.title}
+          fileName={preview.fileName}
+          onClose={() => setPreview(null)}
+        />
       )}
     </div>
   );

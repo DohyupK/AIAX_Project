@@ -211,3 +211,67 @@ def requeue_all_for_reembed() -> dict:
         embed_model(),
     )
     return {"ok": ok, "fail": fail, "total": len(ids), "model": embed_model()}
+
+
+def _chunk_is_meta_only(content: str) -> bool:
+    c = (content or "").strip()
+    if not c:
+        return True
+    lines = [ln for ln in c.splitlines() if ln.strip()]
+    if len(lines) <= 3 and all(
+        ln.startswith("제목:") or ln.startswith("파일:") or ln.startswith("분류:") for ln in lines
+    ):
+        return True
+    return c.startswith("제목:") and "\n\n" not in c and len(c) < 400
+
+
+def find_meta_or_empty_doc_ids() -> list[int]:
+    """청크 없음·메타만·청킹 실패 상태 문서 idx."""
+    with connect(DB) as conn:
+        docs = conn.execute(
+            "SELECT company_document_idx FROM org.company_document ORDER BY company_document_idx"
+        ).fetchall()
+        out: list[int] = []
+        for r in docs:
+            idx = int(r["company_document_idx"])
+            job = conn.execute(
+                "SELECT chunk_status FROM org.document_chunk_job WHERE company_document_idx = %s",
+                [idx],
+            ).fetchone()
+            st = (job["chunk_status"] if job else None) or ""
+            if st in ("pending", "retry_5m", "midnight_pending", ""):
+                out.append(idx)
+                continue
+            chunks = conn.execute(
+                "SELECT content FROM org.document_chunk WHERE company_document_idx = %s ORDER BY chunk_no",
+                [idx],
+            ).fetchall()
+            if not chunks:
+                out.append(idx)
+                continue
+            if all(_chunk_is_meta_only(c.get("content") or "") for c in chunks):
+                out.append(idx)
+        return out
+
+
+def requeue_meta_only_for_reembed() -> dict:
+    """메타만/빈 청크 문서만 본문 재추출 + NIM 임베딩 (토큰 절약)."""
+    ids = find_meta_or_empty_doc_ids()
+    ok, fail = 0, 0
+    for idx in ids:
+        set_job_status(idx, "pending", 0, None)
+        try:
+            run_chunk_once(idx)
+            ok += 1
+        except Exception as e:
+            fail += 1
+            set_job_status(idx, "midnight_pending", 1, str(e)[:500])
+            log.exception("메타문서 재청킹 실패 doc=%s", idx)
+    log.info(
+        "메타/빈 청크 재임베딩 ok=%d fail=%d total=%d model=%s",
+        ok,
+        fail,
+        len(ids),
+        embed_model(),
+    )
+    return {"ok": ok, "fail": fail, "total": len(ids), "ids": ids, "model": embed_model()}
