@@ -7,20 +7,22 @@ const shot = (prob: number, actual: 0 | 1 | null, f: Partial<Shot["features"]> =
   ({ shotId: 1, time: "0:00:00", prob, actual, features: f, castingId }) as Shot;
 const dl = (castingId: string, result: "pass" | "fail"): SecondResult =>
   ({ castingId, modelName: "m", version: "", result, confidenceScore: result === "fail" ? 0.9 : 0.1, predictedAt: "" });
-const RESULTS = new Map([["a", dl("a", "fail")], ["b", dl("b", "pass")], ["c", dl("c", "fail")]]);
+const RESULTS = new Map<string, SecondResult | "pending">([["a", dl("a", "fail")], ["b", dl("b", "pass")], ["c", dl("c", "fail")], ["p", "pending"]]);
 
 // 1차 불량 → 2차 대상 아님(DL 결과가 있어도) / 1차 양품 → DL 결과, 이미지 없으면 noImage
 assert.equal(secondOf(shot(0.5, 0, {}, "c"), 0.5, RESULTS), "first"); // 임계값과 같으면 1차 불량
 assert.equal((secondOf(shot(0.2, 0, {}, "a"), 0.5, RESULTS) as SecondResult).result, "fail");
 assert.equal(secondOf(shot(0.2, 1, {}, "z"), 0.5, RESULTS), "noImage");
 assert.equal(secondOf(shot(0.2, 1), 0.5, RESULTS), "noImage"); // castingId 없는 샷
+assert.equal(secondOf(shot(0.2, 0, {}, "p"), 0.5, RESULTS), "pending"); // 사진 있음·판정 전
+assert.equal(secondOf(shot(0.9, 0, {}, "p"), 0.5, RESULTS), "first"); // 1차 불량이면 대기여도 대상 아님
 
-// 1차 불량 1(c) + 2차 검사 2(a 불량, b 양품) + 이미지 없음 1 → 최종 2, 2차 대상 3
+// 1차 불량 1(c) + 2차 검사 2(a 불량, b 양품) + 판정 대기 1(p) + 이미지 없음 1 → 최종 2, 2차 대상 4
 assert.deepEqual(
-  summarize([shot(0.1, 0, {}, "a"), shot(0.1, 0, {}, "b"), shot(0.7, 0, {}, "c"), shot(0.1, 1, {}, "z")], 0.5, RESULTS),
-  { total: 4, first: 1, secondTargets: 3, inspected: 2, second: 1, final: 2 },
+  summarize([shot(0.1, 0, {}, "a"), shot(0.1, 0, {}, "b"), shot(0.7, 0, {}, "c"), shot(0.1, 0, {}, "p"), shot(0.1, 1, {}, "z")], 0.5, RESULTS),
+  { total: 5, first: 1, secondTargets: 4, inspected: 2, pending: 1, second: 1, final: 2 },
 );
-assert.deepEqual(summarize([], 0.5, RESULTS), { total: 0, first: 0, secondTargets: 0, inspected: 0, second: 0, final: 0 });
+assert.deepEqual(summarize([], 0.5, RESULTS), { total: 0, first: 0, secondTargets: 0, inspected: 0, pending: 0, second: 0, final: 0 });
 assert.equal(rate(1, 0), null);
 assert.equal(rate(1, 4), 25);
 

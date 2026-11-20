@@ -4,6 +4,7 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-20 | 품질 검사 2차: 「판정 대기」와 「이미지 없음」 구분, 샷 목록 팝업에 촬영 사진 표시 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-20 | 품질 검사 2차(DL): 서버가 사진을 미리 판정해 DB(ai.quality_prediction)에 저장, 화면은 DB만 읽음(시간 초과 해결)·「판정 대기 N장」 표시 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-20 | 불량 유형 라벨링: 목록 = 2차 판정 불량(result='fail'), 실제 사진 연결(MS 이미지 API) | [defect_labeling](../기능표.md#불량-유형-라벨링-defect_labeling) |
 | 2026-11-20 | 공정 최적화: 「관리도 알림」 제목 클릭 → 그날 알림 전체 팝업(닫힌 알림 포함), 줄 클릭 → 상세 | [process_optimization](../기능표.md#공정-최적화-대시보드-process_optimization) |
