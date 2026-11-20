@@ -8,12 +8,15 @@ const ALL = ["helmet", "shoes", "vest", "gloves", "goggles"] as const;
 // 게이트 a: 5종 모두 필수 (DB ai.ppe_gate_rule a 와 같음)
 assert.deepEqual(missingGear("a", [...ALL]), []);
 assert.deepEqual(missingGear("a", ["helmet", "shoes", "vest", "gloves"]), ["goggles"]);
-// 게이트 b: 보안경은 선택이라 없어도 통과
+// 게이트 b: 보안경 제외 4종만 검사 — 보안경이 없어도 통과
 assert.deepEqual(missingGear("b", ["helmet", "shoes", "vest", "gloves"]), []);
 assert.deepEqual(missingGear("b", ["helmet", "shoes", "vest"]), ["gloves"]);
 // 판정 불가 장구는 미착용이 아니라 unknown
-assert.deepEqual(gearStatus("b", ["helmet"], ["shoes", "vest", "gloves", "goggles"]).map((g) => g.status),
-  ["worn", "unknown", "unknown", "unknown", "unknown"]);
+assert.deepEqual(gearStatus("b", ["helmet"], ["shoes", "vest", "gloves"]).map((g) => g.status),
+  ["worn", "unknown", "unknown", "unknown"]);
+// 게이트 b 화면 항목은 4개 (보안경 표시 없음)
+assert.deepEqual(gearStatus("b", [...ALL]).map((g) => g.gear), ["helmet", "shoes", "vest", "gloves"]);
+assert.equal(gearStatus("a", []).length, 5);
 // 안내 문구 조사
 assert.equal(violationMessage(["gloves"]), "장갑을 착용하지 않았습니다. 착용 후 다시 태깅해주세요.");
 assert.equal(violationMessage(["helmet"]), "안전모를 착용하지 않았습니다. 착용 후 다시 태깅해주세요.");

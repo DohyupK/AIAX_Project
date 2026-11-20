@@ -1,29 +1,39 @@
 // 경영 리포트 계산 자체 점검 — 실행: node JH/frontend/pages/management_report/logic.check.ts (Node 23.6+)
 import assert from "node:assert/strict";
 import type { ReportSource } from "./data.ts";
-import { buildReport, compareReport, computeReport, listReports, pickFixed, ratio } from "./logic.ts";
+import { buildReport, compareReport, computeReport, listReports, pickFixed, ratio, reportCount } from "./logic.ts";
 
 assert.equal(ratio(1, 0), null);
 assert.equal(ratio(1, 4), 0.25);
 
 // 목록: 최신순, 월 경계·연 경계
 const now = new Date(2026, 10, 14, 9, 0); // 2026-11-14
-const daily = listReports("daily", now);
+const daily = listReports("daily", now, 14);
 assert.equal(daily.length, 14);
 assert.deepEqual([daily[0].from, daily[0].to, daily[13].from], ["2026-11-14", "2026-11-14", "2026-11-01"]);
 assert.equal(daily[0].title, "2026-11-14 일일 경영 리포트");
-const weekly = listReports("weekly", now);
+const weekly = listReports("weekly", now, 8);
 // 주간 = 달력 주 월~일, 이번 주는 월~오늘 (2026-11-14 = 토)
 assert.deepEqual([weekly[0].from, weekly[0].to, weekly[1].from, weekly[1].to], ["2026-11-09", "2026-11-14", "2026-11-02", "2026-11-08"]);
 const wk = (d: Date) => listReports("weekly", d, 2).map((r) => [r.from, r.to]);
 assert.deepEqual(wk(new Date(2026, 10, 15)), [["2026-11-09", "2026-11-15"], ["2026-11-02", "2026-11-08"]]); // 일요일
 assert.deepEqual(wk(new Date(2026, 10, 16)), [["2026-11-16", "2026-11-16"], ["2026-11-09", "2026-11-15"]]); // 월요일
 assert.deepEqual(wk(new Date(2026, 0, 3)), [["2025-12-29", "2026-01-03"], ["2025-12-22", "2025-12-28"]]); // 연말 경계
-const monthly = listReports("monthly", now);
+const monthly = listReports("monthly", now, 6);
 assert.deepEqual(monthly.slice(0, 3).map((r) => [r.from, r.to]), [["2026-11-01", "2026-11-14"], ["2026-10-01", "2026-10-31"], ["2026-09-01", "2026-09-30"]]);
 assert.equal(monthly[0].title, "2026년 11월 월간 경영 리포트");
 assert.deepEqual(listReports("monthly", new Date(2026, 1, 10), 3).map((r) => r.to), ["2026-02-10", "2026-01-31", "2025-12-31"]);
 assert.equal(new Set([...daily, ...weekly, ...monthly].map((r) => r.id)).size, 28); // id 유일
+// 페이지: offset 15 = 16번째 날부터 (2페이지 첫 행)
+assert.deepEqual(listReports("daily", now, 2, 15).map((r) => r.from), ["2026-10-30", "2026-10-29"]);
+// 페이지 수 계산용 전체 건수 = 이번 기간 ~ 데이터 첫날이 든 기간
+assert.equal(reportCount("daily", now, "2026-11-14"), 1);
+assert.equal(reportCount("daily", now, "2026-08-01"), 106); // 8/1~11/14
+assert.equal(reportCount("weekly", now, "2026-11-02"), 2); // 11/2 주 + 이번 주
+assert.equal(reportCount("weekly", now, "2026-11-08"), 2); // 일요일은 그 전 월요일 주
+assert.equal(reportCount("monthly", now, "2026-08-04"), 4); // 8·9·10·11월
+assert.equal(reportCount("monthly", new Date(2026, 0, 3), "2025-12-31"), 2); // 연 경계
+assert.equal(reportCount("daily", now, "2026-12-01"), 1); // 미래 날짜여도 최소 1
 
 // 원자료 → 리포트: 기간 안의 날만 합산
 const src: ReportSource = {

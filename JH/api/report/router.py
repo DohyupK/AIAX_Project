@@ -96,6 +96,18 @@ def safety(start: Date = Query(alias="from"), end: Date = Query(alias="to")) -> 
     }
 
 
+@router.get("/first-date")
+def first_date() -> dict:
+    """리포트 목록 시작일 = 생산 데이터 첫날 (없으면 null) — 화면이 페이지 수 계산"""
+    try:
+        with connect(DB) as conn:
+            row = conn.execute('SELECT min("timestamp") AS d FROM mes.investment_casting').fetchone()
+    except Exception:
+        log.exception("리포트 시작일 조회 실패")
+        raise HTTPException(503, "리포트 시작일 조회에 실패했습니다.")
+    return {"first": row["d"].isoformat() if row["d"] else None}
+
+
 @router.get("/fixed")
 def fixed() -> list[dict]:
     """고정값 전체 (이름·값·단위·적용 시작일, 적용 시작일 오름차순)"""

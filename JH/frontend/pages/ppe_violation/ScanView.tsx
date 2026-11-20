@@ -13,11 +13,11 @@ const BOXES: Record<Gear, { x: number; y: number; w: number; h: number }> = {
   shoes: { x: 70, y: 226, w: 60, h: 22 },
 };
 
-const COLOR: Record<GearStatus, string> = { worn: "#2fb36b", missing: "#e5484d", optional_missing: "#8b93a1", unknown: "#8b93a1" };
+const COLOR: Record<GearStatus, string> = { worn: "#2fb36b", missing: "#e5484d", unknown: "#8b93a1" };
 
 /**
  * 검색대 촬영 이미지 — 판정 사진(MS image_api, 모델 박스·이름이 사진에 이미 그려져 있음)을 보여 주고,
- * 사진이 없으면(404) 예전 실루엣 그림(장구별 충족·미충족·선택 박스) + 범례. 사진을 누르면 크게 보기.
+ * 사진이 없으면(404) 예전 실루엣 그림(게이트 장구별 충족·미충족·판정 불가 박스) + 범례. 사진을 누르면 크게 보기.
  * 판정이 바뀌면 부모가 key 로 다시 그림 (사진 실패 상태 초기화)
  */
 export default function ScanView({ checkIdx, gears, caption, title }: {
@@ -35,7 +35,7 @@ export default function ScanView({ checkIdx, gears, caption, title }: {
         <div className={styles.legend}>
           <span><i className={styles.ok} /> 충족</span>
           <span><i className={styles.bad} /> 미충족</span>
-          <span><i className={styles.grey} /> 선택 · 판정 불가</span>
+          <span><i className={styles.grey} /> 판정 불가</span>
         </div>
       </>
     );
@@ -96,7 +96,7 @@ function Silhouette({ gears, caption }: { gears: { gear: Gear; status: GearStatu
         const c = COLOR[status];
         return (
           <g key={gear}>
-            <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke={c} strokeWidth="2" strokeDasharray={status === "optional_missing" || status === "unknown" ? "4 3" : undefined} />
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke={c} strokeWidth="2" strokeDasharray={status === "unknown" ? "4 3" : undefined} />
             <rect x={b.x} y={b.y - 11} width={GEAR_LABEL[gear].length * 9 + 6} height="11" fill={c} />
             <text x={b.x + 3} y={b.y - 2.5} fontSize="8.5" fill="#fff">
               {GEAR_LABEL[gear]}

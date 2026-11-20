@@ -21,8 +21,8 @@ const SORT_LABEL: Record<SortKey, string> = {
 };
 const STATUS_LABEL: Record<Status, string> = { pass: "통과", fail: "위반", check: "확인 필요" };
 const STATUS_RANK: Record<Status, number> = { fail: 0, check: 1, pass: 2 };
-const GEAR_MARK: Record<GearStatus, string> = { worn: "✓", missing: "✕", optional_missing: "–", unknown: "?" };
-const GEAR_TEXT: Record<GearStatus, string> = { worn: "착용", missing: "미착용", optional_missing: "선택 · 미착용", unknown: "판정 불가" };
+const GEAR_MARK: Record<GearStatus, string> = { worn: "✓", missing: "✕", unknown: "?" };
+const GEAR_TEXT: Record<GearStatus, string> = { worn: "착용", missing: "미착용", unknown: "판정 불가" };
 /** 한 번에 조회하는 기간 상한 — 서버 MAX_RANGE_DAYS 와 같게 */
 const MAX_RANGE_DAYS = 92;
 /** 'YYYY-MM-DD' 두 날짜 사이 일수 (양 끝 포함). UTC 기준이라 서머타임 영향 없음 */
