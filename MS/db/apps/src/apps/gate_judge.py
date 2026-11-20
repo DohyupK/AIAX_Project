@@ -14,19 +14,18 @@ r"""보호구 게이트 판정 프로그램 (2026-11-20, MS)
   - 게이트 필수 보호구(ai.ppe_gate_rule) 중 false 가 하나라도 → violation, 아니고 null 이 하나라도 → undecidable, 전부 true → pass
   - 클래스별 신뢰도 기준값 = 004 임계값 결과 (안전모는 머리카락 오검출 때문에 0.75)
 
-실행 (D:\cas_image 의 가상환경 — ultralytics·torch·opencv 가 있음, psycopg 만 추가 설치)
-  D:\cas_image\.venv\Scripts\python.exe -m pip install "psycopg[binary]"
-  D:\cas_image\.venv\Scripts\python.exe D:\GitHub\AIAX_Project\MS\ppe_gate\gate_judge.py --gate a
+실행 (MS/db/apps — lake_runner·image_sender 와 같은 uv 프로젝트, 게이트용 패키지 묶음 gate: ultralytics·torch(GPU)·opencv)
+  cd D:\GitHub\AIAX_Project\MS\db\apps
+  uv run --group gate python -m apps.gate_judge --gate a
   --no-db  : DB 없이 판정만 (화면·콘솔 출력)
   --goggles-conf 0.6 : 보안경 기준값 올리기 (일반 안경 오인식 줄이기)
-  모델 = DB 의 보호구 배포 모델(file_path), 없거나 파일이 없으면 --model 또는 004 기본 경로
-설정: 이 폴더의 .env  →  DATABASE_URL=postgresql://<계정>:<비밀번호>@49.50.143.236:5432/<DB이름>
+  모델 = DB 의 보호구 배포 모델(file_path, 저장소 기준 상대 경로 가능), 없거나 파일이 없으면 --model 또는 MS/db/apps/models 기본 파일
+설정: 저장소 루트 .env  →  GATE_DATABASE_URL=postgresql://<계정>:<비밀번호>@49.50.143.236:5432/aiax  (출입·판정 쓰기 계정)
 
 판정 사진 (2026-11-20): 판정 3초 동안 박스 친 화면을 Kafka aiax.ppe.frame 으로 보냄 (초당 --frame-fps 장)
   화면마다 세션 번호(태깅 1번)와 "잡힌 보호구 수·신뢰도 합"을 같이 보내고, 판정이 끝나면 결과(판정 번호)를 보냄
   → Flink ppe_frame_select 가 세션별로 중요한 장면 1장을 골라 서버(/api/images/ppe/<판정번호>)에 저장
   Kafka = 루트 .env AIAX_KAFKA_BOOTSTRAP_HOST (기본 localhost:9094). 끊겨도 판정은 계속 (--no-kafka 로 끄기)
-  필요 패키지: D:\cas_image\.venv\Scripts\python.exe -m pip install confluent-kafka
 """
 from __future__ import annotations
 
@@ -46,8 +45,9 @@ try:
 except Exception:  # Windows 에 tzdata 가 없을 때
     KST = timezone(timedelta(hours=9), "KST")
 
-HERE = Path(__file__).resolve().parent
-DEFAULT_MODEL = r"D:\cas_image\ppe\experiments\004_yolo26s_960_light_augmentation\runpod_result\PPE_YOLO26s_20261118_04.pt"
+HERE = Path(__file__).resolve().parent              # MS/db/apps/src/apps
+REPO = HERE.parents[4]                               # 저장소 루트 (D:\GitHub\AIAX_Project)
+DEFAULT_MODEL = str(HERE.parents[1] / "models" / "PPE_YOLO26s_20261118_04.pt")   # MS/db/apps/models (Git 제외)
 SAFETY_DEPT = "안전부"
 
 # DB 칸 이름 → (착용 클래스, 미착용 클래스). 모델의 boots = DB 의 shoes
@@ -409,7 +409,7 @@ def main() -> None:
     ap.add_argument("--helmet-conf", type=float, help=f"안전모 신뢰도 기준값 (기본 {THRESHOLDS['helmet']})")
     ap.add_argument("--no-db", action="store_true", help="DB 없이 판정만")
     ap.add_argument("--no-mirror", action="store_true")
-    ap.add_argument("--env", default=str(HERE / ".env"))
+    ap.add_argument("--env", default=str(REPO / ".env"))
     ap.add_argument("--no-kafka", action="store_true", help="판정 사진을 Kafka 로 보내지 않음")
     ap.add_argument("--frame-fps", type=float, default=10, help="판정 3초 동안 Kafka 로 보낼 초당 화면 수")
     ap.add_argument("--frame-width", type=int, default=640, help="판정 사진 가로 크기(px)")
@@ -424,14 +424,15 @@ def main() -> None:
 
     log("시작 — 설정 읽는 중")
     load_env(Path(args.env))
-    load_env(HERE.parents[1] / ".env")   # Kafka 주소 등은 저장소 루트 .env 에 있어도 됨 (이미 있는 값은 안 덮음)
-    url = None if args.no_db else os.environ.get("DATABASE_URL")
+    url = None if args.no_db else os.environ.get("GATE_DATABASE_URL")
     if not args.no_db and not url:
-        raise SystemExit(f"[gate] {args.env} 에 DATABASE_URL 이 없습니다 (DB 없이 시험: --no-db)")
+        raise SystemExit(f"[gate] {args.env} 에 GATE_DATABASE_URL 이 없습니다 (DB 없이 시험: --no-db)")
     db = Db(url)
     gate = Gate(args, db)
 
     model_path = args.model or db.deployed_model() or DEFAULT_MODEL
+    if not Path(model_path).is_absolute():   # DB file_path 는 저장소 기준 상대 경로
+        model_path = str(REPO / model_path)
     if not Path(model_path).is_file():
         log(f"모델 파일 없음: {model_path} → 기본 경로 사용")
         model_path = DEFAULT_MODEL

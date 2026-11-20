@@ -30,3 +30,20 @@ dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.3",
 ]
+# 보호구 게이트 판정 (apps.gate_judge) 전용 — 필요할 때만: uv run --group gate python -m apps.gate_judge --gate a
+gate = [
+    "ultralytics>=8.4.215",
+    "opencv-python>=4.10",
+    "torch>=2.14",
+    "torchvision>=0.29",
+]
+
+# torch 는 NVIDIA GPU(CUDA 12.6)판으로 받음 (D:\cas_image 에서 쓰던 것과 같은 판)
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126" }]
+torchvision = [{ index = "pytorch-cu126" }]

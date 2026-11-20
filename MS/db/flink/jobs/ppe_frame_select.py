@@ -1,7 +1,7 @@
 """보호구 판정 사진 고르기 Flink job (2026-11-20, MS)
 
 흐름:
-  게이트 프로그램(MS/ppe_gate/gate_judge.py) → Kafka aiax.ppe.frame
+  게이트 프로그램(MS/db/apps/src/apps/gate_judge.py) → Kafka aiax.ppe.frame
     {"type":"frame",  "session", "gate", "count", "score", "ts", "image_base64"}   판정 3초 동안 화면들
     {"type":"result", "session", "gate", "ppe_check_idx", "result", "who", "ts"}    판정 끝 (판정 번호)
   → 세션(태깅 1번)별로 중요한 장면 1장을 고름
