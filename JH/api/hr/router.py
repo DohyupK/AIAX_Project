@@ -1,7 +1,7 @@
 """인사 관리 API — NCP DB org 원본을 실시간 조회·변경 (계정 app_hr)
 
-현재 사용자: 로그인 세션의 사번 (auth/core.acting_employee). 화면이 보내는 X-Employee-No 는 관리자 「보기 전환」에만 쓰임.
-관리자 = 경영부(인사) 소장 권한과 같음 — 전 직원 열람·추가·수정·삭제.
+현재 사용자: 로그인 세션의 사번 (auth/core.acting_employee).
+관리자 = 모든 권한 (경영부 인사 소장과 같음 — 전 직원 열람·추가·수정·삭제).
 """
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import logging
 from typing import Literal
 
 import psycopg
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from auth.core import acting_employee, require_session
@@ -45,16 +45,15 @@ def _load_viewer(conn, employee_no: str) -> Viewer | None:
     return Viewer(r["employee_no"], r["dept_code"], r["position_code"], r["team_code"], r["is_team_rep"], r["team_name"])
 
 
-def current_viewer(request: Request, x_employee_no: str | None = Header(None, alias="X-Employee-No")) -> Viewer:
-    emp, admin = acting_employee(request, x_employee_no)
-    actor = f"admin:{require_session(request).user_id}" if admin else None
-    if emp is None:   # 관리자 (보기 전환 없음) = 전체 권한
-        return Viewer("admin", rules.HR_DEPT, 70000, None, True, None, actor)
+def current_viewer(request: Request) -> Viewer:
+    emp, admin = acting_employee(request)
+    if admin:   # 관리자 = 모든 권한 (접근 기록에는 관리자 아이디)
+        return Viewer("admin", rules.HR_DEPT, 70000, None, True, None, f"admin:{require_session(request).user_id}")
     with connect(DB) as conn:
         v = _load_viewer(conn, emp)
     if not v:
         raise HTTPException(401, "등록되지 않은 사번입니다.")
-    return Viewer(v.employee_no, v.dept_code, v.position_code, v.team_code, v.is_team_rep, v.team_name, actor)
+    return v
 
 
 def _tier_or_403(v: Viewer) -> str:
@@ -80,15 +79,6 @@ def me(v: Viewer = Depends(current_viewer)):
         "scope": "all" if v.is_hr else ("team" if tier else "none"),
         "can_create": rules.can_create(v),
     }
-
-
-@router.get("/mock-accounts", dependencies=[Depends(require_session)])
-def mock_accounts():
-    """관리자 「보기 전환」용 계정 목록 (이름·개인정보 없음, 로그인 필요). 일반 계정은 선택해도 서버가 무시
-    ponytail: 화면에서 일반 계정에게 선택 칸 숨기기는 후속"""
-    with connect(DB) as conn:
-        rows = conn.execute(ROW_SQL + " ORDER BY e.dept_code, p.position_code DESC, e.employee_no").fetchall()
-    return [{k: r[k] for k in ("employee_no", "dept_code", "dept_name", "position_name", "team_code", "team_name", "is_team_rep")} for r in rows]
 
 
 @router.get("/summary")

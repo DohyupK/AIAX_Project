@@ -1,21 +1,14 @@
 // 인사 관리 API 호출 — 서버: JH/api (FastAPI, NCP DB org 원본 실시간)
 // 실행: cd JH/api && uv run uvicorn main:app --host 127.0.0.1 --port 8000
-// ponytail: 로그인 전 — "현재 사용자"는 목업 계정 사번을 X-Employee-No 헤더로 보냄. 로그인 도입 시 세션 쿠키로 교체
+// 현재 사용자 = 로그인 세션(httpOnly 쿠키)의 사번 — 서버가 판단, 화면은 사번을 보내지 않음
 
 const BASE = process.env.NEXT_PUBLIC_HR_API_BASE_URL ?? 'http://127.0.0.1:8000';
-
-// 목업 계정 선택 기억 — 인사 관리·Model Management 가 같이 씀 (로그인 전 전용)
-export const ACCOUNT_KEY = 'jh.hr.mock_employee_no';
-export const DEFAULT_ACCOUNT = 'e0002';   // 경영부 부장 (org 2026-11-17 개편 사번)
 
 export type Tier = 'basic' | 'manage' | 'hr';
 
 export interface Me {
   employee_no: string; dept_code: number; team_code: number | null; team_name: string | null; is_team_rep: boolean; is_hr: boolean;
   tier: Tier | null; visible_fields: string[]; scope: 'all' | 'team' | 'none'; can_create: boolean;
-}
-export interface MockAccount {
-  employee_no: string; dept_code: number; dept_name: string; position_name: string; team_code: number | null; team_name: string | null; is_team_rep: boolean;
 }
 export interface DeptSummary {
   dept_code: number; dept_name: string; rep_no: string | null; rep_position: string | null; headcount: number;
@@ -49,12 +42,12 @@ export class ApiError extends Error {
   constructor(public status: number, message: string, public fields: Record<string, string> = {}) { super(message); }
 }
 
-async function call<T>(who: string, method: string, path: string, body?: unknown): Promise<T> {
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${BASE}/api/hr${path}`, {
       method, cache: 'no-store',
-      headers: { 'X-Employee-No': who, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
@@ -72,13 +65,12 @@ async function call<T>(who: string, method: string, path: string, body?: unknown
 }
 
 export const hrApi = {
-  mockAccounts: () => call<MockAccount[]>('', 'GET', '/mock-accounts'),
-  me: (who: string) => call<Me>(who, 'GET', '/me'),
-  summary: (who: string) => call<Summary>(who, 'GET', '/summary'),
-  list: (who: string, by: 'dept' | 'team', key: number) => call<Employee[]>(who, 'GET', `/employees?${by}=${key}`),
-  create: (who: string, body: EmployeeInput) => call<Employee>(who, 'POST', '/employees', body),
-  update: (who: string, no: string, body: Partial<EmployeeInput>) => call<Employee>(who, 'PATCH', `/employees/${encodeURIComponent(no)}`, body),
-  remove: (who: string, no: string) => call<void>(who, 'DELETE', `/employees/${encodeURIComponent(no)}`),
+  me: () => call<Me>('GET', '/me'),
+  summary: () => call<Summary>('GET', '/summary'),
+  list: (by: 'dept' | 'team', key: number) => call<Employee[]>('GET', `/employees?${by}=${key}`),
+  create: (body: EmployeeInput) => call<Employee>('POST', '/employees', body),
+  update: (no: string, body: Partial<EmployeeInput>) => call<Employee>('PATCH', `/employees/${encodeURIComponent(no)}`, body),
+  remove: (no: string) => call<void>('DELETE', `/employees/${encodeURIComponent(no)}`),
 };
 
 /** 화면 표시용 칼럼 이름 (서버가 보낸 칼럼만 표시) */

@@ -85,8 +85,8 @@ export const formatDateTime = (iso: string) => {
 };
 
 /** 삭제: 본인 업로드만 (서버도 동일 검사) */
-export const canDelete = (doc: Pick<DocMeta, 'uploader_id'>, user: { user_id: string } | null) =>
-  !!user && (!doc.uploader_id || doc.uploader_id === user.user_id);
+export const canDelete = (doc: Pick<DocMeta, 'uploader_id'>, user: { user_id: string; admin?: boolean } | null) =>
+  !!user && (!!user.admin || !doc.uploader_id || doc.uploader_id === user.user_id);   // 관리자 = 모든 문서
 
 /** 업로드 직전 임시 메타 (서버 응답으로 교체됨) */
 export function buildDocMeta(

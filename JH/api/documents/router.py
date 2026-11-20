@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from auth.core import acting_employee
 from fastapi.responses import FileResponse
@@ -26,10 +26,10 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 DB = "DOCS_DATABASE_URL"
 
 
-def _resolve_uploader(request: Request, x_employee_no: str | None) -> str:
-    """올린 사람 사번 = 로그인 세션 사번. 관리자는 보기 전환 사번, 없으면 e0001
-    ponytail: 관리자 전용 사번이 org 에 없어 기본 e0001 로 기록 — 관리자 사번 정해지면 교체"""
-    emp, _ = acting_employee(request, x_employee_no)
+def _resolve_uploader(request: Request) -> str:
+    """올린 사람 사번 = 로그인 세션 사번
+    ponytail: 관리자 전용 사번이 org 에 없어 관리자가 올리면 e0001 로 기록 — 관리자 사번 정해지면 교체"""
+    emp, _ = acting_employee(request)
     no = (emp or "e0001").strip()
     with connect(DB) as conn:
         row = conn.execute("SELECT employee_no FROM org.employee WHERE employee_no = %s", [no]).fetchone()
@@ -85,9 +85,8 @@ async def upload_document(
     file: UploadFile = File(...),
     title: str = Form(...),
     category: str = Form(""),
-    x_employee_no: str | None = Header(None, alias="X-Employee-No"),
 ):
-    uploader = _resolve_uploader(request, x_employee_no)
+    uploader = _resolve_uploader(request)
     name = file.filename or "file"
     ext = ext_of(name)
     if ext not in ALLOWED_EXT:
@@ -210,9 +209,9 @@ def document_text(doc_idx: int):
 def delete_document(
     request: Request,
     doc_idx: int,
-    x_employee_no: str | None = Header(None, alias="X-Employee-No"),
 ):
-    uploader = _resolve_uploader(request, x_employee_no)
+    _, admin = acting_employee(request)
+    uploader = None if admin else _resolve_uploader(request)   # 관리자 = 누가 올린 문서든 삭제
     with connect(DB) as conn:
         row = conn.execute(
             "SELECT file_path, uploaded_by FROM org.company_document WHERE company_document_idx = %s",
@@ -220,7 +219,7 @@ def delete_document(
         ).fetchone()
         if not row:
             raise HTTPException(404, "문서를 찾을 수 없습니다.")
-        if row["uploaded_by"] != uploader:
+        if uploader is not None and row["uploaded_by"] != uploader:
             raise HTTPException(403, "본인이 올린 문서만 삭제할 수 있습니다.")
         path = Path(row["file_path"])
         conn.execute("DELETE FROM org.company_document WHERE company_document_idx = %s", [doc_idx])

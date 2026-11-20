@@ -62,7 +62,7 @@ app.include_router(auth_router.router)
 
 @app.get("/who")   # 다른 API 가 쓰는 acting_employee 확인용
 def who(request: Request):
-    emp, admin = core.acting_employee(request, request.headers.get("X-Employee-No"))
+    emp, admin = core.acting_employee(request)
     return {"emp": emp, "admin": admin}
 
 
@@ -99,11 +99,11 @@ assert c.get("/who", headers={"X-Employee-No": "e0002"}).json() == {"emp": "e000
 assert c.post("/api/auth/logout").status_code == 200
 assert c.get("/api/auth/me").status_code == 401 and c.get("/who").status_code == 401
 
-# 관리자: 전체 권한(None), 헤더로 보기 전환, 로그인 유지 = max-age
+# 관리자: 모든 권한(None) — 헤더로 다른 사번을 보내도 무시, 로그인 유지 = max-age
 r = c.post("/api/auth/login", json={"userId": "admin", "password": "Admin-pass-1", "remember": True})
 assert r.status_code == 200 and r.json()["admin"] is True and "max-age" in r.headers["set-cookie"].lower()
 assert c.get("/who").json() == {"emp": None, "admin": True}
-assert c.get("/who", headers={"X-Employee-No": "e0002"}).json() == {"emp": "e0002", "admin": True}
+assert c.get("/who", headers={"X-Employee-No": "e0002"}).json() == {"emp": None, "admin": True}
 c.post("/api/auth/logout")
 
 # 5번 틀리면 잠금 → 맞는 비밀번호도 429

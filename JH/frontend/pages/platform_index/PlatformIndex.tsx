@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "../../common/theme/ThemeToggle";
 import { AUTH_PAGES } from "../../common/auth/token";
 import { UserMenu } from "./UserMenu";
+// 로고 — 펼침: 전체 로고(로그인 화면과 같은 파일) / PC 접힘: 원형 엠블럼만
+import logo from "../../common/auth/shift-logo.png";
+import emblem from "../../common/auth/shift-emblem.png";
 import { openShiftHandover } from "../shift_handover/ShiftHandover";
 
 type NavLeaf = { label: string; href: string };
@@ -218,11 +222,11 @@ function PlatformShell() {
       >
         {/* 로고 — 어느 페이지에서든 메인 대시보드로 복귀 */}
         <div className="mb-10 flex items-center justify-between pr-3 sm:px-2">
-          <Link href="/" className="flex min-w-0 items-center gap-3" title="알루미늄 공정 플랫폼">
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-700 text-xs font-bold text-white dark:bg-brand-500">
-              AL
-            </span>
-            <span className={`truncate text-sm font-semibold text-gray-800 dark:text-gray-100 ${label}`}>알루미늄 공정 플랫폼</span>
+          <Link href="/" className="flex min-w-0 items-center" title="Shift — 메인 대시보드">
+            <Image src={logo} alt="Shift — Aluminum Die Casting Platform" priority sizes="200px"
+              className={`h-auto w-[200px] max-w-full rounded-lg ${label}`} />
+            <Image src={emblem} alt="Shift" sizes="32px"
+              className={`size-8 rounded-full object-cover ${expanded ? "hidden" : "hidden lg:block"}`} />{/* 원본 귀퉁이가 흰색 → 원형으로 잘라 원판만 */}
           </Link>
           <button
             type="button"

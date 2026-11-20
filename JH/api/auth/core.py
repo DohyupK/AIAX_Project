@@ -155,12 +155,9 @@ def require_session(request: Request) -> Session:
     return s
 
 
-def acting_employee(request: Request, header_no: str | None) -> tuple[str | None, bool]:
-    """(이 요청의 사번, 관리자 여부)
-    - 일반 계정: 세션 사번만 사용 — 화면이 보낸 X-Employee-No 헤더는 무시 (위조 차단)
-    - 관리자: 헤더가 있으면 그 사번으로 「보기 전환」(권한 확인용 목업 계정 선택), 없으면 None = 전체 권한
+def acting_employee(request: Request) -> tuple[str | None, bool]:
+    """(이 요청의 사번, 관리자 여부) — 로그인 세션만 사용 (화면이 보내는 사번 헤더는 무시, 위조 차단)
+    관리자는 사번 None = 모든 권한 (인사 전체·Model Management 편집·문서 삭제)
     """
     s = require_session(request)
-    if s.admin:
-        return ((header_no or "").strip() or None), True
-    return s.employee_no, False
+    return (None, True) if s.admin else (s.employee_no, False)

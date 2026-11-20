@@ -7,7 +7,6 @@ DB 공정 코드 → 화면 이름 (MS 가 2026-11-18 코드·테이블 이름 �
 강건성(품질 2차 팝업) = ai.model_robustness : 조건별 Accuracy·Recall·Precision·F1 (원본 = 위 성과지표)
 각 공정의 배포(deployed) 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차는 casting/model.py 가 파일을 불러 씀).
 ponytail: 등록·배포(쓰기)는 ai 쓰기 계정이 생긴 뒤 — 배포 시 같은 공정 기존 배포 해제는 DB 트리거가 처리.
-현재 사용자: 로그인 전이라 헤더 X-Employee-No(화면의 목업 계정, 인사 관리와 같음) → 페이지 권한 none/read/edit.
 권한 = org 원본 권한 표(access_code + model_management_page) 실시간 — 인사 변경이 바로 반영.
 ponytail: lake 복제(Spark)가 아직 없어 org 원본을 직접 읽음. lake 연결 시 ACCESS_SQL 두 테이블만 lake 사본으로.
 권한 사번 = 로그인 세션 (auth/core.acting_employee). 관리자 = edit.
@@ -16,7 +15,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth.core import acting_employee
 
@@ -55,10 +54,10 @@ WHERE a.employee_no = %s
 """
 
 
-def access_level(request: Request, x_employee_no: str | None = Header(None, alias="X-Employee-No")) -> str:
+def access_level(request: Request) -> str:
     """현재 계정의 Model Management 권한: 'none' | 'read' | 'edit' — 사번은 로그인 세션에서 (관리자 = edit)"""
-    emp, _ = acting_employee(request, x_employee_no)
-    if emp is None:   # 관리자 (보기 전환 없음)
+    emp, admin = acting_employee(request)
+    if admin:   # 관리자 = 모든 권한
         return "edit"
     try:
         with connect(DB) as conn:

@@ -1,18 +1,13 @@
 // 사내 문서함 저장소 — JH API /api/documents
-import { getCurrentUser } from '../../common/currentUser';
 import { isCategory, type DocMeta } from './docs';
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
-function employeeHeader(): HeadersInit {
-  const id = getCurrentUser()?.user_id ?? 'e0001';
-  return { 'X-Employee-No': id };
-}
-
+// 올린 사람·삭제 권한 = 로그인 세션 쿠키 (서버 판단, 화면은 사번을 보내지 않음)
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: { ...employeeHeader(), ...(init?.headers ?? {}) },
+    headers: init?.headers,
     cache: 'no-store',
   });
   if (res.status === 204) return undefined as T;
@@ -53,7 +48,6 @@ export async function addDoc(meta: DocMeta, blob: Blob): Promise<DocMeta> {
   fd.append('category', meta.category);
   const res = await fetch(`${BASE}/api/documents`, {
     method: 'POST',
-    headers: { 'X-Employee-No': meta.uploader_id || 'e0001' },
     body: fd,
   });
   if (!res.ok) {
@@ -76,10 +70,7 @@ export async function getDocBlob(docNoOrIdx: string | number): Promise<Blob | nu
     ? docNoOrIdx
     : Number(String(docNoOrIdx).replace(/^DOC-/i, ''));
   if (!Number.isFinite(idx)) return null;
-  const res = await fetch(`${BASE}/api/documents/${idx}/file`, {
-    headers: employeeHeader(),
-    cache: 'no-store',
-  });
+  const res = await fetch(`${BASE}/api/documents/${idx}/file`, { cache: 'no-store' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`다운로드 실패 (HTTP ${res.status})`);
   return res.blob();
@@ -91,7 +82,7 @@ const idxOf = (docNoOrIdx: string | number) =>
 
 /** docx·xlsx·pptx 의 PDF 변환본. 서버에 변환 도구(LibreOffice)가 없으면 null → 본문 텍스트로 대신 */
 export async function getDocPreview(docNoOrIdx: string | number): Promise<Blob | null> {
-  const res = await fetch(`${BASE}/api/documents/${idxOf(docNoOrIdx)}/preview`, { headers: employeeHeader(), cache: 'no-store' });
+  const res = await fetch(`${BASE}/api/documents/${idxOf(docNoOrIdx)}/preview`, { cache: 'no-store' });
   if (res.status === 501) return null;
   if (!res.ok) throw new Error(`PDF 변환 실패 (HTTP ${res.status})`);
   return res.blob();
@@ -115,7 +106,7 @@ export interface SearchHit {
 export async function searchDocs(query: string, limit = 10): Promise<SearchHit[]> {
   return api<SearchHit[]>('/api/documents/search', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...employeeHeader() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, limit }),
   });
 }

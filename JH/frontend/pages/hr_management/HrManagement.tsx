@@ -1,8 +1,8 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ACCOUNT_KEY, DEFAULT_ACCOUNT, ApiError, FIELD_LABEL, GENDER_LABEL, TIER_LABEL, hrApi,
-  type DeptSummary, type Employee, type EmployeeInput, type Me, type MockAccount, type Summary, type TeamSummary,
+  ApiError, FIELD_LABEL, GENDER_LABEL, TIER_LABEL, hrApi,
+  type DeptSummary, type Employee, type EmployeeInput, type Me, type Summary, type TeamSummary,
 } from './hrApi';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import cd from '../company_documents/CompanyDocuments.module.css';
@@ -20,11 +20,9 @@ const show = (k: string, v: unknown) =>
 
 /**
  * 인사 관리 — 부서별/팀별 정보 카드 → 명단 팝업(직급순) → 상세·수정·삭제, ＋ 사원 추가
- * 권한은 서버(JH/api/hr/rules.py)가 판단하고, 볼 수 없는 칼럼은 응답에서 빠져서 옴
+ * 권한 = 로그인한 계정의 사번(관리자는 모든 권한). 서버(JH/api/hr/rules.py)가 판단하고, 볼 수 없는 칼럼은 응답에서 빠져서 옴
  */
 export default function HrManagement() {
-  const [accounts, setAccounts] = useState<MockAccount[]>([]);
-  const [who, setWho] = useState('');
   const [me, setMe] = useState<Me | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,30 +32,14 @@ export default function HrManagement() {
   const [form, setForm] = useState<{ mode: 'create' } | { mode: 'edit'; emp: Employee } | null>(null);
   const [version, setVersion] = useState(0);     // 추가·수정·삭제 후 다시 조회
 
+  // 로그인 계정 권한 → (열람 가능하면) 부서·팀 요약. 추가·수정·삭제 후 version 으로 다시 조회
   useEffect(() => {
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(ACCOUNT_KEY); } catch { /* 저장소 막힘 → 기본 계정 */ }
-    // 개편 전 사번(E10001 등)이 저장돼 있으면 버리고 기본 계정으로
-    setWho(saved && /^e\d{4}$/.test(saved) ? saved : DEFAULT_ACCOUNT);
-    hrApi.mockAccounts().then(setAccounts).catch((e: Error) => setError(e.message));
-  }, []);
-
-  useEffect(() => {
-    if (!who) return;
     setError(null);
-    setMe(null);
-    hrApi.me(who)
-      .then(m => { setMe(m); return m.tier ? hrApi.summary(who) : null; })
+    hrApi.me()
+      .then(m => { setMe(m); return m.tier ? hrApi.summary() : null; })
       .then(setSummary)
       .catch((e: Error) => setError(e.message));
-  }, [who, version]);
-
-  function changeAccount(no: string) {
-    setWho(no);
-    setSelected(null);
-    setListKey(null);
-    try { localStorage.setItem(ACCOUNT_KEY, no); } catch { /* 무시 */ }
-  }
+  }, [version]);
   const refresh = useCallback(() => setVersion(v => v + 1), []);
 
   const items = summary ? (by === 'dept' ? summary.departments : summary.teams) : [];
@@ -75,17 +57,6 @@ export default function HrManagement() {
           <h2 className={po.title}>인사 관리</h2>
         </div>
         <div className={s.headRight}>
-          <label className={po.chip}>
-            <span>목업 계정</span>
-            <select className={s.account} value={who} onChange={e => changeAccount(e.target.value)} aria-label="목업 로그인 계정">
-              {!accounts.some(a => a.employee_no === who) && who && <option value={who}>{who}</option>}
-              {accounts.map(a => (
-                <option key={a.employee_no} value={a.employee_no}>
-                  {a.employee_no} · {a.dept_name} {a.position_name} · {a.team_name ?? '팀 없음'}{a.is_team_rep ? ' (팀 대표)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
           <button type="button" className={cd.addBtn} disabled={!me?.can_create} onClick={() => setForm({ mode: 'create' })}
             aria-label="사원 추가" title={me?.can_create ? '사원 추가' : '권한 없음 — 인사팀(경영부)·팀 대표만 추가할 수 있습니다'}>
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
@@ -96,9 +67,9 @@ export default function HrManagement() {
       </header>
 
       <div className={po.banner}>
-        로그인 전 단계: 위 「목업 계정」으로 사용자를 바꿔 권한별 화면을 확인합니다. 데이터는 NCP DB 원본(실시간)이며, 조회·변경은 모두 기록됩니다.
-        {me && <> · 현재 권한: <b>{me.scope === 'all' ? '전 직원' : me.scope === 'team' ? `${me.team_name ?? '팀 없음'} 팀만` : '열람 불가'}</b>
-          {me.tier && <> · 열람 등급 <b>{TIER_LABEL[me.tier]}</b></>}</>}
+        {me ? <>로그인 계정: <b>{me.employee_no === 'admin' ? '관리자 (모든 권한)' : me.employee_no}</b> · 현재 권한: <b>{me.scope === 'all' ? '전 직원' : me.scope === 'team' ? `${me.team_name ?? '팀 없음'} 팀만` : '열람 불가'}</b>
+          {me.tier && <> · 열람 등급 <b>{TIER_LABEL[me.tier]}</b></>}</> : '로그인 계정 권한 확인 중…'}
+        {' '}· 데이터는 NCP DB 원본(실시간)이며, 조회·변경은 모두 기록됩니다.
       </div>
       {error && <div className={po.errorBox} role="alert">{error}</div>}
       {me && !me.tier && <div className={po.errorBox} role="alert">인턴은 인사 정보를 열람할 수 없습니다.</div>}
@@ -139,12 +110,12 @@ export default function HrManagement() {
       )}
 
       {listItem && me && (
-        <ListDialog who={who} me={me} by={by} keyValue={keyOf(listItem)}
+        <ListDialog me={me} by={by} keyValue={keyOf(listItem)}
           title={'dept_name' in listItem ? listItem.dept_name : listItem.team_name} version={version}
           onEdit={emp => setForm({ mode: 'edit', emp })} onChanged={refresh} onClose={() => setListKey(null)} />
       )}
       {form && me && summary && (
-        <EmployeeForm who={who} me={me} summary={summary} editing={form.mode === 'edit' ? form.emp : null}
+        <EmployeeForm me={me} summary={summary} editing={form.mode === 'edit' ? form.emp : null}
           onClose={() => setForm(null)} onSaved={() => { setForm(null); refresh(); }} />
       )}
     </div>
@@ -183,8 +154,8 @@ function useEscape(onClose: () => void) {
 }
 
 /** 명단 팝업 — 직급 높은 순(서버 정렬). 행을 누르면 상세 */
-function ListDialog({ who, me, by, keyValue, title, version, onEdit, onChanged, onClose }: {
-  who: string; me: Me; by: By; keyValue: number; title: string; version: number;
+function ListDialog({ me, by, keyValue, title, version, onEdit, onChanged, onClose }: {
+  me: Me; by: By; keyValue: number; title: string; version: number;
   onEdit: (e: Employee) => void; onChanged: () => void; onClose: () => void;
 }) {
   const [rows, setRows] = useState<Employee[] | null>(null);
@@ -194,8 +165,8 @@ function ListDialog({ who, me, by, keyValue, title, version, onEdit, onChanged, 
 
   useEffect(() => {
     setRows(null);
-    hrApi.list(who, by, keyValue).then(setRows).catch((e: Error) => setError(e.message));
-  }, [who, by, keyValue, version]);
+    hrApi.list(by, keyValue).then(setRows).catch((e: Error) => setError(e.message));
+  }, [by, keyValue, version]);
 
   const showPhone = me.visible_fields.includes('phone');
   return (
@@ -229,7 +200,7 @@ function ListDialog({ who, me, by, keyValue, title, version, onEdit, onChanged, 
           </div>
         )}
         {opened && (
-          <DetailDialog who={who} emp={opened} onClose={() => setOpened(null)}
+          <DetailDialog emp={opened} onClose={() => setOpened(null)}
             onEdit={() => { onEdit(opened); setOpened(null); }}
             onDeleted={() => { setOpened(null); onChanged(); }} />
         )}
@@ -239,8 +210,8 @@ function ListDialog({ who, me, by, keyValue, title, version, onEdit, onChanged, 
 }
 
 /** 사원 상세 — 서버가 보낸(볼 권한 있는) 칼럼만 표시 */
-function DetailDialog({ who, emp, onClose, onEdit, onDeleted }: {
-  who: string; emp: Employee; onClose: () => void; onEdit: () => void; onDeleted: () => void;
+function DetailDialog({ emp, onClose, onEdit, onDeleted }: {
+  emp: Employee; onClose: () => void; onEdit: () => void; onDeleted: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -249,7 +220,7 @@ function DetailDialog({ who, emp, onClose, onEdit, onDeleted }: {
   async function remove() {
     if (!window.confirm(`${emp.employee_no} ${emp.employee_name} 사원을 삭제할까요?\n개인정보·명단·권한 코드가 함께 삭제되며 되돌릴 수 없습니다.`)) return;
     setBusy(true); setError(null);
-    try { await hrApi.remove(who, emp.employee_no); onDeleted(); }
+    try { await hrApi.remove(emp.employee_no); onDeleted(); }
     catch (e) { setError((e as Error).message); setBusy(false); }
   }
 
@@ -279,8 +250,8 @@ function DetailDialog({ who, emp, onClose, onEdit, onDeleted }: {
 }
 
 /** 사원 추가·수정 — 사번·등록 일시는 서버 자동. 팀 대표는 팀이 자기 팀으로 고정 */
-function EmployeeForm({ who, me, summary, editing, onClose, onSaved }: {
-  who: string; me: Me; summary: Summary; editing: Employee | null; onClose: () => void; onSaved: () => void;
+function EmployeeForm({ me, summary, editing, onClose, onSaved }: {
+  me: Me; summary: Summary; editing: Employee | null; onClose: () => void; onSaved: () => void;
 }) {
   const teamLocked = !me.is_hr;
   const [v, setV] = useState({
@@ -314,9 +285,9 @@ function EmployeeForm({ who, me, summary, editing, onClose, onSaved }: {
     try {
       if (editing) {
         const patch = Object.fromEntries(Object.entries(body).filter(([k]) => !hidden(k)));
-        await hrApi.update(who, editing.employee_no, patch);
+        await hrApi.update(editing.employee_no, patch);
       } else {
-        await hrApi.create(who, body);
+        await hrApi.create(body);
       }
       onSaved();
     } catch (err) {

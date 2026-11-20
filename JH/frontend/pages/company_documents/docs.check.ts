@@ -30,6 +30,7 @@ const me = { user_id: "e0001" };
 assert.equal(canDelete({ uploader_id: "e0001" }, me), true);
 assert.equal(canDelete({ uploader_id: "e0002" }, me), false);
 assert.equal(canDelete({ uploader_id: "e0001" }, null), false);
+assert.equal(canDelete({ uploader_id: "e0002" }, { user_id: "e0001", admin: true }), true);   // 관리자는 남의 문서도 삭제
 
 const base: DocMeta = {
   doc_no: "DOC-1", title: "t", category: "sop", uploader_id: "e0001", uploader: "김지환",

@@ -4,6 +4,9 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-21 | 메인 대시보드: 오른쪽 위 사용자 표시 삭제 (헤더 계정 정보와 겹침) | [main_dashboard](../기능표.md#메인-대시보드-main_dashboard) |
+| 2026-11-21 | 인사 관리·Model Management 목업 계정 삭제 → 로그인 권한, 관리자 = 모든 권한(문서함 삭제 포함) | [hr_management](../기능표.md#인사-관리-hr_management) · [model_management](../기능표.md#model-management-model_management) · [company_documents](../기능표.md#사내-문서함-company_documents) |
+| 2026-11-21 | 사이드바 로고 → Shift 로고 (펼침 = 전체 로고, PC 접힘 = 원형 엠블럼만) | [platform_index](../기능표.md#공정-안전-플랫폼-인덱스-platform_index) |
 | 2026-11-21 | 경영 관리자 리포트: 목록 14건 제한 해제 → 데이터 첫날까지 15건씩 페이지 번호 (`/api/report/first-date`) | [management_report](../기능표.md#경영-관리자-리포트-management_report) |
 | 2026-11-21 | 보호구 착용 위반: 게이트 b 항목 4종만 표시(보안경 제외) | [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |
 | 2026-11-21 | 교대 인수인계: 좌하단 떠 있는 「인수인계 실행」 버튼 → 사이드바 「사내 문서함」 위 메뉴로 이동, 누르면 같은 팝업 | [shift_handover](../기능표.md#교대-인수인계-리포트-shift_handover) · [platform_index](../기능표.md#공정-안전-플랫폼-인덱스-platform_index) |
