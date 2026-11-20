@@ -17,7 +17,7 @@ def extract_text(path: Path, file_name: str) -> str:
     if ext not in EXTRACT_EXT:
         return ""
     try:
-        if ext == "txt":
+        if ext in ("txt", "md"):
             return path.read_text(encoding="utf-8", errors="replace")
         if ext == "pdf":
             return _pdf(path)

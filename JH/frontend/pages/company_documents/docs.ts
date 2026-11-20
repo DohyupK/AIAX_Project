@@ -13,7 +13,7 @@ export const CATEGORIES = [
 export type Category = (typeof CATEGORIES)[number]['key'];
 
 /** 업로드 허용 확장자 · 크기 제한 (서버 paths.ALLOWED_EXT 와 동일) */
-export const ALLOWED_EXT = ['pdf', 'docx', 'xlsx', 'pptx', 'hwp', 'hwpx', 'txt', 'png', 'jpg', 'jpeg', 'zip'] as const;
+export const ALLOWED_EXT = ['pdf', 'docx', 'xlsx', 'pptx', 'hwp', 'hwpx', 'txt', 'md', 'png', 'jpg', 'jpeg', 'zip'] as const;
 export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB
 export const TITLE_MAX = 100;
 
@@ -46,7 +46,7 @@ export function viewModeOf(fileName: string): ViewMode {
   if (ext === 'pdf') return 'pdf';
   if (['png', 'jpg', 'jpeg'].includes(ext)) return 'image';
   if (['docx', 'xlsx', 'pptx'].includes(ext)) return 'convert';
-  if (['hwp', 'hwpx', 'txt'].includes(ext)) return 'text';
+  if (['hwp', 'hwpx', 'txt', 'md'].includes(ext)) return 'text';
   return 'none';
 }
 

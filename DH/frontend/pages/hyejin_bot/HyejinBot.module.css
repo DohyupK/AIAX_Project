@@ -66,6 +66,23 @@
 .panelHidden {
   display: none;
 }
+/* 전체화면 — 긴 답변 읽기용 */
+.panelFull {
+  top: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(0.75rem + 60px + 10px);
+  left: 0.75rem;
+  width: auto;
+  height: auto;
+  z-index: 61;
+  border-radius: 12px;
+}
+.panelFull .bubbleBot {
+  max-width: min(920px, 100%);
+}
+.panelFull .bubbleUser {
+  max-width: min(720px, 88%);
+}
 
 .panelHead {
   display: flex;
@@ -319,6 +336,13 @@
     width: auto;
     bottom: calc(0.75rem + 60px + 10px);
     height: min(70vh, calc(100vh - 6.5rem));
+  }
+  .panelFull {
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: calc(0.5rem + 60px + 10px);
+    height: auto;
   }
   .fab {
     right: 0.75rem;

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { askShiftBot } from "./chatApi";
+import { plainText } from "./plainText";
 import SourceList from "./SourceList";
 import type { ChatTurn } from "./sources";
 import { snapshotUiContext, startUiContextCapture, stopUiContextCapture } from "./uiContext";
@@ -35,12 +36,20 @@ function saveTurns(turns: ChatTurn[]): void {
   }
 }
 
+function panelClass(open: boolean, full: boolean): string {
+  const parts = [s.panel];
+  if (!open) parts.push(s.panelHidden);
+  if (full) parts.push(s.panelFull);
+  return parts.join(" ");
+}
+
 /**
  * Shift 봇 — 전역 우하단 FAB (app/layout).
- * 패널 닫아도 대화 유지. 새 채팅 전까지 sessionStorage. DB 없음.
+ * 전체화면·대화 sessionStorage 유지. DB 없음.
  */
 export default function HyejinBot() {
   const [open, setOpen] = useState(false);
+  const [full, setFull] = useState(false);
   const [q, setQ] = useState("");
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -106,7 +115,7 @@ export default function HyejinBot() {
   return (
     <div className={s.page}>
       <div
-        className={open ? s.panel : `${s.panel} ${s.panelHidden}`}
+        className={panelClass(open, full)}
         role="dialog"
         aria-label="Shift 채팅"
         aria-hidden={!open}
@@ -118,6 +127,14 @@ export default function HyejinBot() {
             <p className={s.panelSub}>문서·관리도·품질 · 새 채팅 전까지 대화 유지</p>
           </div>
           <div className={s.headActions}>
+            <button
+              type="button"
+              className={s.newChatBtn}
+              aria-pressed={full}
+              onClick={() => setFull((v) => !v)}
+            >
+              {full ? "창 모드" : "전체화면"}
+            </button>
             <button
               type="button"
               className={s.newChatBtn}
@@ -155,7 +172,7 @@ export default function HyejinBot() {
             ) : (
               <div key={i} className={s.bubbleBot}>
                 <div className={s.botLabel}>Shift</div>
-                <p className={s.answer}>{turn.content}</p>
+                <p className={s.answer}>{plainText(turn.content)}</p>
                 <SourceList sources={turn.sources ?? []} answer={turn.content} />
               </div>
             ),

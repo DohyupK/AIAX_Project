@@ -8,10 +8,10 @@ from pathlib import Path
 from common.db import _env
 
 ALLOWED_EXT = frozenset(
-    {"pdf", "docx", "xlsx", "pptx", "hwp", "hwpx", "txt", "png", "jpg", "jpeg", "zip"}
+    {"pdf", "docx", "xlsx", "pptx", "hwp", "hwpx", "txt", "md", "png", "jpg", "jpeg", "zip"}
 )
 # 텍스트 추출 대상 (이미지·zip·미지원 hwp는 빈 문자열 → 청크 0)
-EXTRACT_EXT = frozenset({"txt", "pdf", "docx", "xlsx", "pptx", "hwp", "hwpx"})
+EXTRACT_EXT = frozenset({"txt", "md", "pdf", "docx", "xlsx", "pptx", "hwp", "hwpx"})
 MAX_FILE_BYTES = 20 * 1024 * 1024
 CHUNK_CHARS = 800
 CHUNK_OVERLAP = 80
