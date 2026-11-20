@@ -1,7 +1,7 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LINES, fetchActiveModel, fetchDates, fetchLimits, setDemoSpeed, todayKst, type DemoSpeed, type Line } from '../../common/casting/api';
+import { LINES, fetchActiveModel, fetchDates, fetchLimits, todayKst, type Line } from '../../common/casting/api';
 import { buildAlertCards, type ControlLimits } from '../../common/casting/alerts';
 import { LABELS } from '../../common/casting/analysis';
 import { useShotStream } from '../../common/casting/useShotStream';
@@ -41,37 +41,17 @@ export default function ProcessOptimizationDashboard() {
   const [activeGroup, setActiveGroup] = useState(0); // 설비 장면의 진행 중 공정 단계 묶음
   const [dates, setDates] = useState<string[] | null>(null); // null = 조회 전
   const [date, setDate] = useState(''); // 기본: 데이터가 있는 가장 최근 날짜
-  const [speed, setSpeed] = useState(1); // 버튼·과거재생 배속. live 장면은 DB 사이클이 이미 ÷20 이라 sceneSpeed=1
+  const [speed, setSpeed] = useState(1); // 과거 재생 UI 배속. live 가속은 생성기 --speed 20
   const [cycle, setCycle] = useState(DEFAULT_CYCLE); // 장면 한 바퀴(초) — live=최근 샷, 재생=평균
   // 오늘(KST)은 브라우저에서만 계산 (서버 렌더 시각과 어긋나지 않게). ponytail: 페이지를 연 채 자정을 넘기면 새로고침해야 새 날짜로
   const [today, setToday] = useState('');
   useEffect(() => setToday(todayKst()), []);
   const live = !!date && date === today; // 오늘 = 실시간, 지난 날짜 = 재생
-  // live: 생성기가 사이클을 ÷20 해 넣음 → 장면에 speed 를 또 나누면 7.5/20 이 됨. 과거 재생만 UI speed 적용
+  // live: 생성기 --speed 20 이 사이클÷20 으로 넣음 → 장면은 재나눗셈 안 함. 과거 재생만 UI speed
   const sceneSpeed = live ? 1 : speed;
-
-  // live ×20 ↔ MS shot_generator (mes.shot_generator_control). 과거 재생은 UI만.
   const onSpeed = useCallback((next: number) => {
-    const s = (next > 1 ? 20 : 1) as DemoSpeed;
-    setSpeed(s);
-    if (!live) return;
-    setDemoSpeed(s).catch((e: Error) => {
-      console.error('[process_optimization] 시연 배속 저장 실패', e);
-      setMetaError(e.message);
-    });
-  }, [live]);
-
-  // live 진입 시 1배로 맞추고, 페이지·live 이탈 시에도 1배로 되돌려 생성기가 20배에 남지 않게
-  useEffect(() => {
-    if (!live) return;
-    setSpeed(1);
-    setDemoSpeed(1).catch((e: Error) => {
-      console.error('[process_optimization] 시연 배속 초기화 실패', e);
-    });
-    return () => {
-      setDemoSpeed(1).catch(() => { /* 언마운트·이탈 — 실패해도 다음 진입에서 다시 1 */ });
-    };
-  }, [live]);
+    setSpeed(next > 1 ? 20 : 1);
+  }, []);
 
   // 설비 장면 라벨 클릭 → 해당 변수 선택 + 공정 변수 모니터로 스크롤 (바로 아래 관리도도 같은 변수)
   const pickFromScene = useCallback((k: FeatureKey) => {
@@ -172,7 +152,7 @@ export default function ProcessOptimizationDashboard() {
 
       <div className={s.banner}>
         {live
-          ? '실시간(공정 DB): 오늘 지금까지의 최근 샷을 보여 주고, 새 샷이 들어오면 5초 안에 이어 붙입니다. ×20이면 샷 생성·사이클 값(~150→~7.5초)이 함께 20배속입니다.'
+          ? '실시간(공정 DB): 오늘 지금까지의 최근 샷을 보여 주고, 새 샷이 들어오면 5초 안에 이어 붙입니다. 시연 가속은 샷 생성기 --speed 20 (사이클·간격 ÷20).'
           : '실데이터(공정 DB): 고른 날짜의 샷을 처음부터 재생합니다. 1샷 = 평균 설비 사이클(×20 버튼으로 20배속).'}
         {' '}알림은 불량 예측과 별개로 고정 관리선(기준 기간 정상 양품 샷)으로 기준 기간 다음 날부터 판정합니다 — 경보(설비 한계) · 주의(관리선 밖) · 관찰(추세).
       </div>

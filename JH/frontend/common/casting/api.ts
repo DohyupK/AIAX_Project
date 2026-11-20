@@ -75,42 +75,6 @@ export function fetchLive(line: string, after?: string): Promise<LiveShots> {
   return get<LiveShots>(`/api/casting/live?${q}`);
 }
 
-/** 시연 배속(1|20) — MS shot_generator ↔ 공정최적화 live ×20 */
-export type DemoSpeed = 1 | 20;
-
-async function putJson<T>(path: string, body: unknown): Promise<T> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${BASE}${path}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
-    return res.json() as Promise<T>;
-  } catch (e) {
-    if (e instanceof Error && e.name === 'AbortError') {
-      throw new Error(`${path} 요청 시간 초과 (${FETCH_TIMEOUT_MS / 1000}초)`);
-    }
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** 현재 시연 배속 조회 */
-export function fetchDemoSpeed(): Promise<{ speed: DemoSpeed; updatedAt: string }> {
-  return get(`/api/casting/demo-speed`);
-}
-
-/** 시연 배속 저장 — live ×20 ON=20 / OFF·이탈=1 */
-export function setDemoSpeed(speed: DemoSpeed): Promise<{ speed: DemoSpeed; updatedAt: string }> {
-  return putJson(`/api/casting/demo-speed`, { speed });
-}
-
 /** 관리도 기준선 (라인별·변수별 고정 표, 서버 casting/spc.py) */
 export interface SpcBaseline { cl: number; sigma: number; iLcl: number; iUcl: number; mrCl: number; mrUcl: number; ewmaLcl: number; ewmaUcl: number }
 /** 관리도 점 1개 — flow = 생산 흐름(0 = A), marks: n1 = 규칙 1(I 관리선 밖), n2·n3 = 규칙 2·3, mr·ewma = 관리선 밖 */

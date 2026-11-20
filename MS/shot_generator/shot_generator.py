@@ -13,9 +13,8 @@ r"""실시간 샷 생성기 — TM 「시연 데이터 생성 규칙 (실시간�
          예) --mode test --speed 20   (20배속으로 빨리 보기)
   run  : 운영. DB 의 라인별 마지막 샷에서 이어서, 샷 시각이 되면 mes 에 저장
          꺼져 있던 동안의 샷은 다시 켜질 때 한꺼번에 채움. DB 가 끊기면 같은 샷을 계속 다시 시도
-         --speed 로 초기 배속(기본 1). 운영 중에는 mes.shot_generator_control.speed 를 읽어 바꿈
-         (JH 공정최적화 ×20 → /api/casting/demo-speed). 배속>1 이면 사이클·샷간격 ÷speed(~150/20),
-         INSERT 시각은 벽시계로 찍어 live 조회에 보이게 함
+         --speed 로 배속(기본 1, 시연 20). 배속>1 이면 사이클·샷간격 ÷speed(~150/20),
+         INSERT 시각은 벽시계로 찍어 live 조회에 보이게 함. (배속용 별도 표·API 없음)
          --table 로 시험 테이블에 넣어 볼 수 있음 (예: mes.investment_casting_test, 같은 구조)
 설정: 환경변수 또는 .env 파일 (--env 로 지정, 없으면 이 폴더의 .env → 위쪽 폴더의 .env 순서로 찾음)
   DATABASE_URL = app_mes 계정 (mes 읽기·쓰기)
@@ -344,22 +343,6 @@ class Db:
                 self.close()
                 time.sleep(self.RETRY)
 
-    def read_speed(self, fallback: float) -> float:
-        """시연 배속 — mes.shot_generator_control. 테이블 없으면 fallback"""
-        try:
-            row = self.connect().execute(
-                "SELECT speed FROM mes.shot_generator_control WHERE id = 1"
-            ).fetchone()
-            if row is None:
-                return fallback
-            s = float(row[0])
-            return s if s > 0 else fallback
-        except Exception as e:
-            log(f"배속 조회 실패(이 값은 유지 {fallback}): {str(e).strip().splitlines()[0]}")
-            self.close()
-            return fallback
-
-
 def _stamp_wall(shot: dict) -> dict:
     """배속 INSERT 시 live(date<=now)에 보이도록 시각만 벽시계로 바꿈 (사이클 값은 이미 ÷speed)"""
     now = datetime.now(KST).replace(tzinfo=None)
@@ -367,26 +350,6 @@ def _stamp_wall(shot: dict) -> dict:
     out["timestamp"] = now.strftime("%Y-%m-%d")
     out["date"] = f"{now.hour}:{now:%M:%S}"
     return out
-
-
-def _apply_speed_change(
-    gen: Generator, lines: dict[str, Line], pending: dict[str, dict],
-    old: float, new: float,
-) -> tuple[datetime, float]:
-    """배속 변경 — 남은 due·대기 샷 사이클을 old→new 비율로 맞추고 wait 기준점 재설정"""
-    now_t = datetime.now(KST).replace(tzinfo=None)
-    gen.speed = new
-    for name, ln in lines.items():
-        if ln.t > now_t:
-            rem = (ln.t - now_t).total_seconds()
-            ln.t = now_t + timedelta(seconds=rem * old / new)
-        sh = pending[name]
-        for key in ("facility_CycleTime", "production_CycleTime"):
-            sh[key] = float(sh[key]) * old / new
-        sh["timestamp"] = ln.t.strftime("%Y-%m-%d")
-        sh["date"] = f"{ln.t.hour}:{ln.t:%M:%S}"
-    log(f"배속 변경 {old:g} → {new:g}")
-    return now_t, time.monotonic()
 
 
 def run_stream(gen: Generator, mode: str, speed: float, max_shots: int | None, table: str) -> None:
@@ -406,8 +369,6 @@ def run_stream(gen: Generator, mode: str, speed: float, max_shots: int | None, t
                 log(f"DB 연결 실패, {Db.RETRY}초 뒤 다시: {str(e).strip().splitlines()[0]}")
                 db.close()
                 time.sleep(Db.RETRY)
-        # DB 제어 행이 있으면 CLI --speed 보다 우선 (JH ×20 연동)
-        speed = db.read_speed(speed)
         for name in LINES:
             s = last.get(name)
             if s is None:   # 빈 테이블(시험 테이블 등) — 지금부터 새 런
@@ -434,28 +395,13 @@ def run_stream(gen: Generator, mode: str, speed: float, max_shots: int | None, t
     sent = dup = 0
     try:
         while max_shots is None or sent < max_shots:
-            # 운영: JH 가 바꾼 배속을 매 루프 반영 (사이클·due 이미 ÷speed 이므로 wait 에 다시 나누지 않음)
-            if db is not None:
-                new_speed = db.read_speed(speed)
-                if new_speed != speed:
-                    start_sim, start_wall = _apply_speed_change(gen, lines, pending, speed, new_speed)
-                    speed = new_speed
             name = min(pending, key=lambda k: lines[k].t)          # 가장 이른 샷부터
             shot = pending[name]
             due = lines[name].t
-            # 샷 시각이 될 때까지 기다림 (지난 시각이면 바로 — 꺼져 있던 동안 밀린 샷 채우기)
-            # due 가 이미 ÷speed 압축됨 → wait 에서 speed 로 또 나누지 않음. 1초 단위로 자며 배속 변경 반영
-            while True:
-                wait = (due - start_sim).total_seconds() - (time.monotonic() - start_wall)
-                if wait <= 0:
-                    break
-                time.sleep(min(wait, 1.0))
-                if db is not None:
-                    new_speed = db.read_speed(speed)
-                    if new_speed != speed:
-                        start_sim, start_wall = _apply_speed_change(gen, lines, pending, speed, new_speed)
-                        speed = new_speed
-                        due = lines[name].t
+            # due 가 이미 ÷speed 압축됨 → wait 에서 speed 로 또 나누지 않음
+            wait = (due - start_sim).total_seconds() - (time.monotonic() - start_wall)
+            if wait > 0:
+                time.sleep(wait)
             body = {k: v for k, v in shot.items() if not k.startswith("_")}
             # 배속>1: DB 시각은 벽시계로 찍어 /live 가 받게 함 (사이클 값은 이미 ÷speed)
             if mode == "run" and speed != 1.0:
@@ -486,7 +432,7 @@ def main() -> None:
     ap.add_argument("--mode", choices=["fast", "test", "run"], required=True)
     ap.add_argument("--shots", type=int, help="fast: 라인별 샷 수(기본 20000) / test·run: 만들 샷 수 상한(없으면 계속)")
     ap.add_argument("--out", help="fast: CSV 저장 경로")
-    ap.add_argument("--speed", type=float, default=1.0, help="배속 (test·run). run 은 mes.shot_generator_control 이 있으면 그 값 우선")
+    ap.add_argument("--speed", type=float, default=1.0, help="배속 (test·run). 시연은 20")
     ap.add_argument("--table", default="mes.investment_casting", help="run: 저장할 테이블")
     ap.add_argument("--env", help=".env 파일 경로 (없으면 저장소 루트 .env)")
     ap.add_argument("--seed", type=int)
