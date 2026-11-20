@@ -4,7 +4,7 @@ import "./globals.css";
 import { PlatformLayout } from "@/JH/main";
 // 교대 인수인계 — 전역 팝업·「인수인계 실행」(JH, DH 마운트)
 import { ShiftHandover } from "@/JH/main/shift_handover";
-// 혜진봇 — 전역 우하단 FAB (DH)
+// Shift 봇 — 전역 우하단 FAB (DH, 모듈 id hyejin_bot)
 import { HyejinBot } from "@/DH/main/hyejin_bot";
 
 export const metadata: Metadata = {

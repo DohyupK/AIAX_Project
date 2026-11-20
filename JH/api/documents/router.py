@@ -288,22 +288,33 @@ def search_documents(body: SearchBody):
 
 @router.post("/ask")
 def ask_documents(body: SearchBody):
-    """혜진봇: 문서 검색 + Chat 답변 (NIM 우선). sources는 search hit와 동일 형태."""
+    """Shift 봇: 문서 검색 + 관리도 알림 + 품질 KPI + Chat (NIM 우선)."""
+    from documents.alert_context import collect_alert_context
+    from documents.quality_context import collect_quality_context
+
     q = body.query.strip()
     if not q:
         raise HTTPException(400, "검색어를 입력하세요.")
     hits = _retrieve_hits(q, body.limit)
-    if not hits:
+    alert_sources, alert_text = collect_alert_context()
+    quality_sources, quality_text = collect_quality_context()
+    if not hits and not alert_sources and not quality_sources:
         return {
-            "answer": "사내 문서에서 근거를 찾지 못했습니다. 문서함 업로드·청킹(ok) 상태를 확인해 주세요.",
+            "answer": "사내 문서·관리도 알림·품질 KPI에서 근거를 찾지 못했습니다. 문서함·공정 데이터를 확인해 주세요.",
             "sources": [],
         }
+    doc_sources = [{**h, "kind": "company_document"} for h in hits]
     try:
-        answer = generate_answer(q, hits)
+        answer = generate_answer(
+            q, hits, alert_text=alert_text, quality_text=quality_text
+        )
     except Exception as e:
-        log.exception("혜진봇 Chat 실패")
+        log.exception("Shift Chat 실패")
         msg = str(e)
         if "API_KEY" in msg:
             raise HTTPException(503, msg) from e
         raise HTTPException(502, f"Chat 실패: {e}") from e
-    return {"answer": answer, "sources": hits}
+    return {
+        "answer": answer,
+        "sources": [*doc_sources, *alert_sources, *quality_sources],
+    }
