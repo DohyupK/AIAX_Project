@@ -41,12 +41,17 @@ export default function ProcessOptimizationDashboard() {
   const [activeGroup, setActiveGroup] = useState(0); // 설비 장면의 진행 중 공정 단계 묶음
   const [dates, setDates] = useState<string[] | null>(null); // null = 조회 전
   const [date, setDate] = useState(''); // 기본: 데이터가 있는 가장 최근 날짜
-  const [speed, setSpeed] = useState(1);
-  const [cycle, setCycle] = useState(DEFAULT_CYCLE); // 지금까지 받은 샷의 평균 설비 사이클(초)
+  const [speed, setSpeed] = useState(1); // 과거 재생 UI 배속. live 가속은 생성기 --speed 20
+  const [cycle, setCycle] = useState(DEFAULT_CYCLE); // 장면 한 바퀴(초) — live=최근 샷, 재생=평균
   // 오늘(KST)은 브라우저에서만 계산 (서버 렌더 시각과 어긋나지 않게). ponytail: 페이지를 연 채 자정을 넘기면 새로고침해야 새 날짜로
   const [today, setToday] = useState('');
   useEffect(() => setToday(todayKst()), []);
   const live = !!date && date === today; // 오늘 = 실시간, 지난 날짜 = 재생
+  // live: 생성기 --speed 20 이 사이클÷20 으로 넣음 → 장면은 재나눗셈 안 함. 과거 재생만 UI speed
+  const sceneSpeed = live ? 1 : speed;
+  const onSpeed = useCallback((next: number) => {
+    setSpeed(next > 1 ? 20 : 1);
+  }, []);
 
   // 설비 장면 라벨 클릭 → 해당 변수 선택 + 공정 변수 모니터로 스크롤 (바로 아래 관리도도 같은 변수)
   const pickFromScene = useCallback((k: FeatureKey) => {
@@ -55,13 +60,20 @@ export default function ProcessOptimizationDashboard() {
     document.getElementById(SENSOR_MONITOR_ID)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   }, []);
 
-  const { shots, loading, error, retry, finished, restart } = useShotStream(line, date, playing, true, (cycle / speed) * 1000, live);
+  const { shots, loading, error, retry, finished, restart } = useShotStream(
+    line, date, playing, true, (cycle / sceneSpeed) * 1000, live,
+  );
 
-  // 평균 설비 사이클 = KPI 「평균 사이클」과 같은 값. 정수 초로 반올림해 재생 타이머가 매 샷마다 다시 걸리지 않게
+  // live: 최근 샷 사이클(×20 직후 ~7.5초가 바로 반영). 재생: 평균(정수 초)으로 타이머 안정
   useEffect(() => {
+    if (live) {
+      const last = shots[shots.length - 1]?.features.facility_CycleTime;
+      setCycle(last != null && last > 0 ? last : DEFAULT_CYCLE);
+      return;
+    }
     const v = shots.map(x => x.features.facility_CycleTime).filter((x): x is number => x != null && x > 0);
     setCycle(v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : DEFAULT_CYCLE);
-  }, [shots]);
+  }, [shots, live]);
 
   useEffect(() => {
     fetchActiveModel().then(setModel).catch((e: Error) => setMetaError(e.message));
@@ -140,7 +152,7 @@ export default function ProcessOptimizationDashboard() {
 
       <div className={s.banner}>
         {live
-          ? '실시간(공정 DB): 오늘 지금까지의 최근 샷을 보여 주고, 새 샷이 들어오면 5초 안에 이어 붙입니다. 설비는 샷마다 한 바퀴 돌고 다음 샷까지 기다립니다.'
+          ? '실시간(공정 DB): 오늘 지금까지의 최근 샷을 보여 주고, 새 샷이 들어오면 5초 안에 이어 붙입니다. 시연 가속은 샷 생성기 --speed 20 (사이클·간격 ÷20).'
           : '실데이터(공정 DB): 고른 날짜의 샷을 처음부터 재생합니다. 1샷 = 평균 설비 사이클(×20 버튼으로 20배속).'}
         {' '}알림은 불량 예측과 별개로 고정 관리선(기준 기간 정상 양품 샷)으로 기준 기간 다음 날부터 판정합니다 — 경보(설비 한계) · 주의(관리선 밖) · 관찰(추세).
       </div>
@@ -176,7 +188,8 @@ export default function ProcessOptimizationDashboard() {
       {model && (
         <>
           <section className={`${s.grid} ${s.top}`}>
-            <DiecastScene shots={shots} model={model} playing={live || playing} cycleSec={cycle} speed={speed} onSpeed={setSpeed} onPick={pickFromScene} onPhase={setActiveGroup} />
+            <DiecastScene shots={shots} model={model} playing={live || playing} cycleSec={cycle}
+              speed={speed} sceneSpeed={sceneSpeed} onSpeed={onSpeed} onPick={pickFromScene} onPhase={setActiveGroup} />
             <div className={s.side}>
               <KpiCards shots={shots} model={model} />
               <AlertLog cards={cards} limits={limits && limits.line === line ? limits : null} date={date} />

@@ -53,4 +53,5 @@ CRON_TZ=Asia/Seoul
 ## 화면
 
 - 페이지: `/al-price` (DH `al_price`)
-- 조회 API: `uv run python -m aluminum_price serve` → `GET http://127.0.0.1:8766/prices`
+- 브라우저: `GET /al-price/api/prices` → Next Route Handler → `127.0.0.1:8766` (nginx `/api/`·JH와 분리)
+- 서버 기동: `myapp` tmux 창 `al_price` = `uv run python -m aluminum_price serve`

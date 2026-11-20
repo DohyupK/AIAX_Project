@@ -28,7 +28,7 @@
 | hr_management | 인사 관리 | JH | JH/main/hr_management | 루트 `app/hr/page.tsx`에서 호출. 사이드바 보호구 착용 위반 대시보드와 경영 관리자 리포트 사이. 데이터는 `JH/api` 인사 API(FastAPI)로 NCP DB `org` 원본 실시간 조회·변경. 로그인 전이라 목업 계정 선택, API는 127.0.0.1 전용 | 2026-11-16 |
 | management_report | 경영 관리자 리포트 | JH | JH/main/management_report | 루트 `app/management-report/page.tsx`에서 호출. 일일·주간·월간 목업 리포트 | 2026-11-14 |
 | ppe_violation | 보호구 착용 위반 대시보드 | JH | JH/main/ppe_violation | 루트 `app/safety/ppe-violation/page.tsx`에서 호출 (DH 승인). 옛 이름 작업자 안전 관리(worker_safety)에서 명칭·경로 변경. 검색대 기록·월간 위반 보고서는 목업(DB 연결 전) | 2026-11-17 |
-| al_price | 알루미늄 가격 | DH | DH/main/al_price | 루트 `app/al-price/page.tsx`. LME Al → `org.aluminum_price` 조회(serve :8766). 사이드바는 JH `PlatformIndex` 반영 필요 | 2026-11-20 |
+| al_price | 알루미늄 가격 | DH | DH/main/al_price | 루트 `app/al-price/page.tsx`. 조회 `/al-price/api/prices`→serve :8766. `org.aluminum_price` | 2026-11-20 |
 
 ## 추가할 때 채울 열
 

@@ -32,6 +32,9 @@ DieCasting_{Algo}_{YYYYMMDD}_{NN}
 | 새 이름 | 구 이름 | 날짜 | 비고 |
 |---------|---------|------|------|
 | `DieCasting_CNXV2T_20261117_01` | `cnxv2-t_384_geo-photo_v1_261117_e2e.onnx` | 2026-11-17 | 구 이름 요소: 384 · geo-photo · v1 · e2e (의미는 TM 확인 필요) |
+| `DieCasting_CNXV2T_20261117_02` | `cnxv2-t_384_none_v1_261120.onnx` | 2026-11-20 | 모델 A · 증강 없음 · 전처리 미포함 (비교 실험용) |
+| `DieCasting_CNXV2T_20261117_03` | `cnxv2-t_384_geo-flip_v1_261120.onnx` | 2026-11-20 | 모델 C · 기하+뒤집기 · 전처리 미포함 (비교 실험용) |
+| `DieCasting_CNXV2T_20261117_04` | `cnxv2-t_384_geo-photo-sensor_v1_261120.onnx` | 2026-11-20 | 모델 E · 기하+조명+센서 · 전처리 미포함 (비교 실험용) |
 
 파일 이름만 바꿨으므로 **모델 가중치·성능은 동일**합니다.
 

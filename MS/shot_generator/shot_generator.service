@@ -9,7 +9,8 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/aiax/shot_generator
 EnvironmentFile=/opt/aiax/shot_generator/.env
-ExecStart=/opt/aiax/shot_generator/venv/bin/python -u shot_generator.py --mode run
+# 시연: --speed 20 (사이클·샷간격 ÷20). 표/API 없이 CLI 배속만 사용
+ExecStart=/opt/aiax/shot_generator/venv/bin/python -u shot_generator.py --mode run --speed 20
 Restart=always
 RestartSec=10
 DynamicUser=yes

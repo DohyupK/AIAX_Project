@@ -1,37 +1,85 @@
-:root {
-  --hyundai-navy: #002c5f;
-  --hyundai-navy-deep: #001a3a;
-  --surface: #f2f2f2;
-  --surface-white: #ffffff;
-  --text-on-navy: #ffffff;
-  --text-main: #1a1a1a;
-  --text-muted: #5c5c5c;
-  --radius-pill: 999px;
-  --sidebar-width: 260px;
-  --font-sans: "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+/* 전역 스타일 — Tailwind v4 + Mosaic 디자인 값, 강조색은 현대 남색 유지 (DH 승인 2026-11-20) */
+@import "tailwindcss";
+
+/* 입력창 초기화는 .form-input 등 클래스를 붙인 요소에만 — 기존 페이지 입력창은 그대로 */
+@plugin "@tailwindcss/forms" {
+  strategy: class;
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+/* 다크 모드: <html class="dark"> 기준 (JH/frontend/common/theme) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 모바일 규격(JH/frontend/모바일_페이지_규격.md) 끊음 — 해당 폭 포함. Tailwind max-[N]: 은 「N 미만」이라 N 자체가 빠짐 */
+@custom-variant tablet (@media (max-width: 860px));
+@custom-variant phone (@media (max-width: 460px));
+
+@theme {
+  /* 한글은 Inter에 없으므로 기존 한글 폰트로 대체 표시 */
+  --font-sans: var(--font-inter), "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+
+  --shadow-sm: 0 1px 1px 0 rgb(0 0 0 / 0.05), 0 1px 2px 0 rgb(0 0 0 / 0.02);
+
+  /* 강조색 — 현대 남색 계열. 400은 다크 배경 위 대비용 */
+  --color-brand-50: #e8eef6;
+  --color-brand-400: #4c9dff;
+  --color-brand-500: #1d5fae;
+  --color-brand-700: #002c5f;
+  --color-brand-900: #001a3a;
+
+  /* Mosaic 회색·상태색 */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #bfc4cd;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+
+  --color-green-500: #3ec972;
+  --color-green-600: #34bd68;
+  --color-green-700: #239f52;
+  --color-yellow-500: #f0bb33;
+  --color-yellow-600: #dfad2b;
+  --color-yellow-700: #bc9021;
+  --color-red-500: #ff5656;
+  --color-red-600: #fa4949;
+  --color-red-700: #e63939;
+  --color-sky-500: #67bfff;
+
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5715;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-base--letter-spacing: -0.01em;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.5;
+  --text-lg--letter-spacing: -0.01em;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.5;
+  --text-xl--letter-spacing: -0.01em;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.33;
+  --text-2xl--letter-spacing: -0.01em;
+  --text-3xl: 1.88rem;
+  --text-3xl--line-height: 1.33;
+  --text-3xl--letter-spacing: -0.01em;
+
+  --breakpoint-xs: 480px;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  min-height: 100%;
-  font-family: var(--font-sans);
-  background: var(--surface);
-  color: var(--text-main);
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button {
-  font: inherit;
+/* v4 기본 테두리색(currentColor) 대신 Mosaic과 같은 회색 */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
 }
