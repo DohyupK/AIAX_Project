@@ -338,8 +338,13 @@ def search_documents(body: SearchBody):
 
 @router.post("/ask")
 def ask_documents(body: SearchBody):
-    """Shift 봇: 문서 + (관련 시) 알림·KPI + 화면 맥락 + 멀티턴 Chat. 대화 DB 저장 없음."""
+    """Shift 봇: 문서(+목록·제목검색) + (관련 시) 알림·KPI + 멀티턴. 대화 DB 저장 없음."""
     from documents.alert_context import collect_alert_context
+    from documents.doc_catalog import (
+        collect_catalog_text,
+        lexical_chunk_hits,
+        wants_doc_catalog,
+    )
     from documents.quality_context import collect_quality_context
 
     q = body.query.strip()
@@ -349,6 +354,21 @@ def ask_documents(body: SearchBody):
     ui_dict = ui.model_dump() if ui else None
     path = (ui.path if ui else "") or ""
     hits = _retrieve_hits(q, body.limit)
+    catalog_text = ""
+    if wants_doc_catalog(q, path):
+        catalog_text = collect_catalog_text(q)
+        if len(hits) < 2:
+            lex = lexical_chunk_hits(q)
+            if lex:
+                # 벡터 hits 뒤에 제목검색 청크 보충 (중복 DOC 제외)
+                seen = {h.get("company_document_idx") for h in hits}
+                for h in lex:
+                    if h.get("company_document_idx") in seen:
+                        continue
+                    hits.append(h)
+                    seen.add(h.get("company_document_idx"))
+                    if len(hits) >= body.limit:
+                        break
     alert_sources, alert_text = collect_alert_context(query=q, ui_context=ui_dict)
     if _wants_quality_kpi(q, path):
         quality_sources, quality_text = collect_quality_context()
@@ -363,6 +383,7 @@ def ask_documents(body: SearchBody):
             alert_text=alert_text,
             quality_text=quality_text,
             ui_context_text=_ui_context_text(ui),
+            catalog_text=catalog_text,
             history=history,
         )
     except Exception as e:

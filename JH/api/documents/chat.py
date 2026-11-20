@@ -18,9 +18,10 @@ _SYSTEM = (
     "근거는 「사내 문서 ○○」「관리도 알림(냉각수 온도)」「라인1 품질 지표」처럼 말로 적으세요. "
     "질문에 해당하는 근거만 쓰세요. 관리도 알림·품질 KPI 섹션이 비어 있거나 질문과 무관하면 "
     "냉각수·불량률·주입 압력 등 공정 현황을 답에 넣지 마세요. "
-    "담당자·누가 무엇을 만들었나·기능 배정 질문은 사내 문서 청크만 근거로 답하세요. "
-    "문서에 없으면 「문서에 그 내용이 없습니다」만 짧게 말하고 공정 현황으로 채우지 마세요. "
-    "사내 문서에 적힌 사실·규정·수치는 아래 청크에 있을 때만 말하고, 없는 내용은 지어내지 마세요. "
+    "담당·기능·누가 만들었나 질문은 「문서함 목록」과 「사내 문서 청크」를 우선 쓰세요. "
+    "목록에 파일이 있으면 「문서에 없습니다」만 반복하지 말고, 파일 이름과 청킹 상태"
+    "(ok면 본문 요약, pending/실패면 업로드됨·검색용 본문 준비 중)를 말하세요. "
+    "청크 본문이 있을 때만 내용을 요약하세요. 없는 내용을 지어내지 마세요. "
     "질문이 공정·품질과 관련될 때만 알림·KPI를 요약·분석해도 됩니다. "
     "답변에 마크다운 강조(**볼드**, *이탤릭*, # 제목, 백틱 코드)를 쓰지 마세요. 평범한 문장만 쓰세요. "
     "이전 대화가 있으면 이어서 답하세요."
@@ -45,9 +46,10 @@ def generate_answer(
     alert_text: str = "",
     quality_text: str = "",
     ui_context_text: str = "",
+    catalog_text: str = "",
     history: list[dict[str, Any]] | None = None,
 ) -> str:
-    """문서 히트 + 알림 + KPI + 화면 맥락 + 멀티턴으로 Chat Completions. 대화 DB 저장 없음."""
+    """문서 히트 + 목록 + 알림 + KPI + 화면 맥락 + 멀티턴. 대화 DB 저장 없음."""
     doc_blocks: list[str] = []
     for h in hits:
         doc_no = h.get("doc_no") or f"DOC-{h.get('company_document_idx')}"
@@ -56,6 +58,7 @@ def generate_answer(
         body = (h.get("content") or "").strip()
         doc_blocks.append(f"[{doc_no}] {title} (chunk {chunk_no})\n{body}")
     doc_section = "\n\n".join(doc_blocks) if doc_blocks else "(문서 검색 결과 없음)"
+    catalog_section = catalog_text.strip() if catalog_text.strip() else "(문서함 목록 없음)"
     alert_section = alert_text.strip() if alert_text.strip() else "(관리도 알림 없음)"
     quality_section = quality_text.strip() if quality_text.strip() else "(품질 KPI 없음)"
     ui_section = ui_context_text.strip() if ui_context_text.strip() else "(화면 맥락 없음)"
@@ -67,6 +70,7 @@ def generate_answer(
             "role": "user",
             "content": (
                 f"질문: {query}\n\n"
+                f"--- 문서함 목록 ---\n{catalog_section}\n\n"
                 f"--- 사내 문서 청크 ---\n{doc_section}\n\n"
                 f"--- 관리도 알림 (공정 최적화) ---\n{alert_section}\n\n"
                 f"--- 품질 검사 KPI ---\n{quality_section}\n\n"
