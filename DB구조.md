@@ -46,8 +46,9 @@
 |---------|-------------|----------------------|
 | 주조 수치 | `mes.investment_casting` | `lake.lake_investment_casting` → `mart.mart_investment_casting` |
 | 주조 이미지 | `mes.casting_image` | `lake.lake_casting_image` |
+| 관리도(SPC) 기준선 | `mes.spc_limit` (JH `spc.py` 표 39행) | 복사본 없음 |
 | 사원·조직·출입·근태·페이지 권한 | `org.*` | `lake.lake_*` (같은 이름, 26개) |
-| 고정값·사내 문서 | `org.fixed_value`, `org.company_document`, `org.document_chunk` | 복사본 없음 |
+| 고정값·사내 문서 | `org.fixed_value`, `org.company_document`, `org.document_chunk`, `org.document_chunk_embedding`, `org.document_chunk_job` | 복사본 없음 |
 | 모델·판정·라벨 | `ai.*` | 복사본 없음 |
 
 > **복사본 갱신 상태 (2026-11-19):** Kafka·Flink·Spark·`lake_runner` 는 **MS PC(Docker)** 에서 실행 (서버는 Postgres·웹만). `lake` 의 `org` 복사본·주조 수치는 `lake_runner` 가 매일 00:00 KST 갱신 — MS PC 가 꺼져 있으면 다음에 켤 때 따라잡음 (`lake.etl_watermark` 의 `last_run_at` 으로 확인). `mart` 는 갱신 작업 자체가 없음 (line_no1 2026-08-04~10-11, 57,295행 고정). 이미지 복사본(`lake_casting_image`)은 DH 이미지 파이프라인이 별도로 갱신.
@@ -65,8 +66,9 @@
 | `app_lake` | 조회 (DH·JH API 등) | 읽기 | 읽기 | 읽기 | 읽기 | 읽기 |
 | `app_hr` | 인사 관리 API (JH/api/hr) | - | - | - | 인사 테이블 읽기·쓰기, `hr_access_log` 추가만 | - |
 | `app_ai` | 모델 관리·라벨링·품질 2차 저장 API (JH) | - | - | - | - | 아래 표 |
+| `app_docs` | 사내 문서함 API (JH/api/documents) | - | - | - | 문서 4개 읽기·쓰기, `employee`·`employee_info` 읽기 | - |
 
-권한 그룹: `role_mes`, `role_spark`, `role_mart`, `role_lake`. `app_hr`·`app_ai`는 그룹 없이 테이블별 GRANT (`09`, `17`·`18`). 비밀번호는 루트 `.env`의 `APP_HR_PASSWORD`, `APP_AI_PASSWORD`.
+권한 그룹: `role_mes`, `role_spark`, `role_mart`, `role_lake`. `app_hr`·`app_ai`·`app_docs`는 그룹 없이 테이블별 GRANT (`09`, `17`·`18`, `19`). 비밀번호는 루트 `.env`의 `APP_HR_PASSWORD`, `APP_AI_PASSWORD`, `DOCS_DATABASE_URL`.
 
 `app_ai` 권한 (`17`·`18`):
 
@@ -102,10 +104,10 @@
 | 근태 | `attendance`, `employee_record` |
 | 페이지 권한 9 | `main_page`, `process_optimization_page`, `quality_inspection_page`, `defect_labeling_page`, `ppe_violation_page`, `hr_management_page`, `management_report_page`, `model_management_page`, `company_documents_page` |
 | 앱 기록 | `change_log` (모든 org 변경, lake 복제용), `hr_access_log` (개인정보 조회 기록) |
-| 고정값 | `fixed_value` (단가 등 이름-값, 날짜별 이력. PK `value_name`+`effective_date`) — `14` |
-| 사내 문서 | `company_document` (문서 메타, 파일은 `file_path`), `document_chunk` (LLM 참조용 텍스트 조각) — `15` |
+| 고정값 | `fixed_value` (단가 등 이름-값, 날짜별 이력. PK `value_name`+`effective_date`) — `14`·`20`. 값: 제품_단가, 재활용_회수액, 재활용률, MTTR, MTBF, 리콜_횟수_12개월 |
+| 사내 문서 | `company_document` (문서 메타, 파일은 `file_path`), `document_chunk` (LLM 참조용 텍스트 조각) — `15` / `document_chunk_embedding` (조각별 임베딩 `real[1536]`), `document_chunk_job` (청킹 상태: pending·ok·retry_5m·midnight_pending) — `19` (DH) |
 
-`fixed_value`·`company_document`·`document_chunk` 는 **`change_log` 트리거 없음, lake 복사 대상 아님** (2026-11-19 기준).
+`fixed_value`·`company_document`·`document_chunk`·`document_chunk_embedding`·`document_chunk_job` 는 **`change_log` 트리거 없음, lake 복사 대상 아님** (2026-11-19 기준).
 
 | 코드 | 값 |
 |------|----|
@@ -224,11 +226,11 @@ lake에서 제외: `timestamp`, `date`.
 | 구분 | 테이블 | 핵심 |
 |------|--------|------|
 | 모델 | `model_registry` | PK (`model_name`, `version`). `process_code` = `CAST-QC1`(품질 1차 ML) / `CAST-QC2`(품질 2차 DL) / `SAFE-PPE`(보호구). 공정당 배포 1개 (트리거로 기존 배포 해제). `model_registry_idx` 자동 증가 없음 |
-| 성과지표 | `model_metric_cast_qc1` (PR-AUC·recall·precision·f1), `model_metric_cast_qc2`·`model_metric_safe_ppe` (accuracy·recall·precision·f1) | FK → `model_registry`, ON DELETE CASCADE |
+| 성과지표 | `model_metric_cast_qc1` (PR-AUC·recall·precision·f1), `model_metric_cast_qc2` (accuracy·recall·precision·f1), `model_metric_safe_ppe` (mAP50·recall·precision·f1) | FK → `model_registry`, ON DELETE CASCADE |
 | 강건성 | `model_robustness` | PK (`model_name`, `version`, `condition_name`). 조건별 accuracy·recall·precision·f1 |
-| 품질 2차 판정 | `quality_prediction` | PK `casting_id`. `result` pass/fail, `confidence_score` 0~1. FK → `model_registry` |
+| 품질 판정 (1차·2차) | `quality_prediction` | PK `casting_id` (샷 1줄). 1차 `qc1_result` pass/fail·`qc1_score` 0~1 / 2차 `result`·`confidence_score` (1차 불량이면 비어 있음). 두 모델 모두 FK → `model_registry` |
 | 이미지 후보 | `quality_image_pool` | 2차 검사 랜덤 매칭용. 매칭되면 `matched_casting_id` |
-| 라벨 | `defect_label` (유형별 boolean, 1개 이상), `defect_discard` (판정 불가) | PK `casting_id`. 한 샷은 둘 중 한 곳만 |
+| 라벨 | `defect_label` (유형별 boolean 1개 이상: blowhole 기공·edge_burr 버·surface_rough 표면), `defect_discard` (판정 불가) | PK `casting_id`. 한 샷은 둘 중 한 곳만 |
 | 보호구 | `ppe_gate_rule` (게이트별 필수 보호구), `ppe_check` (검사 기록) | `ppe_check` 는 `org.employee_gate_log` 또는 `org.vendor_gate_log` 중 하나만 참조 |
 | LLM | `llm_feedback` | LLM 분석 결과 저장 (용도 협의 중) |
 
@@ -256,6 +258,13 @@ lake에서 제외: `timestamp`, `date`.
 | `16_모델관리_권한_시스템개발부만.sql` | `org.model_management_page` 를 시스템개발부만으로 교체 (read 전원, edit 과장 이상, 소장·부서장 공통 규칙 제외). **개발부 인원·직급이 바뀌면 다시 실행** (트리거 아님) |
 | `17_app_ai_계정.sql` | 계정 `app_ai` 생성 + 모델·라벨 테이블 권한. 실행: `psql -v ai_pw=…` |
 | `18_app_ai_권한추가.sql` | `app_ai` 에 `model_robustness`·`quality_prediction` 권한 추가 |
+| `19_사내문서함_임베딩.sql` | `org.document_chunk_embedding`·`document_chunk_job` + 계정 `app_docs` (DH 서버 반영분 편입). 실행: `psql -v docs_pw=…` |
+| `20_경영리포트_고정값.sql` | `org.fixed_value` 에 경영 리포트 고정값 5행 (재활용_회수액·재활용률·MTTR·MTBF·리콜_횟수_12개월) |
+| `21_경영리포트_SPC_불량유형.sql` | `mes.spc_limit` (라인·변수별 CL·σ·I·MR·EWMA 한계, 날짜별 이력, JH `spc.py` 값 39행) |
+| `22_품질1차_모델등록.sql` | 품질 1차(CAST-QC1) 모델 56개 등록 + 지표 (TM 정리표 model_summary). 배포 `DieCasting_XGB_20261114_09`/`v17.2`. 파일은 저장소 `TM/model_ml/` (`file_path` = 저장소 기준 경로) |
+| `23_품질판정_1차칸추가.sql` | `ai.quality_prediction` 에 1차(ML) 칸 `qc1_*` 추가, 기존 2차 칸은 비어 있을 수 있게 (1차 불량이면 2차 없음) |
+| `24_보호구_모델등록.sql` | `ai.model_metric_safe_ppe.accuracy_score` → `map50_score`, 보호구 모델 4개 (`PPE_YOLO26*_20261118_01~04` / v1.1~v1.4) 등록, 배포 v1.4 |
+| `25_보호구_게이트기록.sql` | `ai.ppe_check.manual_at` (안전관리자 태깅 시각), 위반 건도 안전관리자 확인 기록 허용, 지난 알람 목업에 안전관리자 확인 채움, 출입 로그·판정 번호 자동 증가 (게이트 프로그램용) |
 
 ---
 
@@ -263,6 +272,13 @@ lake에서 제외: `timestamp`, `date`.
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-11-20 | `25`: 보호구 게이트 실기록 준비 — `manual_at` 추가, 확인 기록을 위반·판정 불가 모두 허용(통과 제외, 3칸 함께), `employee_gate_log`·`vendor_gate_log`·`ppe_check` 번호 시퀀스. 목업: 지난 위반·판정 불가에 안전부 확인(2~10분 뒤, 위반 약 8% 오판) 채움, 미래 시각 목업은 그대로 |
+| 2026-11-20 | `24`: 보호구 지표를 mAP50 으로 (`map50_score`), 모델 4개 등록·`PPE_YOLO26s_20261118_04`/`v1.4` 배포. 파일은 저장소 밖 `D:\cas_image\ppe` |
+| 2026-11-20 | `23`: `ai.quality_prediction` = 샷 1줄에 1차·2차 결과 (1차 `qc1_model_name`·`qc1_version`·`qc1_result`·`qc1_score`·`qc1_predicted_at` 추가). 리포트 1차 불량 수용 |
+| 2026-11-20 | `22`: 품질 1차 모델 56개 등록 (TM 정리표), 배포 `DieCasting_XGB_20261114_09`/`v17.2` (처음 넣은 `v1` 교체). `XGB_20261109_25` 는 파일 없음, `XGB_20261107_01` 은 정리표에 없어 미등록 |
+| 2026-11-20 | `21`: `mes.spc_limit` 신설 + JH `spc.py` 관리도 기준선 39행 옮김 (리포트 SPC 경고용) (불량 유형 미성형·크랙 칼럼은 추가했다가 리포트에서 불량 유형을 빼기로 해 같은 날 삭제) |
+| 2026-11-20 | `20`: 경영 관리자 리포트 고정값 5행을 `org.fixed_value` 에 추가 (JH 코드에 박혀 있던 값, 재활용률은 신규) |
+| 2026-11-19 | `19`: DH 가 서버에 만든 `org.document_chunk_embedding`·`document_chunk_job`, 계정 `app_docs` 를 init 에 편입 (서버 권한 확인 일치) |
 | 2026-11-19 | **주조 데이터 전체 교체** (새 CSV 3개, 요청 반영): mes 134,007 → **118,901** (line_no1 96,256 / line_no2 11,316 / line_no3 11,329, 세 라인 모두 ~2026-11-20). lake 동일하게 재생성, mart 57,295 (같은 범위) 재생성. 테스트 이미지 5장 삭제. 백업: MS PC `D:\AIAX_data\backup\*_20261119_213719.csv`. 실행: `MS/db/apps/src/apps/reload_casting.py` |
 | 2026-11-19 | **`casting_id` 규칙 변경**: `L라인번호_` 추가 (`init/03`, `08_data.sql.gz` 의 lake·mart 번호도 `L1_` 로). Flink `image_ingest.py` 형식 검사 수정. DH `payload.py` 형식 검사 수정 요청 |
 | 2026-11-19 | `lake_sync.py` 접속 버그 수정 (`--packages` 드라이버를 DriverManager 가 못 찾음 → 드라이버 직접 사용). MS PC 에서 첫 실행 성공 (org 1.46만 건 반영) |
