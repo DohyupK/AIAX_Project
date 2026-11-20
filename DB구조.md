@@ -267,6 +267,7 @@ lake에서 제외: `timestamp`, `date`.
 | `24_보호구_모델등록.sql` | `ai.model_metric_safe_ppe.accuracy_score` → `map50_score`, 보호구 모델 4개 (`PPE_YOLO26*_20261118_01~04` / v1.1~v1.4) 등록, 배포 v1.4 |
 | `25_보호구_게이트기록.sql` | `ai.ppe_check.manual_at` (안전관리자 태깅 시각), 위반 건도 안전관리자 확인 기록 허용, 지난 알람 목업에 안전관리자 확인 채움, 출입 로그·판정 번호 자동 증가 (게이트 프로그램용) |
 | `27_주조이미지_경로라벨.sql` | `mes.casting_image` 에 `image_path` (서버 jpg 경로 `/root/images/L1/yymmdd/<casting_id>.jpg`)·`image_label` (ok/defect) 추가. `image_base64` 는 그대로 (JH 2차 검사용). 서버 적용 완료 |
+| `28_알루미늄_시세.sql` | `org.aluminum_price` (일자 `price_date`, 가격 `price` US$/톤). LME 시세 중 알루미늄만, 빈 테이블 |
 
 ---
 
@@ -274,6 +275,7 @@ lake에서 제외: `timestamp`, `date`.
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-11-20 | `28`: `org.aluminum_price` 신설 (알루미늄 현물 시세, 일자·가격). 데이터는 나중에 |
 | 2026-11-20 | `27`: 주조 이미지 서버 파일 저장 준비 — `image_path`·`image_label`. Flink `image_ingest` 는 `.env` `IMAGE_API_KEY` 가 있으면 서버 이미지 API(`https://gknushift.freemyip.com/api/images`, POST, `X-API-Key`)로 보내고, 없으면 예전처럼 DB 직접 저장 |
 | 2026-11-20 | `11`: `ai.model_metric_safe_ppe` 를 처음부터 `map50_score` 로 (서버와 같게, JH 요청). 24 의 이름 변경은 칸이 있을 때만 해서 함께 써도 됨 |
 | 2026-11-20 | `25`: 보호구 게이트 실기록 준비 — `manual_at` 추가, 확인 기록을 위반·판정 불가 모두 허용(통과 제외, 3칸 함께), `employee_gate_log`·`vendor_gate_log`·`ppe_check` 번호 시퀀스. 목업: 지난 위반·판정 불가에 안전부 확인(2~10분 뒤, 위반 약 8% 오판) 채움, 미래 시각 목업은 그대로 |

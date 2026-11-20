@@ -10,7 +10,7 @@ mes 를 주기적으로 확인해 「양품(passorfail = 0)인데 이미지 없�
       같은 사진 재사용 허용. 메시지의 image_label(ok / defect) = 붙인 사진의 정답 (Flink 가 서버 API 로 같이 보냄 → mes.casting_image.image_label)
 
 실행 (MS/db/apps 에서)
-  uv run python -m apps.image_sender                    # 지금부터 들어오는 샷만, 10초마다 확인
+  uv run python -m apps.image_sender                    # 11-01 이후 사진 없는 양품 샷을 다 채우고, 새 샷은 10초마다 확인
   uv run python -m apps.image_sender --dry-run --once   # 보낼 대상만 한 번 출력 (Kafka 안 씀)
   uv run python -m apps.image_sender --since "2026-11-19 00:00"   # 지난 샷도 채우기
 
@@ -36,7 +36,8 @@ except Exception:  # Windows 에 tzdata 가 없을 때 — 한국은 서머타�
     KST = timezone(timedelta(hours=9), "KST")
 
 ROOT_ENV = Path(__file__).resolve().parents[5] / ".env"
-IMAGE_DIR = r"D:\AIAX_data\casting_images"
+IMAGE_DIR = r"D:\AIAX_data\casting_images_300"   # 300x300 사진 (원본 cas_image/plus_data), 2026-11-20
+SINCE_DEFAULT = "2026-11-01 00:00"   # 이 시각 이후 사진 없는 양품 샷은 켤 때마다 다 채움 (끊겼다 다시 켜도 밀린 것 채움)
 RESEND_AFTER = 300   # 보냈는데 이 시간(초) 지나도 DB 에 없으면 다시 보냄 (Flink 중단 등)
 
 # 양품 + 이미지 없음 + 샷 시각이 since ~ 지금(KST) 사이. 미래 시각 샷(미리 넣어 둔 데이터)은 건너뜀
@@ -189,7 +190,7 @@ def main() -> None:
     ap.add_argument("--interval", type=float, default=10, help="새 샷 확인 간격(초)")
     ap.add_argument("--defect-image-rate", type=float, default=0.05, help="불량 사진 비율")
     ap.add_argument("--image-dir", default=IMAGE_DIR)
-    ap.add_argument("--since", help='이 시각(KST) 이후 샷부터, 예 "2026-11-19 00:00". 없으면 시작 5분 전부터')
+    ap.add_argument("--since", default=SINCE_DEFAULT, help=f'이 시각(KST) 이후 샷부터, 예 "2026-11-19 00:00". 기본 {SINCE_DEFAULT}')
     ap.add_argument("--batch", type=int, default=200, help="한 번에 보낼 최대 샷 수")
     ap.add_argument("--dry-run", action="store_true", help="보낼 대상만 출력, Kafka 안 씀")
     ap.add_argument("--once", action="store_true", help="한 번만 확인하고 끝")

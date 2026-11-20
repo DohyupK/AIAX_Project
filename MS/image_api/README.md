@@ -19,6 +19,19 @@ MS PC image_sender → Kafka → Flink image_ingest ──POST /api/images──
 | 저장 | `/root/images/L{라인}/{yymmdd}/{casting_id}.jpg` |
 | 보기 | `GET /api/images/{casting_id}` → jpg |
 
+## 보호구 게이트 실시간 화면 (MJPEG)
+
+게이트 노트북(`MS/ppe_gate/gate_judge.py`)이 박스 친 화면을 초당 최대 30장 보내면, 웹에서 영상처럼 보여요. 저장하지 않고 메모리에 최신 1장만 둬요.
+
+| 주소 | 뜻 |
+|---|---|
+| `POST /api/images/gate/{a\|b}/frame` | 게이트가 보냄 (헤더 `X-API-Key`, 본문 = jpg) |
+| `GET /api/images/gate/{a\|b}/stream` | 웹페이지: `<img src="/api/images/gate/a/stream">` |
+| `GET /api/images/gate/{a\|b}/latest.jpg` | 최신 1장 (확인용) |
+
+- uvicorn 워커 1개로 실행 (기본값). nginx 설정은 안 바꿔도 돼요 (응답에 `X-Accel-Buffering: no`).
+- 코드를 받은 뒤 API만 다시 시작하면 돼요: `sudo systemctl restart image_api`
+
 ## 서버에 올리기 (DH)
 
 1. DB: `MS/db/init/27_주조이미지_경로라벨.sql` (`image_path`·`image_label` 칸) — 2026-11-20 서버 적용 완료
