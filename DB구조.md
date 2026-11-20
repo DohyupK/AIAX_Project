@@ -48,7 +48,7 @@
 | 주조 이미지 | `mes.casting_image` | `lake.lake_casting_image` |
 | 관리도(SPC) 기준선 | `mes.spc_limit` (JH `spc.py` 표 39행) | 복사본 없음 |
 | 사원·조직·출입·근태·페이지 권한 | `org.*` | `lake.lake_*` (같은 이름, 26개) |
-| 고정값·사내 문서 | `org.fixed_value`, `org.company_document`, `org.document_chunk`, `org.document_chunk_embedding`, `org.document_chunk_job` | 복사본 없음 |
+| 고정값·사내 문서·일일 공지 | `org.fixed_value`, `org.company_document`, `org.document_chunk`, `org.document_chunk_embedding`, `org.document_chunk_job`, `org.process_alert_daily_notice` | 복사본 없음 |
 | 모델·판정·라벨 | `ai.*` | 복사본 없음 |
 
 > **복사본 갱신 상태 (2026-11-19):** Kafka·Flink·Spark·`lake_runner` 는 **MS PC(Docker)** 에서 실행 (서버는 Postgres·웹만). `lake` 의 `org` 복사본·주조 수치는 `lake_runner` 가 매일 00:00 KST 갱신 — MS PC 가 꺼져 있으면 다음에 켤 때 따라잡음 (`lake.etl_watermark` 의 `last_run_at` 으로 확인). `mart` 는 갱신 작업 자체가 없음 (line_no1 2026-08-04~10-11, 57,295행 고정). 이미지 복사본(`lake_casting_image`)은 DH 이미지 파이프라인이 별도로 갱신.
@@ -106,8 +106,9 @@
 | 앱 기록 | `change_log` (모든 org 변경, lake 복제용), `hr_access_log` (개인정보 조회 기록) |
 | 고정값 | `fixed_value` (단가 등 이름-값, 날짜별 이력. PK `value_name`+`effective_date`) — `14`·`20`. 값: 제품_단가, 재활용_회수액, 재활용률, MTTR, MTBF, 리콜_횟수_12개월 |
 | 사내 문서 | `company_document` (문서 메타, 파일은 `file_path`), `document_chunk` (LLM 참조용 텍스트 조각) — `15` / `document_chunk_embedding` (조각별 임베딩 `real[1536]`), `document_chunk_job` (청킹 상태: pending·ok·retry_5m·midnight_pending) — `19` (DH) |
+| 일일 공정알람 공지 | `process_alert_daily_notice` (메인 AI 공지 캐시, PK `notice_date`) — DH SQL `06` → MS init 편입 예정. `app_lake` SELECT/INSERT/UPDATE |
 
-`fixed_value`·`company_document`·`document_chunk`·`document_chunk_embedding`·`document_chunk_job` 는 **`change_log` 트리거 없음, lake 복사 대상 아님** (2026-11-19 기준).
+`fixed_value`·`company_document`·`document_chunk`·`document_chunk_embedding`·`document_chunk_job`·`process_alert_daily_notice` 는 **`change_log` 트리거 없음, lake 복사 대상 아님** (2026-11-20 기준).
 
 | 코드 | 값 |
 |------|----|
@@ -280,6 +281,7 @@ lake에서 제외: `timestamp`, `date`.
 | 2026-11-20 | `23`: `ai.quality_prediction` = 샷 1줄에 1차·2차 결과 (1차 `qc1_model_name`·`qc1_version`·`qc1_result`·`qc1_score`·`qc1_predicted_at` 추가). 리포트 1차 불량 수용 |
 | 2026-11-20 | `22`: 품질 1차 모델 56개 등록 (TM 정리표), 배포 `DieCasting_XGB_20261114_09`/`v17.2` (처음 넣은 `v1` 교체). `XGB_20261109_25` 는 파일 없음, `XGB_20261107_01` 은 정리표에 없어 미등록 |
 | 2026-11-20 | `21`: `mes.spc_limit` 신설 + JH `spc.py` 관리도 기준선 39행 옮김 (리포트 SPC 경고용) (불량 유형 미성형·크랙 칼럼은 추가했다가 리포트에서 불량 유형을 빼기로 해 같은 날 삭제) |
+| 2026-11-20 | DH: `org.process_alert_daily_notice` (메인 전날 알람 AI 공지 캐시) — SQL `DH/data/sql/06_…`, MS init 편입 요청 |
 | 2026-11-20 | `20`: 경영 관리자 리포트 고정값 5행을 `org.fixed_value` 에 추가 (JH 코드에 박혀 있던 값, 재활용률은 신규) |
 | 2026-11-19 | `19`: DH 가 서버에 만든 `org.document_chunk_embedding`·`document_chunk_job`, 계정 `app_docs` 를 init 에 편입 (서버 권한 확인 일치) |
 | 2026-11-19 | **주조 데이터 전체 교체** (새 CSV 3개, 요청 반영): mes 134,007 → **118,901** (line_no1 96,256 / line_no2 11,316 / line_no3 11,329, 세 라인 모두 ~2026-11-20). lake 동일하게 재생성, mart 57,295 (같은 범위) 재생성. 테스트 이미지 5장 삭제. 백업: MS PC `D:\AIAX_data\backup\*_20261119_213719.csv`. 실행: `MS/db/apps/src/apps/reload_casting.py` |
