@@ -10,13 +10,15 @@ ponytail: 등록·배포(쓰기)는 ai 쓰기 계정이 생긴 뒤 — 배포 �
 현재 사용자: 로그인 전이라 헤더 X-Employee-No(화면의 목업 계정, 인사 관리와 같음) → 페이지 권한 none/read/edit.
 권한 = org 원본 권한 표(access_code + model_management_page) 실시간 — 인사 변경이 바로 반영.
 ponytail: lake 복제(Spark)가 아직 없어 org 원본을 직접 읽음. lake 연결 시 ACCESS_SQL 두 테이블만 lake 사본으로.
-ponytail: 로그인 도입 시 access_level() 의 사번을 세션에서 꺼내도록 교체. 그 전까지는 127.0.0.1 에서만 실행.
+권한 사번 = 로그인 세션 (auth/core.acting_employee). 관리자 = edit.
 """
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+
+from auth.core import acting_employee
 
 from common.db import connect
 
@@ -53,11 +55,14 @@ WHERE a.employee_no = %s
 """
 
 
-def access_level(x_employee_no: str = Header(..., alias="X-Employee-No")) -> str:
-    """현재 계정의 Model Management 권한: 'none' | 'read' | 'edit'"""
+def access_level(request: Request, x_employee_no: str | None = Header(None, alias="X-Employee-No")) -> str:
+    """현재 계정의 Model Management 권한: 'none' | 'read' | 'edit' — 사번은 로그인 세션에서 (관리자 = edit)"""
+    emp, _ = acting_employee(request, x_employee_no)
+    if emp is None:   # 관리자 (보기 전환 없음)
+        return "edit"
     try:
         with connect(DB) as conn:
-            row = conn.execute(ACCESS_SQL, (x_employee_no.strip(),)).fetchone()
+            row = conn.execute(ACCESS_SQL, (emp,)).fetchone()
     except Exception:
         log.exception("Model Management 권한 조회 실패")
         raise HTTPException(503, "권한 조회에 실패했습니다.")

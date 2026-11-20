@@ -37,6 +37,3 @@ export const EVENTS: CompanyEvent[] = [
   { date: "2026-11-20", title: "모델 배포", tone: "blue" },
   { date: "2026-11-27", title: "월말 마감", tone: "green" },
 ];
-
-/** 로그인 연동 전 표시용 사용자 자리 */
-export const CURRENT_USER = { name: "김지환", role: "품질 엔지니어" };

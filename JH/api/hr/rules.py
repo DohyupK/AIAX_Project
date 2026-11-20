@@ -42,6 +42,7 @@ class Viewer:
     team_code: int | None
     is_team_rep: bool
     team_name: str | None = None   # 표시용 (casting1 … tf)
+    actor: str | None = None       # 실제 행동한 계정 (관리자 보기 전환 시 "admin:아이디") — 접속 기록·로그용
 
     @property
     def is_intern(self) -> bool:

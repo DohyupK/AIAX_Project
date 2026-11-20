@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "../../common/theme/ThemeToggle";
+import { AUTH_PAGES } from "../../common/auth/token";
+import { UserMenu } from "./UserMenu";
 
 type NavLeaf = { label: string; href: string };
 // icon = 24x24 SVG path(d). 하위 메뉴가 있으면 href 없이 펼침 그룹
@@ -68,11 +70,17 @@ function Icon({ d, className = "" }: { d: string; className?: string }) {
 
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
+/** 로그인·회원가입 화면은 사이드바·헤더 없이 전체 화면 */
+export function PlatformIndex() {
+  const pathname = usePathname();
+  return AUTH_PAGES.includes(pathname) ? null : <PlatformShell />;
+}
+
 /**
- * 셸 클라이언트 아일랜드 — 사이드바 + 상단 헤더.
+ * 셸 클라이언트 아일랜드 — 사이드바 + 상단 헤더(로그인 사용자·로그아웃).
  * PC(lg+): 펼침 256px ↔ 아이콘 80px (선택 저장) / 1024px 미만: 햄버거로 여는 서랍 + 어두운 뒤 배경
  */
-export function PlatformIndex() {
+function PlatformShell() {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expanded, setExpanded] = useState(true);
@@ -278,6 +286,7 @@ export function PlatformIndex() {
           </button>
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
+            <UserMenu />
           </div>
         </div>
       </header>

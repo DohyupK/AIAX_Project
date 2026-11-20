@@ -1,7 +1,7 @@
 """인사 관리 API — NCP DB org 원본을 실시간 조회·변경 (계정 app_hr)
 
-현재 사용자: 로그인 전이라 요청 헤더 X-Employee-No (화면의 목업 계정 선택) 로 받음.
-ponytail: 로그인 도입 시 current_viewer() 한 곳만 세션 확인으로 교체. 그 전까지는 127.0.0.1 에서만 실행.
+현재 사용자: 로그인 세션의 사번 (auth/core.acting_employee). 화면이 보내는 X-Employee-No 는 관리자 「보기 전환」에만 쓰임.
+관리자 = 경영부(인사) 소장 권한과 같음 — 전 직원 열람·추가·수정·삭제.
 """
 from __future__ import annotations
 
@@ -9,9 +9,10 @@ import logging
 from typing import Literal
 
 import psycopg
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
+from auth.core import acting_employee, require_session
 from common.db import connect
 from hr import rules
 from hr.rules import Viewer
@@ -44,12 +45,16 @@ def _load_viewer(conn, employee_no: str) -> Viewer | None:
     return Viewer(r["employee_no"], r["dept_code"], r["position_code"], r["team_code"], r["is_team_rep"], r["team_name"])
 
 
-def current_viewer(x_employee_no: str = Header(..., alias="X-Employee-No")) -> Viewer:
+def current_viewer(request: Request, x_employee_no: str | None = Header(None, alias="X-Employee-No")) -> Viewer:
+    emp, admin = acting_employee(request, x_employee_no)
+    actor = f"admin:{require_session(request).user_id}" if admin else None
+    if emp is None:   # 관리자 (보기 전환 없음) = 전체 권한
+        return Viewer("admin", rules.HR_DEPT, 70000, None, True, None, actor)
     with connect(DB) as conn:
-        v = _load_viewer(conn, x_employee_no.strip())
+        v = _load_viewer(conn, emp)
     if not v:
         raise HTTPException(401, "등록되지 않은 사번입니다.")
-    return v
+    return Viewer(v.employee_no, v.dept_code, v.position_code, v.team_code, v.is_team_rep, v.team_name, actor)
 
 
 def _tier_or_403(v: Viewer) -> str:
@@ -61,7 +66,7 @@ def _tier_or_403(v: Viewer) -> str:
 
 def _log_access(conn, v: Viewer, action: str, target: str, tier: str, n: int) -> None:
     conn.execute("INSERT INTO org.hr_access_log (viewer_no, action, target, field_tier, row_count) VALUES (%s,%s,%s,%s,%s)",
-                 [v.employee_no, action, target, tier, n])
+                 [v.actor or v.employee_no, action, target, tier, n])
 
 
 # ---------- 조회 ----------
@@ -77,9 +82,10 @@ def me(v: Viewer = Depends(current_viewer)):
     }
 
 
-@router.get("/mock-accounts")
+@router.get("/mock-accounts", dependencies=[Depends(require_session)])
 def mock_accounts():
-    """목업 계정 선택용 (이름·개인정보 없음). ponytail: 로그인 도입 시 삭제"""
+    """관리자 「보기 전환」용 계정 목록 (이름·개인정보 없음, 로그인 필요). 일반 계정은 선택해도 서버가 무시
+    ponytail: 화면에서 일반 계정에게 선택 칸 숨기기는 후속"""
     with connect(DB) as conn:
         rows = conn.execute(ROW_SQL + " ORDER BY e.dept_code, p.position_code DESC, e.employee_no").fetchall()
     return [{k: r[k] for k in ("employee_no", "dept_code", "dept_name", "position_name", "team_code", "team_name", "is_team_rep")} for r in rows]
@@ -227,7 +233,7 @@ def create_employee(body: EmployeeIn, v: Viewer = Depends(current_viewer)):
             r = conn.execute(ROW_SQL + " WHERE e.employee_no = %s", [no]).fetchone()
     except ValueError as e:                    # 사번 e9999 초과
         raise HTTPException(422, {"employee_no": str(e)})
-    log.info("사원 추가 %s by %s", no, v.employee_no)
+    log.info("사원 추가 %s by %s", no, v.actor or v.employee_no)
     return rules.filter_fields(r, rules.tier_of(v)) | {"can_edit": True}
 
 
@@ -260,7 +266,7 @@ def update_employee(employee_no: str, body: EmployeePatch, v: Viewer = Depends(c
         # 부서·직급·팀이 바뀌면 명단과 access_code 는 DB 트리거(org.trg_employee_sync)가 다시 맞춤
         _log_access(conn, v, "update", employee_no, rules.tier_of(v) or "basic", 1)
         r = conn.execute(ROW_SQL + " WHERE e.employee_no = %s", [employee_no]).fetchone()
-    log.info("사원 수정 %s by %s (%s)", employee_no, v.employee_no, ",".join(d))
+    log.info("사원 수정 %s by %s (%s)", employee_no, v.actor or v.employee_no, ",".join(d))
     return rules.filter_fields(r, rules.tier_of(v)) | {"can_edit": rules.can_write_team(v, r["team_code"])}
 
 
@@ -293,4 +299,4 @@ def delete_employee(employee_no: str, v: Viewer = Depends(current_viewer)):
         except psycopg.errors.ForeignKeyViolation:
             raise HTTPException(409, "다른 기록이 이 사원을 참조하고 있어 삭제할 수 없습니다.")
         _log_access(conn, v, "delete", employee_no, rules.tier_of(v) or "basic", 1)
-    log.info("사원 삭제 %s by %s", employee_no, v.employee_no)
+    log.info("사원 삭제 %s by %s", employee_no, v.actor or v.employee_no)

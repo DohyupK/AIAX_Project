@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePathname } from 'next/navigation';
+import { AUTH_PAGES } from '../../common/auth/token';
 import { buildHandoverReport, type HandoverReport } from './buildHandoverReport';
 import HandoverDialog from './HandoverDialog';
 import { autoHandoverWindow, currentShiftWindow, type ShiftWindow } from './shift';
@@ -28,12 +30,18 @@ function markShown(key: string) {
   }
 }
 
+/** 로그인·회원가입 화면에서는 버튼·자동 팝업 모두 없음 (자동 팝업 1회 기록도 남기지 않게 통째로 건너뜀) */
+export default function ShiftHandover() {
+  const pathname = usePathname();
+  return AUTH_PAGES.includes(pathname) ? null : <ShiftHandoverInner />;
+}
+
 /**
  * 교대 인수인계 — app/layout 전역 마운트
  * · 좌하단 「인수인계 실행」: 현재 교대(미완료면 시작~지금) 집계
  * · 교대 전환 후 30분: 직전 완료 교대 자동 팝업 (세션당 교대 키 1회)
  */
-export default function ShiftHandover() {
+function ShiftHandoverInner() {
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
