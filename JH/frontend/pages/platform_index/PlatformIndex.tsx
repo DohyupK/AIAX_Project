@@ -188,9 +188,9 @@ export function PlatformIndex() {
 
   return (
     <>
-      {/* 모바일 뒤 배경 — 누르면 서랍 닫힘. z-65: 전역 떠 있는 버튼(인수인계 55·챗봇 60) 위 */}
+      {/* 모바일 뒤 배경 — 누르면 서랍 닫힘 */}
       <div
-        className={`fixed inset-0 z-[65] bg-gray-900/30 transition-opacity duration-200 lg:hidden ${
+        className={`fixed inset-0 z-40 bg-gray-900/30 transition-opacity duration-200 lg:hidden ${
           drawerOpen ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={() => setDrawerOpen(false)}
@@ -200,7 +200,7 @@ export function PlatformIndex() {
       <aside
         id="sidebar"
         aria-label="알루미늄 공정 플랫폼 메뉴"
-        className={`fixed left-0 top-0 z-[65] flex h-dvh lg:z-40 w-64 shrink-0 flex-col overflow-y-auto bg-white p-4 shadow-sm transition-all duration-200 ease-in-out dark:bg-gray-800 lg:sticky lg:row-span-2 lg:translate-x-0 lg:rounded-r-2xl ${
+        className={`fixed left-0 top-0 z-40 flex h-dvh w-64 shrink-0 flex-col overflow-y-auto bg-white p-4 shadow-sm transition-all duration-200 ease-in-out dark:bg-gray-800 lg:sticky lg:row-span-2 lg:translate-x-0 lg:rounded-r-2xl ${
           drawerOpen ? "translate-x-0" : "-translate-x-64"
         } ${expanded ? "lg:w-64" : "lg:w-20"}`}
       >
@@ -235,8 +235,8 @@ export function PlatformIndex() {
           <ul className="mt-3 space-y-1">{NAV.map(navItem)}</ul>
         </nav>
 
-        {/* 하단 고정: 사내 문서함 · 설정(표시만) · PC 접기 버튼. PC는 왼쪽 아래 「인수인계 실행」 버튼 높이만큼 띄움 */}
-        <div className="mt-auto pt-6 lg:pb-16">
+        {/* 하단 고정: 사내 문서함 · 설정(표시만) · PC 접기 버튼 */}
+        <div className="mt-auto pt-6">
           <ul>{navItem(DOCS)}</ul>
           <div className={`mt-3 flex gap-3 px-3 ${expanded ? "items-center justify-between" : "items-center justify-between lg:flex-col lg:px-0"}`}>
             <span className="text-gray-400 dark:text-gray-500" role="img" aria-label="설정">

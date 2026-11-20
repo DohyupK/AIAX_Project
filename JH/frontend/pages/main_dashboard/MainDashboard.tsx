@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { CURRENT_USER, EVENTS, NOTICES, type EventTone, type Notice, type NoticeTag } from "./data";
+import styles from "./MainDashboard.module.css";
+import { CURRENT_USER, EVENTS, NOTICES, type Notice, type NoticeTag } from "./data";
 import { fetchDailyNotice } from "./noticeApi";
 
 // 메모 저장소: 백엔드 전까지 브라우저 쿠키 (같은 PC·브라우저에서만 유지)
@@ -10,35 +11,7 @@ const COOKIE_MAX_VALUE = 3800; // 브라우저 쿠키 4096바이트 한도에서
 const TITLE_MAX = 50;
 const CONTENT_MAX = 200;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-// Mosaic 스타일 — 상태색 배지(옅은 바탕 + 진한 글자), 카드, 입력창
-const BADGE = "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium";
-const TAG_CLASS: Record<NoticeTag, string> = {
-  필독: "bg-red-500/20 text-red-700 dark:text-red-400",
-  안전: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
-  일반: "bg-sky-500/20 text-sky-700 dark:text-sky-400",
-};
-const EVENT_CLASS: Record<EventTone, string> = {
-  red: "bg-red-500/20 text-red-700 dark:text-red-400",
-  orange: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
-  blue: "bg-sky-500/20 text-sky-700 dark:text-sky-400",
-  green: "bg-green-500/20 text-green-700 dark:text-green-400",
-};
-// 폰(460px 이하) 달력 칸은 일정 글자 대신 색 점
-const EVENT_DOT: Record<EventTone, string> = {
-  red: "bg-red-500",
-  orange: "bg-yellow-500",
-  blue: "bg-sky-500",
-  green: "bg-green-500",
-};
-const CARD = "min-w-0 rounded-xl bg-white shadow-sm dark:bg-gray-800";
-const CARD_HEAD = "flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-700/60 phone:px-4";
-const CARD_TITLE = "font-semibold text-gray-800 dark:text-gray-100";
-const FIELD =
-  "w-full rounded-lg border-gray-200 bg-white text-sm text-gray-800 shadow-sm placeholder:text-gray-400 hover:border-gray-300 focus:border-brand-500 focus:ring-0 dark:border-gray-700/60 dark:bg-gray-900/30 dark:text-gray-100 dark:placeholder:text-gray-500 dark:hover:border-gray-600 phone:py-3";
-const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
-// 폰 아래 여백 — 전역 떠 있는 버튼(인수인계·챗봇)에 마지막 입력란이 가리지 않게
-const PAGE = "mx-auto w-full max-w-[96rem] px-4 py-8 sm:px-6 lg:px-8 phone:px-3 phone:pt-5 phone:pb-24";
+const TAG_CLASS: Record<NoticeTag, string> = { 필독: styles.tagRed, 안전: styles.tagOrange, 일반: styles.tagBlue };
 
 type Memo = { id: string; title: string; content: string };
 type Memos = Record<string, Memo[]>; // 'YYYY-MM-DD' → 그날 메모 목록
@@ -176,7 +149,7 @@ export default function MainDashboard() {
     saveMemo();
   }
 
-  if (!today || !month) return <div className={PAGE} />;
+  if (!today || !month) return <div className={styles.page} />;
 
   const year = month.getFullYear();
   const mon = month.getMonth();
@@ -189,74 +162,54 @@ export default function MainDashboard() {
   const todayKey = toKey(today);
   const selectedEvents = EVENTS.filter((e) => e.date === selected);
   const selectedMemos = memos[selected] ?? [];
-  const navBtn = `flex size-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:border-gray-700/60 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-600 phone:size-10 ${FOCUS}`;
 
   return (
-    <div className={PAGE}>
-      {/* 제목 줄 — 오른쪽 사용자 (로그인 연동 전 표시용) */}
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-3 phone:mb-5">
-        <h1 className="text-2xl font-bold text-gray-800 md:text-3xl dark:text-gray-100">메인 대시보드</h1>
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <span
-            className="grid size-8 place-items-center rounded-full bg-brand-50 font-semibold text-brand-700 dark:bg-brand-400/20 dark:text-brand-400"
-            aria-hidden
-          >
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div className={styles.user}>
+          <span className={styles.avatar} aria-hidden>
             {CURRENT_USER.name[0]}
           </span>
-          <span className="font-medium text-gray-800 dark:text-gray-100">{CURRENT_USER.name}</span>
-          <span className="phone:hidden">· {CURRENT_USER.role}</span>
+          {CURRENT_USER.name} · {CURRENT_USER.role}
         </div>
-      </div>
+      </header>
 
-      {/* PC: 공지(전체) / 달력 8칸 + 메모 4칸. 860px 이하: 1열 — 공지 → 달력 → 메모 */}
-      <div className="grid grid-cols-12 gap-6 phone:gap-4">
-        <section className={`${CARD} col-span-12`} aria-labelledby="notice-title">
-          <header className={CARD_HEAD}>
-            <h2 id="notice-title" className={CARD_TITLE}>회사 전체 공지</h2>
-            {/* 전체 공지 페이지 미구현 — 링크 자리 */}
-            <a className={`text-sm font-medium text-brand-700 hover:text-brand-900 dark:text-brand-400 ${FOCUS}`} href="#notices">
-              전체 보기
-            </a>
-          </header>
-          <ul className="divide-y divide-gray-100 dark:divide-gray-700/60">
-            {notices.map((n) => (
-              <li key={n.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenNotice(n)}
-                  className={`flex w-full items-center gap-3 px-5 py-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700/30 phone:px-4 phone:py-3.5 ${FOCUS} focus-visible:-outline-offset-2`}
-                >
-                  <span className={`${BADGE} ${TAG_CLASS[n.tag]}`}>{n.tag}</span>
-                  <span className="min-w-0 flex-1 truncate text-gray-800 dark:text-gray-100">{n.title}</span>
-                  <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500">{n.date.slice(5).replace("-", ".")}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+      <section className={styles.card} aria-labelledby="notice-title">
+        <div className={styles.cardHead}>
+          <h2 id="notice-title" className={styles.cardTitle}>회사 전체 공지</h2>
+          {/* 전체 공지 페이지 미구현 — 링크 자리 */}
+          <a className={styles.more} href="#notices">전체 보기</a>
+        </div>
+        <ul className={styles.noticeList}>
+          {notices.map((n) => (
+            <li key={n.id}>
+              <button type="button" className={styles.notice} onClick={() => setOpenNotice(n)}>
+                <span className={`${styles.tag} ${TAG_CLASS[n.tag]}`}>{n.tag}</span>
+                <span className={styles.noticeTitle}>{n.title}</span>
+                <span className={styles.noticeDate}>{n.date.slice(5).replace("-", ".")}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
 
-        <section className={`${CARD} col-span-12 flex flex-col min-[861px]:col-span-8`} aria-labelledby="calendar-title">
-          <header className={CARD_HEAD}>
-            <h2 id="calendar-title" className={CARD_TITLE}>회사 일정</h2>
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-              <button type="button" className={navBtn} aria-label="이전 달" onClick={() => setMonth(new Date(year, mon - 1, 1))}>
+      <div className={styles.body}>
+        <section className={`${styles.card} ${styles.calendar}`} aria-labelledby="calendar-title">
+          <div className={styles.cardHead}>
+            <h2 id="calendar-title" className={styles.cardTitle}>회사 일정</h2>
+            <div className={styles.monthNav}>
+              <button type="button" className={styles.navBtn} aria-label="이전 달" onClick={() => setMonth(new Date(year, mon - 1, 1))}>
                 ‹
               </button>
-              <span className="min-w-[6.5rem] text-center">{year}년 {mon + 1}월</span>
-              <button type="button" className={navBtn} aria-label="다음 달" onClick={() => setMonth(new Date(year, mon + 1, 1))}>
+              <span>{year}년 {mon + 1}월</span>
+              <button type="button" className={styles.navBtn} aria-label="다음 달" onClick={() => setMonth(new Date(year, mon + 1, 1))}>
                 ›
               </button>
             </div>
-          </header>
-          {/* 주(5~6줄)가 카드 높이를 똑같이 나눔 */}
-          <div className="grid flex-1 auto-rows-[minmax(88px,1fr)] grid-cols-7 grid-rows-[auto] gap-1.5 p-4 tablet:auto-rows-[minmax(64px,auto)] phone:auto-rows-[minmax(44px,auto)] phone:gap-1 phone:p-2">
+          </div>
+          <div className={styles.grid}>
             {WEEKDAYS.map((w, i) => (
-              <div
-                key={w}
-                className={`pb-1 text-center text-xs font-semibold ${
-                  i === 0 ? "text-red-500" : i === 6 ? "text-sky-600 dark:text-sky-500" : "text-gray-400 dark:text-gray-500"
-                }`}
-              >
+              <div key={w} className={`${styles.weekday} ${i === 0 ? styles.sun : ""} ${i === 6 ? styles.sat : ""}`}>
                 {w}
               </div>
             ))}
@@ -265,172 +218,115 @@ export default function MainDashboard() {
               const key = `${year}-${pad(mon + 1)}-${pad(d)}`;
               const dow = i % 7;
               const isToday = key === todayKey;
-              const isSel = key === selected;
-              const hasMemo = (memos[key]?.length ?? 0) > 0;
-              const dayEvents = EVENTS.filter((e) => e.date === key);
-              const numColor = isToday
-                ? "bg-brand-700 font-bold text-white dark:bg-brand-500"
-                : dow === 0
-                  ? "text-red-500"
-                  : dow === 6
-                    ? "text-sky-600 dark:text-sky-500"
-                    : "text-gray-700 dark:text-gray-200";
+              const cls = [
+                styles.day,
+                key === selected ? styles.selected : "",
+                isToday ? styles.today : "",
+              ].join(" ");
               return (
                 <button
                   key={key}
                   type="button"
+                  className={cls}
                   onClick={() => selectDate(key)}
-                  aria-pressed={isSel}
+                  aria-pressed={key === selected}
                   aria-current={isToday ? "date" : undefined}
-                  aria-label={`${mon + 1}월 ${d}일${dayEvents.length ? ` 일정 ${dayEvents.map((e) => e.title).join(", ")}` : ""}${hasMemo ? " 메모 있음" : ""}`}
-                  className={`flex min-w-0 flex-col gap-1 rounded-lg border p-1.5 text-left text-xs transition phone:items-center phone:p-1 ${FOCUS} ${
-                    isSel
-                      ? "border-brand-700 ring-1 ring-brand-700 dark:border-brand-400 dark:ring-brand-400"
-                      : "border-gray-200 hover:border-gray-300 dark:border-gray-700/60 dark:hover:border-gray-600"
-                  }`}
                 >
-                  <span className="flex w-full items-center justify-between phone:justify-center">
-                    <span className={`inline-flex size-5 items-center justify-center rounded-full ${numColor}`}>{d}</span>
-                    {hasMemo && <span className="size-1.5 rounded-full bg-brand-500 phone:hidden dark:bg-brand-400" title="메모 있음" />}
+                  <span className={`${styles.dayNum} ${dow === 0 ? styles.sun : ""} ${dow === 6 ? styles.sat : ""}`}>
+                    <span className={styles.dayText}>{d}</span>
+                    {memos[key]?.length ? <span className={styles.memoDot} title="메모 있음" /> : null}
                   </span>
-                  {/* PC·태블릿: 일정 이름 */}
-                  {dayEvents.map((e) => (
-                    <span key={e.title} className={`truncate rounded px-1.5 py-px text-[11px] font-medium phone:hidden ${EVENT_CLASS[e.tone]}`}>
+                  {EVENTS.filter((e) => e.date === key).map((e) => (
+                    <span key={e.title} className={`${styles.event} ${styles[e.tone]}`}>
                       {e.title}
                     </span>
                   ))}
-                  {/* 폰: 일정·메모 색 점 */}
-                  {(dayEvents.length > 0 || hasMemo) && (
-                    <span className="hidden gap-0.5 phone:flex" aria-hidden>
-                      {dayEvents.map((e) => (
-                        <span key={e.title} className={`size-1.5 rounded-full ${EVENT_DOT[e.tone]}`} />
-                      ))}
-                      {hasMemo && <span className="size-1.5 rounded-full bg-brand-500 dark:bg-brand-400" />}
-                    </span>
-                  )}
                 </button>
               );
             })}
           </div>
         </section>
 
-        <aside className={`${CARD} col-span-12 flex flex-col min-[861px]:col-span-4`} aria-labelledby="memo-title">
-          <header className={CARD_HEAD}>
-            <h2 id="memo-title" className={CARD_TITLE}>내 메모</h2>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{selected.replaceAll("-", ".")}</span>
-          </header>
-          <div className="flex flex-col gap-3 p-5 phone:p-4">
-            {/* 선택한 날 일정 — 폰에서는 달력에 이름이 안 보이므로 여기서 확인 */}
-            {selectedEvents.length > 0 && (
-              <ul className="flex flex-wrap gap-1.5" aria-label="이날 일정">
-                {selectedEvents.map((e) => (
-                  <li key={e.title} className={`${BADGE} ${EVENT_CLASS[e.tone]}`}>
-                    {e.title}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <input
-              className={`form-input ${FIELD}`}
-              value={title}
-              maxLength={TITLE_MAX}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setMessage(null);
-              }}
-              onKeyDown={onEnter}
-              placeholder="제목 (필수)"
-              aria-label={`${selected} 메모 제목`}
-              aria-required
-            />
-            <div>
-              <textarea
-                className={`form-textarea min-h-28 resize-y ${FIELD}`}
-                value={content}
-                maxLength={CONTENT_MAX}
-                onChange={(e) => {
-                  setContent(e.target.value);
-                  setMessage(null);
-                }}
-                onKeyDown={onEnter}
-                placeholder="내용 (선택) — Enter 저장, Shift+Enter 줄바꿈"
-                aria-label={`${selected} 메모 내용`}
-              />
-              <p className="mt-1 text-right text-xs text-gray-400 dark:text-gray-500">
-                {content.length}/{CONTENT_MAX}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={saveMemo}
-              className={`inline-flex items-center justify-center rounded-lg bg-brand-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-900 dark:bg-brand-500 dark:hover:bg-brand-400 phone:py-3 ${FOCUS}`}
-            >
-              메모 저장
-            </button>
-            {message && (
-              <p
-                className={`text-center text-sm ${message.error ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}
-                role="status"
-              >
-                {message.text}
-              </p>
-            )}
+        <aside className={`${styles.card} ${styles.memo}`} aria-labelledby="memo-title">
+          <h2 id="memo-title" className={styles.cardTitle}>내 메모</h2>
+          <p className={styles.sub}>{selected.replaceAll("-", ".")}</p>
+          {selectedEvents.length > 0 && (
+            <ul className={styles.memoEvents}>
+              {selectedEvents.map((e) => (
+                <li key={e.title}>{e.title}</li>
+              ))}
+            </ul>
+          )}
+          <input
+            className={styles.input}
+            value={title}
+            maxLength={TITLE_MAX}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setMessage(null);
+            }}
+            onKeyDown={onEnter}
+            placeholder="제목 (필수)"
+            aria-label={`${selected} 메모 제목`}
+            aria-required
+          />
+          <textarea
+            className={styles.textarea}
+            value={content}
+            maxLength={CONTENT_MAX}
+            onChange={(e) => {
+              setContent(e.target.value);
+              setMessage(null);
+            }}
+            onKeyDown={onEnter}
+            placeholder="내용 (선택) — Enter 저장, Shift+Enter 줄바꿈"
+            aria-label={`${selected} 메모 내용`}
+          />
+          <span className={styles.counter}>{content.length}/{CONTENT_MAX}</span>
+          <button type="button" className={styles.saveBtn} onClick={saveMemo}>
+            메모 저장
+          </button>
+          {message && (
+            <p className={message.error ? styles.errorMsg : styles.savedMsg} role="status">
+              {message.text}
+            </p>
+          )}
 
-            {selectedMemos.length > 0 && (
-              <div className="flex flex-col gap-2 border-t border-gray-100 pt-3 dark:border-gray-700/60">
-                <p className="text-xs font-semibold text-gray-400 dark:text-gray-500">저장된 메모</p>
-                {selectedMemos.map((m) => (
-                  <details key={m.id} className="rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700/60">
-                    <summary className="cursor-pointer text-sm font-semibold break-all text-gray-800 dark:text-gray-100 phone:py-1">
-                      {m.title}
-                    </summary>
-                    {m.content && <p className="mt-2 text-sm break-all whitespace-pre-wrap text-gray-600 dark:text-gray-300">{m.content}</p>}
-                    <button
-                      type="button"
-                      onClick={() => deleteMemo(m.id)}
-                      className={`mt-1 py-1 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 phone:py-2 ${FOCUS}`}
-                    >
-                      삭제
-                    </button>
-                  </details>
-                ))}
-              </div>
-            )}
-          </div>
+          {selectedMemos.length > 0 && (
+            <div className={styles.savedList}>
+              <p className={styles.savedHead}>저장된 메모</p>
+              {selectedMemos.map((m) => (
+                <details key={m.id} className={styles.savedItem}>
+                  <summary className={styles.savedTitle}>{m.title}</summary>
+                  {m.content && <p className={styles.savedContent}>{m.content}</p>}
+                  <button type="button" className={styles.deleteBtn} onClick={() => deleteMemo(m.id)}>
+                    삭제
+                  </button>
+                </details>
+              ))}
+            </div>
+          )}
         </aside>
       </div>
 
-      {/* 공지 상세 팝업 — 폰은 아래에서 올라오는 시트 */}
       {openNotice && (
-        <div
-          // z-65: 전역 떠 있는 버튼(인수인계 55·챗봇 60) 위, 인수인계 팝업(70) 아래
-          className="fixed inset-0 z-[65] flex items-center justify-center bg-gray-900/30 p-4 phone:items-end phone:p-0"
-          onClick={() => setOpenNotice(null)}
-        >
+        <div className={styles.backdrop} onClick={() => setOpenNotice(null)}>
           <div
-            className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-lg dark:bg-gray-800 phone:max-w-none phone:rounded-b-none"
+            className={styles.dialog}
             role="dialog"
             aria-modal="true"
             aria-labelledby="notice-dialog-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2">
-              <span className={`${BADGE} ${TAG_CLASS[openNotice.tag]}`}>{openNotice.tag}</span>
-              <span className="text-xs text-gray-400 dark:text-gray-500">{openNotice.date.replaceAll("-", ".")}</span>
-              <button
-                ref={closeRef}
-                type="button"
-                aria-label="닫기"
-                onClick={() => setOpenNotice(null)}
-                className={`ml-auto flex size-8 items-center justify-center rounded-full text-xl leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700/50 phone:size-10 ${FOCUS}`}
-              >
+            <div className={styles.dialogHead}>
+              <span className={`${styles.tag} ${TAG_CLASS[openNotice.tag]}`}>{openNotice.tag}</span>
+              <span className={styles.noticeDate}>{openNotice.date.replaceAll("-", ".")}</span>
+              <button ref={closeRef} type="button" className={styles.closeBtn} aria-label="닫기" onClick={() => setOpenNotice(null)}>
                 ×
               </button>
             </div>
-            <h3 id="notice-dialog-title" className="mt-3 mb-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
-              {openNotice.title}
-            </h3>
-            <p className="text-sm leading-relaxed whitespace-pre-line text-gray-600 dark:text-gray-300">{openNotice.content}</p>
+            <h3 id="notice-dialog-title" className={styles.dialogTitle}>{openNotice.title}</h3>
+            <p className={styles.dialogBody}>{openNotice.content}</p>
           </div>
         </div>
       )}
