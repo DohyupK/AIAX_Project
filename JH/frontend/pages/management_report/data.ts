@@ -70,6 +70,11 @@ export interface ReportSource {
   daily: DailyProduction[]; safety: SafetyData; spc: SpcDaily[]; attendance: AttendanceDaily[]; fixed: FixedRow[];
 }
 
+/** 리포트 목록 시작일 = 생산 데이터 첫날 'YYYY-MM-DD' (데이터 없으면 null) */
+export async function fetchFirstDate(): Promise<string | null> {
+  return (await get<{ first: string | null }>("first-date")).first;
+}
+
 /** 기간(from~to, 'YYYY-MM-DD', 양 끝 포함, 최대 220일) 리포트 원자료 전부 */
 export async function fetchReportSource(from: string, to: string): Promise<ReportSource> {
   const range = { from, to };

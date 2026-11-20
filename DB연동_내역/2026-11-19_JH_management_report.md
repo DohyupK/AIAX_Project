@@ -16,7 +16,7 @@
 
 | 테이블명 | 주요 컬럼 | 읽기/쓰기 | 연동 화면·API | 비고 |
 |----------|-----------|-----------|---------------|------|
-| `mes.investment_casting` | `timestamp`(생산일), `passorfail` | 읽기 | `GET /api/report/daily?from=&to=` (날짜별 샷 수·불량 수, 최대 220일) | 세 라인(line_no1~3) 합계. 불량 = 실제 판정 `passorfail = 1` |
+| `mes.investment_casting` | `timestamp`(생산일), `passorfail` | 읽기 | `GET /api/report/daily?from=&to=` (날짜별 샷 수·불량 수, 최대 220일) · `GET /api/report/first-date` (`min(timestamp)` = 목록 시작일, 2026-11-21 추가) | 세 라인(line_no1~3) 합계. 불량 = 실제 판정 `passorfail = 1`. 시작일은 목록 페이지 수 계산용 |
 | `ai.ppe_check` + `org.employee_gate_log`·`employee_card`·`employee`·`department`·`vendor_gate_log`·`vendor_worker`·`vendor_company`·`gate_card` | 장구 5종, `result`, `manual_result`, 출입 `work_date` | 읽기 | `GET /api/report/safety?from=&to=` (날짜별 판정 수 + 위반 건) | 2026-11-19 추가. 보호구 API(`ppe/router.py` `CHECKS`·`VIOLATION`)와 같은 SQL — 같은 날 보호구가 lake 사본 → **org 원본**으로 바뀌어 함께 원본 기준. 기록 [2026-11-18_JH_ppe_violation.md](2026-11-18_JH_ppe_violation.md) |
 | `org.fixed_value` | `value_name`, `value`, `unit`, `effective_date` | 읽기 | `GET /api/report/fixed` (전체 행) | 2026-11-20 추가. 화면이 리포트 기간 마지막 날 기준으로 이름별 최신 값 선택 — 제품_단가·재활용_회수액·재활용률·MTTR·MTBF·리콜_횟수_12개월 |
 | `mes.spc_limit` (+ `mes.investment_casting`) | `line_unit`, `variable`, `i_lcl`, `i_ucl`, `effective_date` | 읽기 | `GET /api/report/spc?from=&to=` (날짜별 UCL 초과·LCL 미만 「샷 × 변수」 수) | 2026-11-20 추가. 적용 시작일 ~ 다음 적용 시작일 전까지 그 기준선 사용 |

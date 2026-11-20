@@ -10,15 +10,17 @@ const ymd = (d: Date) => d.toLocaleDateString("sv-SE");
 
 export interface ReportItem { id: string; period: Period; from: string; to: string; title: string }
 
-export const LIST_COUNT: Record<Period, number> = { daily: 14, weekly: 8, monthly: 6 };
+/** 목록 한 페이지 건수 (아래 페이지 번호로 다음 15건) */
+export const PAGE_SIZE = 15;
 const PERIOD_LABEL: Record<Period, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
 
 /**
- * 기간별 리포트 목록 (최신순)
+ * 기간별 리포트 목록 (최신순) — offset 번째(0 = 이번 기간)부터 count 건
  * 일일: 하루씩 / 주간: 달력 주 월~일 (이번 주는 월~오늘) / 월간: 달력 월 (이번 달은 오늘까지)
  */
-export function listReports(p: Period, now: Date, count = LIST_COUNT[p]): ReportItem[] {
-  return Array.from({ length: count }, (_, i) => {
+export function listReports(p: Period, now: Date, count: number, offset = 0): ReportItem[] {
+  return Array.from({ length: count }, (_, k) => {
+    const i = k + offset;
     let from: Date, to: Date;
     if (p === "monthly") {
       from = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -35,6 +37,19 @@ export function listReports(p: Period, now: Date, count = LIST_COUNT[p]): Report
     const name = p === "monthly" ? `${from.getFullYear()}년 ${from.getMonth() + 1}월` : f === t ? f : `${f} ~ ${t}`;
     return { id: `${p}-${f}`, period: p, from: f, to: t, title: `${name} ${PERIOD_LABEL[p]} 경영 리포트` };
   });
+}
+
+/** 이번 기간부터 first('YYYY-MM-DD', 데이터 첫날)가 든 기간까지 리포트 수 (최소 1) */
+export function reportCount(p: Period, now: Date, first: string): number {
+  const [y, m, d] = first.split("-").map(Number);
+  const f = new Date(y, m - 1, d);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / 86_400_000); // 서머타임 없는 KST 기준 반올림
+  const monday = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate() - ((x.getDay() + 6) % 7));
+  const n = p === "daily" ? days(today, f) + 1
+    : p === "weekly" ? days(monday(today), monday(f)) / 7 + 1
+    : (today.getFullYear() - f.getFullYear()) * 12 + today.getMonth() - f.getMonth() + 1;
+  return Math.max(1, n);
 }
 
 /**

@@ -11,28 +11,28 @@ export const GEAR_LABEL: Record<Gear, string> = {
   goggles: "보안경",
 };
 
-/** a·b = 회사 정문 (DB 게이트 코드 그대로). DB ai.ppe_gate_rule 과 같은 기준 — 규칙이 바뀌면 둘 다 고침 */
-export const GATE_RULES: Record<Gate, { required: Gear[]; optional: Gear[] }> = {
-  a: { required: ["helmet", "shoes", "vest", "gloves", "goggles"], optional: [] },
-  b: { required: ["helmet", "shoes", "vest", "gloves"], optional: ["goggles"] },
+/**
+ * a·b = 회사 정문 (DB 게이트 코드 그대로). DB ai.ppe_gate_rule 과 같은 기준 — 규칙이 바뀌면 둘 다 고침.
+ * 게이트에서 검사·표시하는 장구 = 필수 장구만 (b 는 보안경 제외 4종, DB goggles=false)
+ */
+export const GATE_RULES: Record<Gate, Gear[]> = {
+  a: ["helmet", "shoes", "vest", "gloves", "goggles"],
+  b: ["helmet", "shoes", "vest", "gloves"],
 };
 
-export type GearStatus = "worn" | "missing" | "optional_missing" | "unknown";
+export type GearStatus = "worn" | "missing" | "unknown";
 
-/** 장구별 상태: 착용 / 필수 미착용(위반) / 선택 미착용 / 판정 불가(카메라가 못 봄) */
+/** 게이트 장구별 상태: 착용 / 미착용(위반) / 판정 불가(카메라가 못 봄) */
 export function gearStatus(gate: Gate, detected: Gear[], unknown: Gear[] = []): { gear: Gear; status: GearStatus }[] {
-  const { required, optional } = GATE_RULES[gate];
-  return [...required, ...optional].map((gear) => ({
+  return GATE_RULES[gate].map((gear) => ({
     gear,
-    status: unknown.includes(gear) ? "unknown"
-      : detected.includes(gear) ? "worn"
-      : required.includes(gear) ? "missing" : "optional_missing",
+    status: unknown.includes(gear) ? "unknown" : detected.includes(gear) ? "worn" : "missing",
   }));
 }
 
 /** 필수 장구 중 검출되지 않은 항목. 비어 있으면 통과(개찰구 개방) */
 export function missingGear(gate: Gate, detected: Gear[]): Gear[] {
-  return GATE_RULES[gate].required.filter((g) => !detected.includes(g));
+  return GATE_RULES[gate].filter((g) => !detected.includes(g));
 }
 
 /** 마지막 글자 받침 유무로 을/를 선택 */
