@@ -1,4 +1,4 @@
--- 22 품질 1차(ML) 모델 등록 — TM 모델 목록 56개 + 배포 모델 (2026-11-20, MS)
+-- 22 품질 1차(ML) 모델 등록 — TM 모델 목록 56개 + 배포 모델 + CatBoost v2.0 (2026-11-21, MS)
 -- 근거: TM 정리표 model_summary (파일명·모델명·버전·한줄설명·PR_AUC·Precision·Recall·F1)
 --       모델 파일은 Git 저장소 TM/model_ml/<모델명>/ 에 그대로 둠 (서버 모델 폴더가 생기면 file_path 만 바꿈)
 -- 배포: DieCasting_XGB_20261114_09 / v17.2 (TM README 「운영(배포) 모델」, 전체 100% 학습)
@@ -67,7 +67,8 @@ INSERT INTO qc1_models VALUES
     ('DieCasting_HGB_20261114_01', 'v16.11', '[HistGB] GridSearchCV 13위 설정 (최종 8개 변수)', 'DieCasting_HGB_20261114_01.joblib', 'TM/model_ml/DieCasting_HGB_20261114_01/DieCasting_HGB_20261114_01.joblib', DATE '2026-11-14', 0.8185, 0.9559, 0.6701, 0.7879),
     ('DieCasting_XGB_20261114_08', 'v16.12', '[XGBoost] 튜닝 전 XGBoost (깊이 4, 트리 300) — 튜닝 효과 비교 기준', 'DieCasting_XGB_20261114_08.joblib', 'TM/model_ml/DieCasting_XGB_20261114_08/DieCasting_XGB_20261114_08.joblib', DATE '2026-11-14', 0.8405, 0.9973, 0.6392, 0.7791),
     ('DieCasting_XGB_20261114_10', 'v17.1', '[XGBoost] 최종 모델 v1.0 검증용: 앞 80% 학습, Test로 성능 확인한 모델', 'DieCasting_XGB_20261114_10.pkl', 'TM/model_ml/DieCasting_XGB_20261114_10/DieCasting_XGB_20261114_10.pkl', DATE '2026-11-14', 0.8297, 0.9378, 0.6993, 0.8012),
-    ('DieCasting_XGB_20261114_09', 'v17.2', '[XGBoost] 최종 모델 v1.0 배포용: 같은 설정으로 데이터 100% 학습 (Test도 학습에 포함)', 'DieCasting_XGB_20261114_09.pkl', 'TM/model_ml/DieCasting_XGB_20261114_09/DieCasting_XGB_20261114_09.pkl', DATE '2026-11-14', 0.8297, 0.9378, 0.6993, 0.8012);
+    ('DieCasting_XGB_20261114_09', 'v17.2', '[XGBoost] 최종 모델 v1.0 배포용: 같은 설정으로 데이터 100% 학습 (Test도 학습에 포함)', 'DieCasting_XGB_20261114_09.pkl', 'TM/model_ml/DieCasting_XGB_20261114_09/DieCasting_XGB_20261114_09.pkl', DATE '2026-11-14', 0.8297, 0.9378, 0.6993, 0.8012),
+    ('DieCasting_CatB_20261115_03', 'v18.1', '[CatBoost] 최종 모델 v2.0: 파생 4개 포함 12개 변수, 데이터 100% 학습 (깊이 8, 트리 800)', 'DieCasting_CatB_20261115_03.pkl', 'TM/model_ml/DieCasting_CatB_20261115_03/DieCasting_CatB_20261115_03.pkl', DATE '2026-11-15', 0.8557, 0.9575, 0.6976, 0.8072);
 
 BEGIN;
 
@@ -93,7 +94,7 @@ SELECT model_name, version, pr_auc, rec, prec, f1 FROM qc1_models;
 COMMIT;
 DROP TABLE IF EXISTS qc1_models;
 
--- 확인: CAST-QC1 56행 · 배포 1행 · 지표 56행
+-- 확인: CAST-QC1 57행 · 배포 1행 · 지표 57행
 SELECT count(*) AS 모델수, count(*) FILTER (WHERE deployed) AS 배포수,
        string_agg(model_name || ' / ' || version, ', ') FILTER (WHERE deployed) AS 배포모델,
        count(*) FILTER (WHERE file_name IS NULL) AS 파일없음

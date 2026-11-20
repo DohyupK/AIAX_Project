@@ -1,0 +1,4 @@
+﻿설명,원본_top_temp1,원본_top_temp2,원본_bottom_temp1,원본_bottom_temp2,원본_injection_pressure,원본_biscuit_thickness,원본_mechanical_strength,원본_facility_CycleTime,입력_top_temp1,입력_top_temp2,입력_bottom_temp1,입력_bottom_temp2,입력_injection_pressure,입력_biscuit_thickness,입력_mechanical_strength,입력_facility_CycleTime,입력_top_mean,입력_bottom_mean,입력_mold_mean,입력_tb_diff,불량확률,경보
+정상 예시,380.0,350,470,400,670,150,87,150,380.0,350.0,470.0,400.0,670.0,150.0,87.0,150.0,365.0,435.0,400.0,-70.0,0.009180306300000765,0
+top_temp1 결측 + bottom_temp1 불가능값(2859),,300,2859,410,650,145,85,152,395.0,300.0,469.0,410.0,650.0,145.0,85.0,152.0,300.0,410.0,355.0,-110.0,0.01929997269646375,0
+압력 0·형체력 0,390.0,360,460,400,0,150,0,150,390.0,360.0,460.0,400.0,0.0,150.0,0.0,150.0,375.0,430.0,402.5,-55.0,0.9474347184161684,1
