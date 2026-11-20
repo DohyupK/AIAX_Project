@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import styles from "./MainDashboard.module.css";
-import { CURRENT_USER, EVENTS, NOTICES, type Notice, type NoticeTag } from "./data";
+import { EVENTS, NOTICES, type Notice, type NoticeTag } from "./data";
+import { useCurrentUser } from "../../common/currentUser";
 import { fetchDailyNotice } from "./noticeApi";
 
 // 메모 저장소: 백엔드 전까지 브라우저 쿠키 (같은 PC·브라우저에서만 유지)
@@ -66,6 +67,7 @@ export default function MainDashboard() {
   const [openNotice, setOpenNotice] = useState<Notice | null>(null);
   const [notices, setNotices] = useState<Notice[]>(NOTICES);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const user = useCurrentUser(); // 로그인 사용자 (예전 목업 CURRENT_USER 대체)
 
   useEffect(() => {
     const now = new Date();
@@ -166,12 +168,14 @@ export default function MainDashboard() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <div className={styles.user}>
-          <span className={styles.avatar} aria-hidden>
-            {CURRENT_USER.name[0]}
-          </span>
-          {CURRENT_USER.name} · {CURRENT_USER.role}
-        </div>
+        {user && (
+          <div className={styles.user}>
+            <span className={styles.avatar} aria-hidden>
+              {user.name[0]}
+            </span>
+            {user.name}{user.admin && " · 관리자"}
+          </div>
+        )}
       </header>
 
       <section className={styles.card} aria-labelledby="notice-title">

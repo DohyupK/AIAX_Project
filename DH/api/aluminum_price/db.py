@@ -19,12 +19,34 @@ ON CONFLICT (price_date) DO NOTHING
 
 MAX_DATE_SQL = "SELECT MAX(price_date) FROM org.aluminum_price"
 
+META_SQL = """
+SELECT MIN(price_date), MAX(price_date), COUNT(*)::bigint
+FROM org.aluminum_price
+"""
+
 LIST_SQL = """
 SELECT price_date, price
 FROM org.aluminum_price
 ORDER BY price_date DESC
 LIMIT %s
 """
+
+RANGE_SQL = """
+SELECT price_date, price
+FROM org.aluminum_price
+WHERE price_date >= %s AND price_date <= %s
+ORDER BY price_date DESC
+LIMIT %s
+"""
+
+CSV_SQL = """
+SELECT price_date, price
+FROM org.aluminum_price
+ORDER BY price_date DESC
+"""
+
+# 구간 요청 상한 (5년 거래일 ~1.3k + 여유)
+RANGE_ROW_CAP = 2500
 
 
 def database_url() -> str:
@@ -64,12 +86,56 @@ def insert_new_rows(rows: list[AlRow], *, after: date | None) -> int:
     return n
 
 
+def _row_dicts(rows: list) -> list[dict]:
+    return [
+        {"price_date": r[0].isoformat(), "price": float(r[1])}
+        for r in rows
+    ]
+
+
 def list_prices(*, limit: int = 500) -> list[dict]:
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(LIST_SQL, (limit,))
             rows = cur.fetchall()
-    return [
-        {"price_date": r[0].isoformat(), "price": float(r[1])}
-        for r in rows
-    ]
+    return _row_dicts(rows)
+
+
+def list_prices_range(
+    *,
+    date_from: date,
+    date_to: date,
+    limit: int = RANGE_ROW_CAP,
+) -> list[dict]:
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+    lim = max(1, min(limit, RANGE_ROW_CAP))
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(RANGE_SQL, (date_from, date_to, lim))
+            rows = cur.fetchall()
+    return _row_dicts(rows)
+
+
+def price_meta() -> dict:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(META_SQL)
+            row = cur.fetchone()
+    if not row or row[2] == 0 or row[0] is None:
+        return {"min_date": None, "max_date": None, "count": 0}
+    return {
+        "min_date": row[0].isoformat(),
+        "max_date": row[1].isoformat(),
+        "count": int(row[2]),
+    }
+
+
+def iter_all_csv_lines():
+    """전체 시세 CSV 라인 생성기 (헤더 포함)."""
+    yield "price_date,price\n"
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(CSV_SQL)
+            for d, p in cur:
+                yield f"{d.isoformat()},{float(p):.4f}".rstrip("0").rstrip(".") + "\n"

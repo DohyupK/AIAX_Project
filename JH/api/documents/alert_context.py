@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -16,8 +17,14 @@ log = logging.getLogger("jh.documents.alert_context")
 DB = "DATABASE_URL"  # app_lake — mes 읽기
 LINES = ("line_no1", "line_no2", "line_no3")
 KST = ZoneInfo("Asia/Seoul")
-MAX_ALERTS = 30
+MAX_ALERTS = 5
 GRADE_SCORE = {"alarm": 1.0, "caution": 0.7, "watch": 0.4}
+
+_ALERT_KW = re.compile(
+    r"알림|관리도|이탈|경보|주의|관찰|넬슨|spc|알람|형체|주입\s*압력|냉각수|용융",
+    re.I,
+)
+_QUALITY_KW = re.compile(r"불량|품질|kpi|양품|검.?사", re.I)
 
 
 def _kst_today() -> date:
@@ -72,11 +79,54 @@ def _card_block(c: AlertCard) -> str:
     )
 
 
-def collect_alert_context(max_alerts: int = MAX_ALERTS) -> tuple[list[dict[str, Any]], str]:
-    """당일(없으면 라인별 최신일) 관리도 알림 → (sources용 dict 목록, LLM 텍스트).
+def _alert_budget(query: str, path: str) -> int:
+    """화면·질문에 따라 알림 개수 상한. 관련 없으면 0 (문서 질문 노이즈 방지)."""
+    p = (path or "").lower()
+    q = query or ""
+    if "process-optimization" in p or _ALERT_KW.search(q):
+        return MAX_ALERTS
+    if "quality-inspection" in p or _QUALITY_KW.search(q):
+        return 2
+    return 0
 
-    실패 시 빈 결과 (문서 검색은 계속).
+
+def _prefer_lines(path: str, actions: list[dict[str, Any]]) -> set[str] | None:
+    """최근 동작·경로에서 라인 힌트가 있으면 그 라인 우선."""
+    blob = " ".join(
+        [
+            path or "",
+            *(str(a.get("label") or "") for a in actions),
+        ]
+    ).lower()
+    found: set[str] = set()
+    if "line_no1" in blob or "라인1" in blob or "라인 1" in blob:
+        found.add("line_no1")
+    if "line_no2" in blob or "라인2" in blob or "라인 2" in blob:
+        found.add("line_no2")
+    if "line_no3" in blob or "라인3" in blob or "라인 3" in blob:
+        found.add("line_no3")
+    return found or None
+
+
+def collect_alert_context(
+    max_alerts: int | None = None,
+    *,
+    query: str = "",
+    ui_context: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    """당일(없으면 라인별 최신일) 관리도 알림 → (sources, LLM 텍스트).
+
+    실패 시 빈 결과 (문서 검색은 계속). 대화 DB 저장 없음.
     """
+    ctx = ui_context or {}
+    path = str(ctx.get("path") or "")
+    actions = list(ctx.get("actions") or [])[:15]
+    budget = max_alerts if max_alerts is not None else _alert_budget(query, path)
+    if budget <= 0:
+        return [], ""
+
+    prefer = _prefer_lines(path, actions)
+
     try:
         today = _kst_today()
         cards: list[AlertCard] = []
@@ -97,13 +147,22 @@ def collect_alert_context(max_alerts: int = MAX_ALERTS) -> tuple[list[dict[str, 
                     continue
                 cards.extend(build_alert_cards(shots, lim, day.isoformat()))
 
-        # 경보 > 주의 > 관찰, 같은 등급은 날짜·시각 순
+        if prefer:
+            preferred = [c for c in cards if c.line in prefer]
+            others = [c for c in cards if c.line not in prefer]
+            cards = preferred + others
+
         cards.sort(key=lambda c: (-GRADE_RANK[c.grade], c.date, c.time))
-        top = cards[:max_alerts]
+        top = cards[:budget]
         sources = [_card_to_source(c) for c in top]
         blocks = [_card_block(c) for c in top]
         text = "\n\n".join(blocks) if blocks else ""
-        log.info("Shift 관리도 알림 컨텍스트 %d건 (수집 %d)", len(top), len(cards))
+        log.info(
+            "Shift 관리도 알림 컨텍스트 %d건 (수집 %d, budget=%d)",
+            len(top),
+            len(cards),
+            budget,
+        )
         return sources, text
     except Exception:
         log.exception("관리도 알림 컨텍스트 수집 실패 — 문서만으로 진행")

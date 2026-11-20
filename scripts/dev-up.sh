@@ -20,7 +20,7 @@ fi
 
 tmux has-session -t "${SESSION}" 2>/dev/null && tmux kill-session -t "${SESSION}"
 
-# window next — 루트 Next.js (/api/al-price → :8766 rewrite)
+# window next — 루트 Next.js (/al-price/api/prices → :8766 프록시)
 tmux new-session -d -s "${SESSION}" -n next -c "${ROOT}" \
   "${PNPM} dev"
 

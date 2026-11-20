@@ -1,21 +1,87 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { askShiftBot } from "./chatApi";
+import { plainText } from "./plainText";
+import SourceList from "./SourceList";
 import type { ChatTurn } from "./sources";
+import { snapshotUiContext, startUiContextCapture, stopUiContextCapture } from "./uiContext";
 import s from "./HyejinBot.module.css";
+
+/** 탭 세션만 — DB 테이블 없음. 새 채팅 시 삭제 */
+const TURNS_KEY = "shift_chat_turns";
+
+function loadTurns(): ChatTurn[] {
+  if (typeof sessionStorage === "undefined") return [];
+  try {
+    const raw = sessionStorage.getItem(TURNS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ChatTurn[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (t) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveTurns(turns: ChatTurn[]): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    if (turns.length === 0) sessionStorage.removeItem(TURNS_KEY);
+    else sessionStorage.setItem(TURNS_KEY, JSON.stringify(turns));
+  } catch {
+    /* quota 등 — 무시 */
+  }
+}
+
+function panelClass(open: boolean, full: boolean): string {
+  const parts = [s.panel];
+  if (!open) parts.push(s.panelHidden);
+  if (full) parts.push(s.panelFull);
+  return parts.join(" ");
+}
 
 /**
  * Shift 봇 — 전역 우하단 FAB (app/layout).
- * JH /api/documents/ask: 사내 문서 + 관리도 알림 + Chat
+ * 전체화면·대화 sessionStorage 유지. DB 없음.
  */
 export default function HyejinBot() {
   const [open, setOpen] = useState(false);
+  const [full, setFull] = useState(false);
   const [q, setQ] = useState("");
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    startUiContextCapture();
+    setTurns(loadTurns());
+    setHydrated(true);
+    return () => stopUiContextCapture();
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveTurns(turns);
+  }, [turns, hydrated]);
+
+  function startNewChat() {
+    if (busy) return;
+    setTurns([]);
+    setError(null);
+    setQ("");
+    if (typeof sessionStorage !== "undefined") {
+      try {
+        sessionStorage.removeItem(TURNS_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,28 +89,60 @@ export default function HyejinBot() {
     if (!text || busy) return;
     setError(null);
     setQ("");
+
+    const history = turns
+      .filter((t) => t.role === "user" || t.role === "assistant")
+      .map((t) => ({ role: t.role, content: t.content }))
+      .slice(-6);
+
     setTurns((t) => [...t, { role: "user", content: text, sources: [] }]);
     setBusy(true);
+    requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     try {
-      const res = await askShiftBot(text);
+      const res = await askShiftBot(text, {
+        history,
+        uiContext: snapshotUiContext(),
+      });
       setTurns((t) => [...t, { role: "assistant", content: res.answer, sources: res.sources }]);
-      requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+      requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     }
   }
 
   return (
     <div className={s.page}>
-      {open && (
-        <div className={s.panel} role="dialog" aria-label="Shift 채팅">
-          <header className={s.panelHead}>
-            <div>
-              <div className={s.panelTitle}>Shift</div>
-              <p className={s.panelSub}>사내 문서·관리도 알림을 근거로 답합니다</p>
-            </div>
+      <div
+        className={panelClass(open, full)}
+        role="dialog"
+        aria-label="Shift 채팅"
+        aria-hidden={!open}
+        hidden={!open}
+      >
+        <header className={s.panelHead}>
+          <div>
+            <div className={s.panelTitle}>Shift</div>
+            <p className={s.panelSub}>문서·관리도·품질 · 새 채팅 전까지 대화 유지</p>
+          </div>
+          <div className={s.headActions}>
+            <button
+              type="button"
+              className={s.newChatBtn}
+              aria-pressed={full}
+              onClick={() => setFull((v) => !v)}
+            >
+              {full ? "창 모드" : "전체화면"}
+            </button>
+            <button
+              type="button"
+              className={s.newChatBtn}
+              disabled={busy || turns.length === 0}
+              onClick={startNewChat}
+            >
+              새 채팅
+            </button>
             <button
               type="button"
               className={s.closeBtn}
@@ -53,94 +151,59 @@ export default function HyejinBot() {
             >
               ×
             </button>
-          </header>
+          </div>
+        </header>
 
-          {error && (
-            <div className={s.errorBox} role="alert">
-              {error}
+        {error && (
+          <div className={s.errorBox} role="alert">
+            {error}
+          </div>
+        )}
+
+        <div className={s.thread} aria-live="polite" aria-busy={busy}>
+          {turns.length === 0 && !busy && (
+            <p className={s.empty}>질문을 입력하세요. 새 채팅으로 이전 대화를 끊을 수 있습니다.</p>
+          )}
+          {turns.map((turn, i) =>
+            turn.role === "user" ? (
+              <div key={i} className={s.bubbleUser}>
+                {turn.content}
+              </div>
+            ) : (
+              <div key={i} className={s.bubbleBot}>
+                <div className={s.botLabel}>Shift</div>
+                <p className={s.answer}>{plainText(turn.content)}</p>
+                <SourceList sources={turn.sources ?? []} answer={turn.content} />
+              </div>
+            ),
+          )}
+          {busy && (
+            <div className={s.bubbleBot} aria-label="Shift 답변 생성 중">
+              <div className={s.botLabel}>Shift</div>
+              <div className={s.typingDots} aria-hidden>
+                <span />
+                <span />
+                <span />
+              </div>
             </div>
           )}
-
-          <div className={s.thread} aria-live="polite">
-            {turns.length === 0 && (
-              <p className={s.empty}>문서함·공정 관리도 알림을 검색해 답합니다.</p>
-            )}
-            {turns.map((turn, i) =>
-              turn.role === "user" ? (
-                <div key={i} className={s.bubbleUser}>
-                  {turn.content}
-                </div>
-              ) : (
-                <div key={i} className={s.bubbleBot}>
-                  <div className={s.botLabel}>Shift</div>
-                  <p className={s.answer}>{turn.content}</p>
-                  {turn.sources.length > 0 && (
-                    <ul className={s.sources} aria-label="출처">
-                      {turn.sources.map((src) => (
-                        <li key={`${src.kind}-${src.doc_no}-${src.chunk_no}-${src.file_name}`}>
-                          <div className={s.srcTitle}>
-                            {src.doc_no} · {src.title}
-                          </div>
-                          <div className={s.srcMeta}>
-                            {src.kind === "process_alert" ? (
-                              <>
-                                관리도 알림
-                                {src.category ? ` · ${src.category}` : ""}
-                                {src.file_name ? ` · ${src.file_name}` : ""}
-                              </>
-                            ) : src.kind === "quality_kpi" ? (
-                              <>
-                                품질 검사 KPI
-                                {src.line ? ` · ${src.line}` : ""}
-                                {src.file_name ? ` · ${src.file_name}` : ""}
-                              </>
-                            ) : (
-                              <>
-                                {src.file_name}
-                                {src.category ? ` · ${src.category}` : ""} · chunk {src.chunk_no} ·
-                                score {src.score}
-                              </>
-                            )}
-                          </div>
-                          {src.snippet && <p className={s.snippet}>{src.snippet}</p>}
-                          {src.kind === "company_document" && src.file_url ? (
-                            <a className={s.fileLink} href={src.file_url} target="_blank" rel="noreferrer">
-                              원문 다운로드
-                            </a>
-                          ) : src.kind === "process_alert" ? (
-                            <a className={s.fileLink} href="/casting/process-optimization">
-                              공정 최적화 · 관리도 알림
-                            </a>
-                          ) : src.kind === "quality_kpi" ? (
-                            <a className={s.fileLink} href="/casting/quality-inspection">
-                              품질 검사 대시보드
-                            </a>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ),
-            )}
-            <div ref={bottomRef} />
-          </div>
-
-          <form className={s.form} onSubmit={onSubmit}>
-            <input
-              className={s.input}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="문서·관리도 알림에 대해 질문하세요"
-              aria-label="Shift 질문"
-              disabled={busy}
-            />
-            <button type="submit" className={s.send} disabled={busy || !q.trim()}>
-              {busy ? "답변 중…" : "보내기"}
-            </button>
-          </form>
+          <div ref={bottomRef} />
         </div>
-      )}
+
+        <form className={s.form} onSubmit={onSubmit}>
+          <input
+            className={s.input}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="이어서 질문하거나 새 주제를 물어보세요"
+            aria-label="Shift 질문"
+            disabled={busy}
+          />
+          <button type="submit" className={s.send} disabled={busy || !q.trim()}>
+            {busy ? "답변 중…" : "보내기"}
+          </button>
+        </form>
+      </div>
 
       <button
         type="button"

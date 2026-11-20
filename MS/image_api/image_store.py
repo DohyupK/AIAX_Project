@@ -74,6 +74,21 @@ def parse(data: object) -> ImageIn:
                    str(uri).strip() if uri else None)
 
 
+def decode_jpeg(b64: object) -> bytes:
+    """base64 문자열 → jpg 바이트 (크기·형식 검사). 잘못되면 BadRequest"""
+    if not isinstance(b64, str) or not b64:
+        raise BadRequest("image_base64 가 필요합니다")
+    if len(b64) > MAX_BYTES * 4 // 3 + 4:
+        raise BadRequest("사진이 너무 큽니다 (최대 5MB)")
+    try:
+        jpg = base64.b64decode(b64, validate=True)
+    except (binascii.Error, ValueError) as e:
+        raise BadRequest("image_base64 가 base64 가 아닙니다") from e
+    if not jpg.startswith(JPEG_MAGIC):
+        raise BadRequest("jpg 사진이 아닙니다")
+    return jpg
+
+
 def file_path(casting_id: str, root: Path | None = None) -> Path:
     """L1_261120_132200_15 → /root/images/L1/261120/L1_261120_132200_15.jpg"""
     m = CASTING_ID_RE.match(casting_id)

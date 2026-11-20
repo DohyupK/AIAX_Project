@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile
+
+from auth.core import acting_employee
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -23,8 +26,11 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 DB = "DOCS_DATABASE_URL"
 
 
-def _resolve_uploader(x_employee_no: str | None) -> str:
-    no = (x_employee_no or "e0001").strip()
+def _resolve_uploader(request: Request, x_employee_no: str | None) -> str:
+    """올린 사람 사번 = 로그인 세션 사번. 관리자는 보기 전환 사번, 없으면 e0001
+    ponytail: 관리자 전용 사번이 org 에 없어 기본 e0001 로 기록 — 관리자 사번 정해지면 교체"""
+    emp, _ = acting_employee(request, x_employee_no)
+    no = (emp or "e0001").strip()
     with connect(DB) as conn:
         row = conn.execute("SELECT employee_no FROM org.employee WHERE employee_no = %s", [no]).fetchone()
     if not row:
@@ -75,12 +81,13 @@ def list_documents():
 
 @router.post("", status_code=201)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
     category: str = Form(""),
     x_employee_no: str | None = Header(None, alias="X-Employee-No"),
 ):
-    uploader = _resolve_uploader(x_employee_no)
+    uploader = _resolve_uploader(request, x_employee_no)
     name = file.filename or "file"
     ext = ext_of(name)
     if ext not in ALLOWED_EXT:
@@ -159,8 +166,11 @@ def _stored_file(doc_idx: int) -> tuple[Path, str]:
 
 
 @router.get("/{doc_idx}/file")
-def download_file(doc_idx: int):
+def download_file(doc_idx: int, inline: bool = False):
+    """원본 파일. inline=1 이면 브라우저에서 보기(다운로드 강제 안 함)."""
     path, name = _stored_file(doc_idx)
+    if inline:
+        return FileResponse(path, filename=name, content_disposition_type="inline")
     return FileResponse(path, filename=name)
 
 
@@ -198,10 +208,11 @@ def document_text(doc_idx: int):
 
 @router.delete("/{doc_idx}", status_code=204)
 def delete_document(
+    request: Request,
     doc_idx: int,
     x_employee_no: str | None = Header(None, alias="X-Employee-No"),
 ):
-    uploader = _resolve_uploader(x_employee_no)
+    uploader = _resolve_uploader(request, x_employee_no)
     with connect(DB) as conn:
         row = conn.execute(
             "SELECT file_path, uploaded_by FROM org.company_document WHERE company_document_idx = %s",
@@ -222,13 +233,52 @@ def delete_document(
     return None
 
 
+MIN_SCORE = 0.25  # 이하면 무관 문서로 간주 (top-k만으로는 노이즈)
+
+
+class HistoryMsg(BaseModel):
+    role: str
+    content: str = Field(..., max_length=4000)
+
+
+class UiAction(BaseModel):
+    t: str = ""
+    kind: str = ""
+    label: str = Field("", max_length=80)
+
+
+class UiContext(BaseModel):
+    path: str = Field("", max_length=200)
+    page_label: str = Field("", max_length=80)
+    actions: list[UiAction] = Field(default_factory=list)
+
+
 class SearchBody(BaseModel):
     query: str = Field(..., min_length=1)
-    limit: int = Field(10, ge=1, le=50)
+    limit: int = Field(10, ge=1, le=10)
+    history: list[HistoryMsg] = Field(default_factory=list)
+    ui_context: UiContext | None = None
+
+
+def _ui_context_text(ui: UiContext | None) -> str:
+    if not ui:
+        return ""
+    lines = [
+        f"경로: {ui.path or '(없음)'}",
+        f"페이지: {ui.page_label or '(없음)'}",
+    ]
+    acts = ui.actions[-15:]
+    if acts:
+        lines.append("최근 동작:")
+        for a in acts:
+            label = (a.label or "").strip()[:80]
+            if label:
+                lines.append(f"  - [{a.kind or 'act'}] {label}")
+    return "\n".join(lines)
 
 
 def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
-    """의미검색 top-k. 임베딩 실패는 HTTPException."""
+    """의미검색 top-k + min_score. 임베딩 실패는 HTTPException."""
     from documents.llm_client import embed_dim
 
     try:
@@ -259,6 +309,8 @@ def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
         if len(emb) != want_dim:
             continue
         score = cosine(qvec, emb)
+        if score < MIN_SCORE:
+            continue
         scored.append(
             (
                 score,
@@ -270,12 +322,20 @@ def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
                     "file_name": r["file_name"],
                     "category": r["category"],
                     "chunk_no": int(r["chunk_no"]),
-                    "content": r["content"][:400],
+                    "content": r["content"][:1200],
                 },
             )
         )
     scored.sort(key=lambda x: x[0], reverse=True)
     return [item for _, item in scored[:limit]]
+
+
+def _wants_quality_kpi(query: str, path: str) -> bool:
+    """품질 KPI는 품질·불량 질문/화면일 때만."""
+    p = (path or "").lower()
+    if "quality-inspection" in p or "defect-labeling" in p:
+        return True
+    return bool(re.search(r"불량|품질|kpi|양품|검.?사|불량률", query or "", re.I))
 
 
 @router.post("/search")
@@ -288,25 +348,43 @@ def search_documents(body: SearchBody):
 
 @router.post("/ask")
 def ask_documents(body: SearchBody):
-    """Shift 봇: 문서 검색 + 관리도 알림 + 품질 KPI + Chat (NIM 우선)."""
+    """Shift 봇: 문서(+목록·제목검색) + (관련 시) 알림·KPI + 멀티턴. 대화 DB 저장 없음."""
     from documents.alert_context import collect_alert_context
+    from documents.doc_catalog import (
+        collect_catalog_text,
+        ensure_live_bodies,
+        wants_doc_catalog,
+    )
     from documents.quality_context import collect_quality_context
 
     q = body.query.strip()
     if not q:
         raise HTTPException(400, "검색어를 입력하세요.")
+    ui = body.ui_context
+    ui_dict = ui.model_dump() if ui else None
+    path = (ui.path if ui else "") or ""
     hits = _retrieve_hits(q, body.limit)
-    alert_sources, alert_text = collect_alert_context()
-    quality_sources, quality_text = collect_quality_context()
-    if not hits and not alert_sources and not quality_sources:
-        return {
-            "answer": "사내 문서·관리도 알림·품질 KPI에서 근거를 찾지 못했습니다. 문서함·공정 데이터를 확인해 주세요.",
-            "sources": [],
-        }
+    catalog_text = ""
+    if wants_doc_catalog(q, path):
+        catalog_text = collect_catalog_text(q)
+        # 제목검색·메타만 청크 → 파일 즉시 추출 + 재청킹 예약
+        hits = ensure_live_bodies(q, hits, limit=body.limit)
+    alert_sources, alert_text = collect_alert_context(query=q, ui_context=ui_dict)
+    if _wants_quality_kpi(q, path):
+        quality_sources, quality_text = collect_quality_context()
+    else:
+        quality_sources, quality_text = [], ""
     doc_sources = [{**h, "kind": "company_document"} for h in hits]
+    history = [m.model_dump() for m in body.history]
     try:
         answer = generate_answer(
-            q, hits, alert_text=alert_text, quality_text=quality_text
+            q,
+            hits,
+            alert_text=alert_text,
+            quality_text=quality_text,
+            ui_context_text=_ui_context_text(ui),
+            catalog_text=catalog_text,
+            history=history,
         )
     except Exception as e:
         log.exception("Shift Chat 실패")
@@ -318,3 +396,4 @@ def ask_documents(body: SearchBody):
         "answer": answer,
         "sources": [*doc_sources, *alert_sources, *quality_sources],
     }
+

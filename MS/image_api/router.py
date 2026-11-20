@@ -7,6 +7,12 @@ POST /api/images        사진 1장 받기 (MS PC Flink image_ingest 가 보냄)
   응답  200 저장됨(같은 casting_id 는 덮어씀) / 400 값 오류·없는 casting_id / 401 키 오류 / 500 서버 오류
 GET  /api/images/{casting_id}   저장된 jpg 보기 (화면용)
 
+보호구 판정 사진 (2026-11-20 추가, init 29)
+POST /api/images/ppe/{ppe_check_idx}   Flink ppe_frame_select 가 판정 1건마다 고른 사진 1장을 보냄
+  헤더 X-API-Key, 본문 {"image_base64": "...", "detected_count": 0~5, "score": 0~5}
+  → /root/images/ppe/<판정번호>.jpg + ai.ppe_check_image. 같은 판정번호는 덮어씀. 없는 판정번호 → 400
+GET  /api/images/ppe/{ppe_check_idx}   그 판정의 사진 (웹: 판정 기록 행 → <img src=…>)
+
 환경변수 (루트 .env): IMAGE_API_KEY (보내는 쪽 MS PC .env 와 같은 이름·같은 값),
                       IMAGE_DATABASE_URL (app_mes 계정 — mes.casting_image 쓰기), IMAGE_DIR (기본 /root/images)
 DB: init 27 (image_path·image_label 칸) 을 먼저 실행해야 함
@@ -82,6 +88,57 @@ def view(casting_id: str) -> FileResponse:
         path = store.file_path(casting_id, Path(_env("IMAGE_DIR", "/root/images")))
     except store.BadRequest as e:
         raise HTTPException(400, str(e)) from e
+    if not path.is_file():
+        raise HTTPException(404, "사진이 없습니다")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+# ---------------------------------------------------------------- 보호구 판정 사진
+PPE_UPSERT_SQL = """
+INSERT INTO ai.ppe_check_image (ppe_check_idx, image_path, detected_count, score, created_at)
+VALUES (%s, %s, %s, %s, now())
+ON CONFLICT (ppe_check_idx) DO UPDATE SET
+    image_path = EXCLUDED.image_path, detected_count = EXCLUDED.detected_count,
+    score = EXCLUDED.score, created_at = now()
+"""
+
+
+def _ppe_path(check_idx: int) -> Path:
+    return Path(_env("IMAGE_DIR", "/root/images")) / "ppe" / f"{check_idx}.jpg"
+
+
+@router.post("/ppe/{check_idx}")
+async def ppe_upload(check_idx: int, request: Request, x_api_key: str | None = Header(default=None)) -> dict:
+    _check_key(x_api_key)
+    try:
+        data = await request.json()
+        jpg = store.decode_jpeg(data.get("image_base64"))
+        count, score = int(data.get("detected_count")), float(data.get("score"))
+        if not (0 <= count <= 5 and 0 <= score <= 5) or check_idx <= 0:
+            raise store.BadRequest("detected_count 0~5, score 0~5, 판정번호 > 0")
+    except store.BadRequest as e:
+        raise HTTPException(400, str(e)) from e
+    except (ValueError, TypeError, AttributeError) as e:
+        raise HTTPException(400, "JSON 형식 오류 (image_base64, detected_count, score)") from e
+
+    path = _ppe_path(check_idx)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".jpg.tmp")
+    tmp.write_bytes(jpg)
+    os.replace(tmp, path)
+    try:
+        with psycopg.connect(_env("IMAGE_DATABASE_URL"), connect_timeout=10) as conn:
+            conn.execute(PPE_UPSERT_SQL, (check_idx, str(path), count, round(score, 4)))
+    except psycopg.errors.ForeignKeyViolation as e:   # ai.ppe_check 에 없는 판정
+        path.unlink(missing_ok=True)
+        raise HTTPException(400, f"없는 판정번호: {check_idx}") from e
+    log.info("보호구 사진 저장 %s (보호구 %d개, 신뢰도 합 %.2f)", path, count, score)
+    return {"ppe_check_idx": check_idx, "image_path": str(path), "detected_count": count}
+
+
+@router.get("/ppe/{check_idx}")
+def ppe_view(check_idx: int) -> FileResponse:
+    path = _ppe_path(check_idx)
     if not path.is_file():
         raise HTTPException(404, "사진이 없습니다")
     return FileResponse(path, media_type="image/jpeg")

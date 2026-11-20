@@ -1,7 +1,8 @@
 """JH API 서버 — 실행: cd JH/api && uv run uvicorn main:app --host 127.0.0.1 --port 8000
 
-라우터: hr · casting · ppe · models · report · documents (사내 문서함, app_docs) · notice (메인 일일 공지)
-ponytail: 로그인 전이라 개인정보 API가 열려 있음 → 반드시 127.0.0.1 로만 실행 (외부 공개 금지).
+라우터: auth (로그인·회원가입) · hr · casting · ppe · models · report · documents (사내 문서함, app_docs) · notice (메인 일일 공지)
+로그인: hr·models·documents 는 세션(httpOnly 쿠키)의 사번으로 권한 판단 (auth/core.acting_employee).
+ponytail: casting·ppe·report·notice 등 데이터 API 는 아직 세션 검사 없음 — 서버는 127.0.0.1 로만 실행하고 외부는 nginx 경유.
 루트 단일 서버로 합칠 때는 이 파일 대신 루트 진입점이 hr.router 를 include (DH 결정).
 """
 import logging
@@ -10,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from auth.router import router as auth_router
 from casting import dl_model
 from casting.router import router as casting_router
 from documents.router import router as documents_router
@@ -35,6 +37,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "X-Employee-No"],
 )
+app.include_router(auth_router)
 app.include_router(hr_router)
 app.include_router(casting_router)
 app.include_router(ppe_router)

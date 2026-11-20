@@ -49,7 +49,9 @@ assert.equal(formatSize(2048), "2 KB");
 assert.equal(formatSize(5 * 1024 * 1024), "5.0 MB");
 
 // 문서 내용 보기 방식 (대소문자 무관)
-assert.deepEqual(["a.PDF", "b.png", "c.jpeg", "d.docx", "e.xlsx", "f.pptx", "g.hwp", "h.hwpx", "i.txt", "j.zip", "noext"].map(viewModeOf),
-  ["pdf", "image", "image", "convert", "convert", "convert", "text", "text", "text", "none", "none"]);
+assert.deepEqual(
+  ["a.PDF", "b.png", "c.jpeg", "d.docx", "e.xlsx", "f.pptx", "g.hwp", "h.hwpx", "i.txt", "k.md", "j.zip", "noext"].map(viewModeOf),
+  ["pdf", "image", "image", "convert", "convert", "convert", "text", "text", "text", "text", "none", "none"],
+);
 
 console.log("company_documents docs: OK");

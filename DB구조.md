@@ -64,7 +64,7 @@
 | `app_spark` | 배치 | 읽기 | 읽기·쓰기 | 읽기·쓰기 | 읽기 (`employee_info`·`hr_access_log` 제외) | 읽기 |
 | `app_mart` | 학습 읽기 | - | - | 읽기 | - | - |
 | `app_lake` | 조회 (DH·JH API 등) | 읽기 | 읽기 | 읽기 | 읽기 | 읽기 |
-| `app_hr` | 인사 관리 API (JH/api/hr) | - | - | - | 인사 테이블 읽기·쓰기, `hr_access_log` 추가만 | - |
+| `app_hr` | 인사 관리 API (JH/api/hr)·로그인 | - | - | - | 인사 테이블 읽기·쓰기, `hr_access_log` 추가만, `app_user` 읽기·추가·`last_login_at`·`password_hash` 수정 | - |
 | `app_ai` | 모델 관리·라벨링·품질 2차 저장 API (JH) | - | - | - | - | 아래 표 |
 | `app_docs` | 사내 문서함 API (JH/api/documents) | - | - | - | 문서 4개 읽기·쓰기, `employee`·`employee_info` 읽기 | - |
 
@@ -100,6 +100,7 @@
 |------|--------|
 | 마스터 | `"position"`, `department`, `team`, `page`, `vendor_company` |
 | 사원 | `employee`, `employee_info`, `employee_status`, `access_code`, `dept_roster`, `team_roster` |
+| 로그인 | `app_user` (웹 로그인 계정, 사번 1:1, `password_hash` scrypt). 이름·이메일은 `employee_info` — `31` |
 | 카드·게이트 | `employee_card`, `vendor_worker`, `gate_card`, `employee_gate_log`, `vendor_gate_log` |
 | 근태 | `attendance`, `employee_record` |
 | 페이지 권한 9 | `main_page`, `process_optimization_page`, `quality_inspection_page`, `defect_labeling_page`, `ppe_violation_page`, `hr_management_page`, `management_report_page`, `model_management_page`, `company_documents_page` |
@@ -108,7 +109,7 @@
 | 사내 문서 | `company_document` (문서 메타, 파일은 `file_path`), `document_chunk` (LLM 참조용 텍스트 조각) — `15` / `document_chunk_embedding` (조각별 임베딩 `real[1536]`), `document_chunk_job` (청킹 상태: pending·ok·retry_5m·midnight_pending) — `19` (DH) |
 | 일일 공정알람 공지 | `process_alert_daily_notice` (메인 AI 공지 캐시, PK `notice_date`) — DH SQL `06` → MS init 편입 예정. `app_lake` SELECT/INSERT/UPDATE |
 
-`fixed_value`·`company_document`·`document_chunk`·`document_chunk_embedding`·`document_chunk_job`·`process_alert_daily_notice` 는 **`change_log` 트리거 없음, lake 복사 대상 아님** (2026-11-20 기준).
+`fixed_value`·`company_document`·`document_chunk`·`document_chunk_embedding`·`document_chunk_job`·`process_alert_daily_notice`·`app_user` 는 **`change_log` 트리거 없음, lake 복사 대상 아님** (2026-11-20 기준).
 
 | 코드 | 값 |
 |------|----|
@@ -267,6 +268,10 @@ lake에서 제외: `timestamp`, `date`.
 | `24_보호구_모델등록.sql` | `ai.model_metric_safe_ppe.accuracy_score` → `map50_score`, 보호구 모델 4개 (`PPE_YOLO26*_20261118_01~04` / v1.1~v1.4) 등록, 배포 v1.4 |
 | `25_보호구_게이트기록.sql` | `ai.ppe_check.manual_at` (안전관리자 태깅 시각), 위반 건도 안전관리자 확인 기록 허용, 지난 알람 목업에 안전관리자 확인 채움, 출입 로그·판정 번호 자동 증가 (게이트 프로그램용) |
 | `27_주조이미지_경로라벨.sql` | `mes.casting_image` 에 `image_path` (서버 jpg 경로 `/root/images/L1/yymmdd/<casting_id>.jpg`)·`image_label` (ok/defect) 추가. `image_base64` 는 그대로 (JH 2차 검사용). 서버 적용 완료 |
+| `28_알루미늄_시세.sql` | `org.aluminum_price` (일자 `price_date`, 가격 `price` US$/톤). LME 시세 중 알루미늄만, 빈 테이블 |
+| `29_보호구_판정사진.sql` | `ai.ppe_check_image` (판정번호 PK·FK, `image_path`, `detected_count` 0~5, `score`). 판정 1건 = 사진 1장. 쓰기 `app_mes`(사진 받기 API) |
+| `30_품질2차_모델추가.sql` | 품질 2차 모델 `DieCasting_CNXV2T_20261117_02~04` (v1.1~v1.3) 등록·지표·강건성 14개씩. 배포 안 함 (`_01` 유지) |
+| `31_로그인계정.sql` | `org.app_user` (웹 로그인 계정). 쓰기 `app_hr`, lake·spark 권한 없음 |
 
 ---
 
@@ -274,6 +279,10 @@ lake에서 제외: `timestamp`, `date`.
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-11-21 | `31`: `org.app_user` 신설 (JH 요청, 임시 SQLite 대체). 사번 1:1·사원 삭제 시 함께 삭제. 이메일 칸 없음 → `employee_info.email` 하나로 통일. `app_hr` 재사용, lake 복사 안 함 |
+| 2026-11-21 | `30`: 품질 2차 모델 3개 등록 (배포 안 함) |
+| 2026-11-20 | `29`: `ai.ppe_check_image` 신설 — 보호구 판정 사진 (게이트 → Kafka `aiax.ppe.frame` → Flink `ppe_frame_select` → 사진 받기 API `/api/images/ppe/<판정번호>`). 중요한 장면 = 보호구 5개 다 잡힌 화면 중 신뢰도 합 최고 |
+| 2026-11-20 | `28`: `org.aluminum_price` 신설 (알루미늄 현물 시세, 일자·가격). 데이터는 나중에 |
 | 2026-11-20 | `27`: 주조 이미지 서버 파일 저장 준비 — `image_path`·`image_label`. Flink `image_ingest` 는 `.env` `IMAGE_API_KEY` 가 있으면 서버 이미지 API(`https://gknushift.freemyip.com/api/images`, POST, `X-API-Key`)로 보내고, 없으면 예전처럼 DB 직접 저장 |
 | 2026-11-20 | `11`: `ai.model_metric_safe_ppe` 를 처음부터 `map50_score` 로 (서버와 같게, JH 요청). 24 의 이름 변경은 칸이 있을 때만 해서 함께 써도 됨 |
 | 2026-11-20 | `25`: 보호구 게이트 실기록 준비 — `manual_at` 추가, 확인 기록을 위반·판정 불가 모두 허용(통과 제외, 3칸 함께), `employee_gate_log`·`vendor_gate_log`·`ppe_check` 번호 시퀀스. 목업: 지난 위반·판정 불가에 안전부 확인(2~10분 뒤, 위반 약 8% 오판) 채움, 미래 시각 목업은 그대로 |

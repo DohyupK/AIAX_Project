@@ -1,7 +1,10 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
 import styles from "./PpeViolation.module.css";
+import { ppePhotoUrl } from "./data";
 import { GEAR_LABEL, type Gear, type GearStatus } from "./rules";
 
-// 촬영 이미지 자리 — DL 연동 전 실루엣 + 장구별 고정 박스. 연동 시 <image> + 모델 bbox 좌표로 교체
+// 사진이 없을 때 쓰는 대체 그림 — 실루엣 + 장구별 고정 박스 (판정 결과 색)
 const BOXES: Record<Gear, { x: number; y: number; w: number; h: number }> = {
   helmet: { x: 78, y: 14, w: 44, h: 22 },
   goggles: { x: 82, y: 40, w: 36, h: 12 },
@@ -12,9 +15,72 @@ const BOXES: Record<Gear, { x: number; y: number; w: number; h: number }> = {
 
 const COLOR: Record<GearStatus, string> = { worn: "#2fb36b", missing: "#e5484d", optional_missing: "#8b93a1", unknown: "#8b93a1" };
 
-export default function ScanView({ gears, caption }: { gears: { gear: Gear; status: GearStatus }[]; caption: string }) {
+/**
+ * 검색대 촬영 이미지 — 판정 사진(MS image_api, 모델 박스·이름이 사진에 이미 그려져 있음)을 보여 주고,
+ * 사진이 없으면(404) 예전 실루엣 그림(장구별 충족·미충족·선택 박스) + 범례. 사진을 누르면 크게 보기.
+ * 판정이 바뀌면 부모가 key 로 다시 그림 (사진 실패 상태 초기화)
+ */
+export default function ScanView({ checkIdx, gears, caption, title }: {
+  checkIdx: number; gears: { gear: Gear; status: GearStatus }[]; caption: string; title: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const [zoom, setZoom] = useState(false);
+  const src = ppePhotoUrl(checkIdx);
+
+  if (failed) {
+    return (
+      <>
+        <Silhouette gears={gears} caption={caption} />
+        {/* 범례는 대체 그림의 색 박스용 (사진에는 모델이 그린 표시가 있음) */}
+        <div className={styles.legend}>
+          <span><i className={styles.ok} /> 충족</span>
+          <span><i className={styles.bad} /> 미충족</span>
+          <span><i className={styles.grey} /> 선택 · 판정 불가</span>
+        </div>
+      </>
+    );
+  }
+
   return (
-    <svg className={styles.scan} viewBox="0 0 200 260" role="img" aria-label={`검색대 촬영 이미지 (${caption})`}>
+    <>
+      <button type="button" className={styles.photoBtn} onClick={() => setZoom(true)} aria-label={`${title} 사진 크게 보기`}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- 서버 jpg 그대로 (Next 이미지 최적화 대상 아님) */}
+        <img className={styles.photo} src={src} alt={`${title} 검색대 판정 사진 (${caption})`} loading="lazy"
+          onError={() => setFailed(true)} />
+        <span className={styles.zoomHint} aria-hidden>크게 보기</span>
+      </button>
+      {zoom && <PhotoDialog src={src} title={title} onClose={() => setZoom(false)} />}
+    </>
+  );
+}
+
+/** 사진 크게 보기 — Esc·바깥 클릭·× 로 닫음. 폰은 아래에서 올라오는 시트 */
+function PhotoDialog({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className={styles.photoBackdrop} onClick={onClose}>
+      <div className={styles.photoDialog} role="dialog" aria-modal="true" aria-label={`${title} 사진`} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.photoDialogHead}>
+          <span>{title}</span>
+          <button ref={closeRef} type="button" className={styles.photoClose} aria-label="닫기" onClick={onClose}>×</button>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className={styles.photoLarge} src={src} alt={`${title} 검색대 판정 사진 (크게)`} />
+      </div>
+    </div>
+  );
+}
+
+function Silhouette({ gears, caption }: { gears: { gear: Gear; status: GearStatus }[]; caption: string }) {
+  return (
+    <svg className={styles.scan} viewBox="0 0 200 260" role="img" aria-label={`검색대 판정 결과 그림 (${caption})`}>
       <rect width="200" height="260" fill="#2b3039" />
       {/* 사람 실루엣 */}
       <g fill="#5d6470">
