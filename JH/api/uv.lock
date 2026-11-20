@@ -260,6 +260,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "python-pptx" },
     { name = "scipy" },
+    { name = "slack-sdk" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "xgboost-cpu" },
 ]
@@ -279,6 +280,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.34" },
     { name = "python-pptx", specifier = ">=1.0.2" },
     { name = "scipy", specifier = "==1.18.1" },
+    { name = "slack-sdk", specifier = ">=3.48.0" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.54.0" },
     { name = "xgboost-cpu", specifier = "==3.4.1" },
 ]
@@ -995,6 +997,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cf/d9/135be205d9de8783193aff9cc3bf483a03a38e4b29432c954e8cb66ac14e/scipy-1.18.1-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:179ce34a8d0fe273d8883ba59e17e052247d08973dfcb743ca52bb1cce2d60b0", size = 37521946, upload-time = "2026-08-21T23:28:35.245Z" },
     { url = "https://files.pythonhosted.org/packages/5c/a2/5b7d5270621ab7cfa3f7766067bf95dc360b5efb6394694e8143b4156e2b/scipy-1.18.1-cp315-cp315t-win_amd64.whl", hash = "sha256:5632e3ae3d09197c446310cd5187de63e28448ce22f0f67b2b93d97503c0c230", size = 37408295, upload-time = "2026-08-21T23:28:40.724Z" },
     { url = "https://files.pythonhosted.org/packages/63/ad/741c19fcb66755ff953daf9243af8480e4bf3d7fbe57583c178c7d2b6b51/scipy-1.18.1-cp315-cp315t-win_arm64.whl", hash = "sha256:eda632a7981f69730d6281f451db9c1c370993a2c0d7ddb43e2a809a2862b83a", size = 25319710, upload-time = "2026-08-21T23:28:45.713Z" },
+]
+
+[[package]]
+name = "slack-sdk"
+version = "3.48.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e9/5a/2f581566a103251e1b2a809dacdfbf1f42b5d6564588d0a7bd84f0896ec0/slack_sdk-3.48.0.tar.gz", hash = "sha256:e54389b4b9b221c9d57f1d98bc1e28f4918e4e0bc435cc5d430216cb1ab6ad7c", size = 277236, upload-time = "2026-11-20T05:53:59.924Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/3d/66cfaec5fe2a7c7c691fa169f4d1add600b5bc2ee3524d846db9530c79cf/slack_sdk-3.48.0-py2.py3-none-any.whl", hash = "sha256:1213726e5b8015eeded608fcb3665c4e9b48af7f7f383ecc1b90af886d6aaa03", size = 336355, upload-time = "2026-11-20T05:53:58.208Z" },
 ]
 
 [[package]]
