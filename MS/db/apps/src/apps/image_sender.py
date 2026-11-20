@@ -37,7 +37,7 @@ except Exception:  # Windows 에 tzdata 가 없을 때 — 한국은 서머타�
     KST = timezone(timedelta(hours=9), "KST")
 
 ROOT_ENV = Path(__file__).resolve().parents[5] / ".env"
-IMAGE_DIR = r"D:\AIAX_data\casting_images_300"   # 300x300 사진 (원본 cas_image/plus_data), 2026-11-20
+IMAGE_DIR = r"D:\AIAX_data\casting_images"   # 512x512 사진 (2차 모델 학습 크기와 같음), 2026-11-20
 SINCE_DEFAULT = "2026-11-01 00:00"   # 이 시각 이후 사진 없는 양품 샷은 켤 때마다 다 채움 (끊겼다 다시 켜도 밀린 것 채움)
 RESEND_AFTER = 300   # 보냈는데 이 시간(초) 지나도 DB 에 없으면 다시 보냄 (Flink 중단 등)
 
