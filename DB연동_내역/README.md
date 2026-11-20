@@ -19,6 +19,7 @@
 
 | 파일 | 비고 |
 |------|------|
+| [2026-11-20_DH_process_alert_daily_notice.md](2026-11-20_DH_process_alert_daily_notice.md) | 메인 일일 공정알람 AI 공지 캐시 (`org.process_alert_daily_notice`) |
 | [2026-11-16_DH_org_permission_postgres.md](2026-11-16_DH_org_permission_postgres.md) | org 서버 반영 |
 | [2026-11-15_DH_org_permission_sqlite.md](2026-11-15_DH_org_permission_sqlite.md) | **폐기** (Postgres로 대체) |
 | [2026-11-10_DH_ncp_mes_dashboard.md](2026-11-10_DH_ncp_mes_dashboard.md) | mes 대시보드 조회 |

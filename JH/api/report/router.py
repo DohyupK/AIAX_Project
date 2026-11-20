@@ -11,18 +11,28 @@ from __future__ import annotations
 
 import logging
 from datetime import date as Date
+from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Query
+from notion_client.errors import APIResponseError
+from pydantic import BaseModel
 
 from casting.router import FEATURES
 from casting.spc import _TABLE as SPC_TABLE
 from common.db import connect
+from notion_export.client import notion_http_error, require_notion, upsert_page
+from notion_export.mgmt_daily import assemble_source, build_daily_payload, target_date
 from ppe.router import CHECKS, GEARS, VIOLATION
 
 router = APIRouter(prefix="/api/report")
 log = logging.getLogger("jh.report")
 DB = "DATABASE_URL"   # app_lake — mes·ai·org 읽기만
 MAX_RANGE_DAYS = 220  # 월간 목록(7개월) 한 번에 조회
+
+
+class NotionDailyBody(BaseModel):
+    """date 를 주면 그 날, 없으면 어제(KST). 크론은 body 없이 POST."""
+    date: Date | None = None
 
 
 def _check_range(start: Date, end: Date) -> None:
@@ -138,3 +148,40 @@ def attendance(start: Date = Query(alias="from"), end: Date = Query(alias="to"))
         log.exception("리포트 근태 집계 실패 from=%s to=%s", start, end)
         raise HTTPException(503, "근태 집계에 실패했습니다.")
     return [{"date": r["d"].isoformat(), "scheduled": r["scheduled"], "present": r["present"]} for r in rows]
+
+
+@router.post("/notion/daily")
+def notion_daily(body: NotionDailyBody = NotionDailyBody()) -> dict:
+    """어제(또는 body.date) 일일 경영 리포트를 노션 부모 페이지 아래에 생성·갱신 (멱등).
+
+    서버 크론 예: curl -X POST http://127.0.0.1:8000/api/report/notion/daily
+    """
+    day = body.date if body.date else target_date()
+    prev = day - timedelta(days=1)
+    try:
+        notion, parent = require_notion("NOTION_PARENT_PAGE_ID")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+
+    try:
+        # 전일 대비용으로 이틀치 원자료
+        src = assemble_source(
+            daily(start=prev, end=day),
+            safety(start=prev, end=day),
+            spc_alarms(start=prev, end=day),
+            attendance(start=prev, end=day),
+            fixed(),
+        )
+        title, children = build_daily_payload(src, day)
+        result = upsert_page(notion, parent, title, children)
+    except APIResponseError as e:
+        log.exception("일일 경영 리포트 노션 전송 실패 day=%s", day)
+        raise HTTPException(502, notion_http_error(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("일일 경영 리포트 노션 전송 실패 day=%s", day)
+        raise HTTPException(503, "일일 경영 리포트 노션 전송에 실패했습니다.") from None
+
+    log.info("일일 경영 리포트 노션 %s day=%s page=%s", "생성" if result["created"] else "갱신", day, result["page_id"])
+    return {"ok": True, "date": day.isoformat(), "title": title, **result}

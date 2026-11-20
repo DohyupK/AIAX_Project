@@ -89,9 +89,13 @@ export default function ViolationReports({ onClose }: { onClose: () => void }) {
   );
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+
 /** 출력본 양식 그대로의 월간 보고서 */
 function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void }) {
   const docTitle = `보호구_착용_위반_보고서_${r.title.replace(/\s/g, "")}`;
+  const [notionMsg, setNotionMsg] = useState("");
+  const [notionBusy, setNotionBusy] = useState(false);
 
   function printPdf() {
     // PDF 기본 파일명 = 문서 제목 → 인쇄 동안만 보고서 제목으로 바꿈
@@ -101,6 +105,31 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
     document.title = prevTitle;
   }
 
+  async function sendNotion() {
+    setNotionBusy(true);
+    setNotionMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/ppe/notion`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: r.month }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const data = (await res.json().catch(() => ({}))) as { detail?: string; url?: string; created?: boolean };
+      if (!res.ok) {
+        const detail = typeof data.detail === "string" ? data.detail : "노션 전송에 실패했습니다.";
+        throw new Error(detail);
+      }
+      setNotionMsg(data.created === false ? "노션 페이지를 갱신했습니다." : "노션 페이지를 만들었습니다.");
+      if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (e: unknown) {
+      console.error("[ppe_violation] 노션 전송 실패", e);
+      setNotionMsg(e instanceof Error ? e.message : "노션 전송에 실패했습니다.");
+    } finally {
+      setNotionBusy(false);
+    }
+  }
+
   const prevNo = r.prevMonthNo;
   return (
     <div className={`${s.dialog} ${s.reportDialog}`} role="dialog" aria-modal="true" aria-labelledby="ppe-report-title" data-print-area onClick={(e) => e.stopPropagation()}>
@@ -108,8 +137,12 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
       <div className={s.toolbar} data-print-hide>
         <button type="button" className={s.backBtn} onClick={onClose}>← 목록</button>
         <button type="button" className={s.printBtn} onClick={printPdf}>PDF 출력</button>
+        <button type="button" className={s.notionBtn} onClick={sendNotion} disabled={notionBusy}>
+          {notionBusy ? "전송 중…" : "노션으로 보내기"}
+        </button>
         <button type="button" className={s.closeBtn} onClick={onClose} aria-label="닫기" autoFocus>×</button>
       </div>
+      {notionMsg && <p className={s.notionMsg} data-print-hide role="status">{notionMsg}</p>}
 
       <div className={s.paper}>
         {/* 결재란 — 출력본 수기 서명용 */}

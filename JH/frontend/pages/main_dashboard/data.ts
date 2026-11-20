@@ -1,4 +1,4 @@
-// 메인 대시보드 화면용 하드코딩 데이터 — 백엔드 연동 전 자리 (연동 시 이 파일만 API 호출로 교체)
+// 메인 대시보드 — 일정·예시 공지 하드코딩. 일일 공정 알람 AI 공지는 noticeApi → GET /api/main/daily-notice
 
 export type NoticeTag = "필독" | "안전" | "일반";
 export type EventTone = "red" | "orange" | "blue" | "green";

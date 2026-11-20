@@ -5,6 +5,7 @@ description = "JH API 서버 (FastAPI) — 인사 관리 등. 실행: uv run uvi
 requires-python = ">=3.13"
 dependencies = [
     "fastapi==0.162.0",
+    "notion-client>=3.1.0",
     "numpy==2.5.4",
     "onnxruntime==1.32.0",
     "openai>=3.55.1",

@@ -63,13 +63,34 @@
   color: var(--ink);
 }
 .printBtn { margin-left: auto; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.notionBtn {
+  font: inherit;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 600;
+}
+.notionBtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.notionBtn:disabled { opacity: 0.6; cursor: wait; }
+.notionMsg { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
 .backBtn:hover { border-color: var(--accent); }
 .printBtn:hover { filter: brightness(1.08); }
 
 .closeBtn:focus-visible,
 .backBtn:focus-visible,
 .printBtn:focus-visible,
+.notionBtn:focus-visible,
 .rowBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .toolbar { flex-wrap: wrap; }
+  .printBtn { margin-left: 0; }
+  .notionBtn { flex: 1 1 auto; }
+}
 
 .num { font-variant-numeric: tabular-nums; }
 .bad { color: var(--bad); }
