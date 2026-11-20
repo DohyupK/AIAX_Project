@@ -222,13 +222,52 @@ def delete_document(
     return None
 
 
+MIN_SCORE = 0.25  # 이하면 무관 문서로 간주 (top-k만으로는 노이즈)
+
+
+class HistoryMsg(BaseModel):
+    role: str
+    content: str = Field(..., max_length=4000)
+
+
+class UiAction(BaseModel):
+    t: str = ""
+    kind: str = ""
+    label: str = Field("", max_length=80)
+
+
+class UiContext(BaseModel):
+    path: str = Field("", max_length=200)
+    page_label: str = Field("", max_length=80)
+    actions: list[UiAction] = Field(default_factory=list)
+
+
 class SearchBody(BaseModel):
     query: str = Field(..., min_length=1)
-    limit: int = Field(10, ge=1, le=50)
+    limit: int = Field(10, ge=1, le=10)
+    history: list[HistoryMsg] = Field(default_factory=list)
+    ui_context: UiContext | None = None
+
+
+def _ui_context_text(ui: UiContext | None) -> str:
+    if not ui:
+        return ""
+    lines = [
+        f"경로: {ui.path or '(없음)'}",
+        f"페이지: {ui.page_label or '(없음)'}",
+    ]
+    acts = ui.actions[-15:]
+    if acts:
+        lines.append("최근 동작:")
+        for a in acts:
+            label = (a.label or "").strip()[:80]
+            if label:
+                lines.append(f"  - [{a.kind or 'act'}] {label}")
+    return "\n".join(lines)
 
 
 def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
-    """의미검색 top-k. 임베딩 실패는 HTTPException."""
+    """의미검색 top-k + min_score. 임베딩 실패는 HTTPException."""
     from documents.llm_client import embed_dim
 
     try:
@@ -259,6 +298,8 @@ def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
         if len(emb) != want_dim:
             continue
         score = cosine(qvec, emb)
+        if score < MIN_SCORE:
+            continue
         scored.append(
             (
                 score,
@@ -288,25 +329,29 @@ def search_documents(body: SearchBody):
 
 @router.post("/ask")
 def ask_documents(body: SearchBody):
-    """Shift 봇: 문서 검색 + 관리도 알림 + 품질 KPI + Chat (NIM 우선)."""
+    """Shift 봇: 문서 + 알림 + KPI + 화면 맥락 + 멀티턴 Chat. 대화 DB 저장 없음."""
     from documents.alert_context import collect_alert_context
     from documents.quality_context import collect_quality_context
 
     q = body.query.strip()
     if not q:
         raise HTTPException(400, "검색어를 입력하세요.")
+    ui = body.ui_context
+    ui_dict = ui.model_dump() if ui else None
     hits = _retrieve_hits(q, body.limit)
-    alert_sources, alert_text = collect_alert_context()
+    alert_sources, alert_text = collect_alert_context(query=q, ui_context=ui_dict)
     quality_sources, quality_text = collect_quality_context()
-    if not hits and not alert_sources and not quality_sources:
-        return {
-            "answer": "사내 문서·관리도 알림·품질 KPI에서 근거를 찾지 못했습니다. 문서함·공정 데이터를 확인해 주세요.",
-            "sources": [],
-        }
+    # 문서·알림·KPI 없어도 화면 맥락·멀티턴만으로 분석 답 가능
     doc_sources = [{**h, "kind": "company_document"} for h in hits]
+    history = [m.model_dump() for m in body.history]
     try:
         answer = generate_answer(
-            q, hits, alert_text=alert_text, quality_text=quality_text
+            q,
+            hits,
+            alert_text=alert_text,
+            quality_text=quality_text,
+            ui_context_text=_ui_context_text(ui),
+            history=history,
         )
     except Exception as e:
         log.exception("Shift Chat 실패")
@@ -318,3 +363,4 @@ def ask_documents(body: SearchBody):
         "answer": answer,
         "sources": [*doc_sources, *alert_sources, *quality_sources],
     }
+
