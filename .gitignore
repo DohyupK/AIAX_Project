@@ -29,6 +29,8 @@ dist/
 **/data/*.db
 **/data/*.sqlite
 **/data/*.sqlite3
+# DH 알루미늄 시세 백필 CSV (MS 적재 후 삭제 대상)
+DH/data/aluminum_price/*.csv
 *.db
 *.sqlite
 *.sqlite3
