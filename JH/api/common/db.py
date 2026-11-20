@@ -31,5 +31,9 @@ def _env(key: str) -> str:
 @contextmanager
 def connect(url_key: str):
     """with connect('HR_DATABASE_URL') as conn: ... — 정상 종료 시 커밋, 오류 시 롤백, 항상 닫음"""
-    with psycopg.connect(_env(url_key), connect_timeout=10, row_factory=dict_row) as conn:
+    url = _env(url_key)
+    # 웹 주소(https://…) 등 잘못 넣은 값을 원인이 보이게 안내 (값 자체는 비밀이라 메시지에 넣지 않음)
+    if not url.startswith(("postgresql://", "postgres://")):
+        raise RuntimeError(f"루트 .env 의 {url_key} 는 DB 접속 주소여야 합니다 — 형식: postgresql://계정:비밀번호@호스트:5432/aiax")
+    with psycopg.connect(url, connect_timeout=10, row_factory=dict_row) as conn:
         yield conn
