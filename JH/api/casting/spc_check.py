@@ -52,4 +52,12 @@ res = spc.compute(mix, 0, base)
 assert [x["flow"] for x in res] == [0, 1, 0, 1, 0]
 assert res[2]["mr"] == 2 and res[3]["mr"] == 4 and res[4]["mr"] == 4
 assert res[1]["runStart"] and not res[2]["runStart"]
+
+# 6) 알림 판정용 관리선 — 라인마다 13개 변수 + 기준 기간, 없는 라인은 None
+for line in ("line_no1", "line_no2", "line_no3"):
+    lim = spc.limits(line)
+    assert len(lim["variables"]) == 13 and lim["baselineFrom"] < lim["baselineTo"] < lim["judgeFrom"]
+    assert lim["variables"]["top_temp1"] == spc.baseline(line, "top_temp1")
+assert spc.limits("line_no1")["judgeFrom"] == "2026-10-19" and spc.limits("line_no2")["judgeFrom"] == "2026-11-08"
+assert spc.limits("line_no9") is None
 print("spc_check OK")
