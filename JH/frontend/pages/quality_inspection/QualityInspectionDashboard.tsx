@@ -221,7 +221,8 @@ export default function QualityInspectionDashboard() {
                   : !second ? '2차 검사 결과 불러오는 중…'
                   : <>모델 <b>{second.model.name}{second.model.version && ` ${second.model.version}`}</b>
                     {second.model.source === 'registry' ? ' · Model Management 「품질 2차 검사」 배포 모델' : ' · 레지스트리 미등록 — 기본 모델 (판정 저장 안 됨)'}
-                    {second.pending > 0 && <> · <b>판정 대기 {second.pending.toLocaleString()}장</b> (서버가 순서대로 판정 중 — 새로고침하면 반영)</>}</>}
+                    {/* sum.pending = 화면 기준(1차 불량 제외) — 위 숫자와 같게. 서버 second.pending 은 1차 미저장 샷도 셈 */}
+                    {sum.pending > 0 && <> · <b>판정 대기 {sum.pending.toLocaleString()}장</b> (서버가 순서대로 판정 중 — 새로고침하면 반영)</>}</>}
               </span>
               <span className={s.cardSection}>
                 <span className={po.sub}>최근 2차 불량 샷 (하루 전체 · 불량 확률)</span>
