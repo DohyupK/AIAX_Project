@@ -4,6 +4,7 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-20 | UI 템플릿(Mosaic) 이식 1·3단계: Tailwind v4 도입(사용자·DH 승인), 디자인 값·라이트/다크 모드 기반, 사이드바·헤더 셸 교체(PC 접힘·모바일 서랍) | [platform_index](../기능표.md#공정-안전-플랫폼-인덱스-platform_index) |
 | 2026-11-20 | 공정 최적화 live ×20 ↔ MS 샷 생성 배속 (`/api/casting/demo-speed`, DH 구현·승인) | [process_optimization](../기능표.md#공정-최적화-대시보드-process_optimization) |
 | 2026-11-20 | 품질 검사 1차(ML): 판정 결과 DB 저장(ai.quality_prediction qc1_*), 2차는 1차 양품만 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-20 | 교대 인수인계 리포트: 3교대 구간 경보·전체 불량 집계, 전역 「인수인계 실행」·전환 후 자동 팝업·PDF 출력 (DH 구현·JH 승인, app/layout 마운트) | [shift_handover](../기능표.md#교대-인수인계-리포트-shift_handover) |
