@@ -1,9 +1,10 @@
-"""Al 시세 조회 HTTP (stdlib). GET /health, GET /prices"""
+"""Al 시세 조회 HTTP. GET /health, /prices, /prices/meta, /prices/csv"""
 from __future__ import annotations
 
 import json
 import logging
 import os
+from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -14,6 +15,15 @@ log = logging.getLogger("dh.aluminum_price.server")
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8766
+
+
+def _parse_iso_date(s: str | None) -> date | None:
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s.strip())
+    except ValueError:
+        return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -38,24 +48,70 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
-        path = parsed.path
+        path = parsed.path.rstrip("/") or "/"
+        qs = parse_qs(parsed.query)
+
         if path == "/health":
             self._json(200, {"ok": True, "service": "dh.aluminum_price"})
             return
+
+        if path in ("/prices/meta",):
+            try:
+                meta = db.price_meta()
+                self._json(200, {"ok": True, **meta})
+            except Exception as e:
+                log.exception("meta 실패")
+                self._json(500, {"ok": False, "error": str(e)})
+            return
+
+        if path in ("/prices/csv",):
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/csv; charset=utf-8")
+                self.send_header(
+                    "Content-Disposition",
+                    'attachment; filename="aluminum_price_all.csv"',
+                )
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                for line in db.iter_all_csv_lines():
+                    self.wfile.write(line.encode("utf-8"))
+            except Exception as e:
+                log.exception("csv 실패")
+                if not self.wfile.closed:
+                    self._json(500, {"ok": False, "error": str(e)})
+            return
+
         if path in ("/prices", "/api/al-price/prices"):
-            qs = parse_qs(parsed.query)
+            date_from = _parse_iso_date((qs.get("from") or [None])[0])
+            date_to = _parse_iso_date((qs.get("to") or [None])[0])
             try:
-                limit = int((qs.get("limit") or ["500"])[0])
+                limit = int((qs.get("limit") or [str(db.RANGE_ROW_CAP)])[0])
             except ValueError:
-                limit = 500
-            limit = max(1, min(limit, 5000))
+                limit = db.RANGE_ROW_CAP
             try:
-                rows = db.list_prices(limit=limit)
-                self._json(200, {"ok": True, "rows": rows, "count": len(rows)})
+                if date_from and date_to:
+                    rows = db.list_prices_range(
+                        date_from=date_from, date_to=date_to, limit=limit
+                    )
+                else:
+                    limit = max(1, min(limit, 5000))
+                    rows = db.list_prices(limit=limit)
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        "rows": rows,
+                        "count": len(rows),
+                        "from": date_from.isoformat() if date_from else None,
+                        "to": date_to.isoformat() if date_to else None,
+                    },
+                )
             except Exception as e:
                 log.exception("prices 조회 실패")
                 self._json(500, {"ok": False, "error": str(e)})
             return
+
         self._json(404, {"ok": False, "error": "not_found"})
 
 

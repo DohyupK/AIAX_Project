@@ -1,15 +1,20 @@
-// Al 시세 프록시 — 브라우저 → Next → DH serve :8766 (nginx /api/ 와 분리)
+// Al 시세 프록시 — from/to/limit → DH serve :8766/prices
 import { NextRequest, NextResponse } from "next/server";
 
 const SERVE = "http://127.0.0.1:8766";
 
 export async function GET(req: NextRequest) {
-  const limit = req.nextUrl.searchParams.get("limit") ?? "500";
-  const url = `${SERVE}/prices?limit=${encodeURIComponent(limit)}`;
+  const sp = req.nextUrl.searchParams;
+  const q = new URLSearchParams();
+  for (const key of ["from", "to", "limit"] as const) {
+    const v = sp.get(key);
+    if (v) q.set(key, v);
+  }
+  const url = `${SERVE}/prices${q.toString() ? `?${q}` : ""}`;
   try {
     const upstream = await fetch(url, {
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(20_000),
     });
     const text = await upstream.text();
     return new NextResponse(text, {
