@@ -4,6 +4,7 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-20 | 노션 연동: 일일 경영 리포트 자동(`POST /api/report/notion/daily`) · 보호구 위반 보고서 「노션으로 보내기」 | [management_report](../기능표.md#경영-관리자-리포트-management_report) · [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |
 | 2026-11-20 | 메인 대시보드: 전날 관리도 알람 AI 일일 공지 (`/api/main/daily-notice` → org 캐시, 공지 맨 앞) | [main_dashboard](../기능표.md#메인-대시보드-main_dashboard) |
 | 2026-11-18 | Model Management: 탭 이름 품질 1차 검사·품질 2차 검사·보호구 착용 위반, 세 탭 DB 연결. 배포 모델 = 실제 사용 모델 (품질 검사 1차 판정 모델 교체, 2차·보호구는 이름 표시) | [model_management](../기능표.md#model-management-model_management) |
 | 2026-11-18 | Model Management: 성과지표 공정별(공정 최적화 = PR-AUC·Recall·Precision·F1), 공정 최적화 탭 서버 DB 연결(읽기), 목업 56건·localStorage 배포 연동 삭제 | [model_management](../기능표.md#model-management-model_management) |

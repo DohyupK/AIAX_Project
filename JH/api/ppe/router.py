@@ -8,16 +8,26 @@ ponytail: 분석용으로 lake 를 다시 쓰려면 org.* 를 lake.lake_* 로 (�
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date as Date
 
 from fastapi import APIRouter, HTTPException, Query
+from notion_client.errors import APIResponseError
+from pydantic import BaseModel, Field
 
 from common.db import connect
+from notion_export.client import notion_http_error, require_notion, upsert_page
+from notion_export.ppe_monthly import build_ppe_payload
 
 router = APIRouter(prefix="/api/ppe")
 log = logging.getLogger("jh.ppe")
 DB = "DATABASE_URL"   # app_lake — ai·org 읽기만
 GEARS = ("helmet", "shoes", "vest", "gloves", "goggles")
+_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+
+
+class NotionPpeBody(BaseModel):
+    month: str = Field(..., description="YYYY-MM")
 
 # 판정 1건 = 1행. 사원은 출입 로그의 게이트, 하청은 카드에 열린 게이트(a 또는 b 하나)
 CHECKS = """
@@ -143,3 +153,32 @@ def monthly() -> list[dict]:
             ),
         })
     return out
+
+
+@router.post("/notion")
+def notion_ppe(body: NotionPpeBody) -> dict:
+    """선택한 월의 보호구 착용 위반 보고서를 노션에 생성·갱신 (화면 「노션으로 보내기」)."""
+    if not _MONTH_RE.match(body.month):
+        raise HTTPException(400, "month 는 YYYY-MM 형식이어야 합니다.")
+    try:
+        notion, parent = require_notion("NOTION_PARENT_PAGE_ID")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+
+    try:
+        all_raw = monthly()
+        if not any(r["month"] == body.month for r in all_raw):
+            raise HTTPException(404, f"{body.month} 월 보고서 원자료가 없습니다.")
+        title, children = build_ppe_payload(body.month, all_raw)
+        result = upsert_page(notion, parent, title, children)
+    except HTTPException:
+        raise
+    except APIResponseError as e:
+        log.exception("보호구 보고서 노션 전송 실패 month=%s", body.month)
+        raise HTTPException(502, notion_http_error(e)) from e
+    except Exception:
+        log.exception("보호구 보고서 노션 전송 실패 month=%s", body.month)
+        raise HTTPException(503, "보호구 보고서 노션 전송에 실패했습니다.") from None
+
+    log.info("보호구 보고서 노션 %s month=%s page=%s", "생성" if result["created"] else "갱신", body.month, result["page_id"])
+    return {"ok": True, "month": body.month, "title": title, **result}
