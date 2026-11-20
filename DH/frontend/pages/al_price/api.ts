@@ -1,4 +1,5 @@
-// Al 시세 조회 — same-origin /api/al-price → Next rewrite → serve :8766
+// Al 시세 조회 — /al-price/api/prices (Next Route) → serve :8766
+// nginx /api/ → JH 와 겹치지 않음
 
 const FETCH_MS = 15_000;
 
@@ -8,7 +9,7 @@ export interface AlPriceRow {
 }
 
 export async function fetchAlPrices(limit = 500): Promise<AlPriceRow[]> {
-  const res = await fetch(`/api/al-price/prices?limit=${limit}`, {
+  const res = await fetch(`/al-price/api/prices?limit=${limit}`, {
     cache: "no-store",
     signal: AbortSignal.timeout(FETCH_MS),
   });
