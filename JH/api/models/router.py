@@ -3,7 +3,7 @@
 DB 공정 코드 → 화면 이름 (MS 가 2026-11-18 코드·테이블 이름 변경)
   CAST-QC1 = 품질 1차 검사 (ML)  지표 ai.model_metric_cast_qc1 : PR-AUC·Recall·Precision·F1
   CAST-QC2 = 품질 2차 검사 (DL)  지표 ai.model_metric_cast_qc2 : Accuracy·Recall·Precision·F1
-  SAFE-PPE = 보호구 착용 위반     지표 ai.model_metric_safe_ppe : Accuracy·Recall·Precision·F1
+  SAFE-PPE = 보호구 착용 위반     지표 ai.model_metric_safe_ppe : mAP50·Recall·Precision·F1 (검출 모델, 2026-11-20 서버 칼럼 accuracy → map50)
 강건성(품질 2차 팝업) = ai.model_robustness : 조건별 Accuracy·Recall·Precision·F1 (원본 = 위 성과지표)
 각 공정의 배포(deployed) 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차는 casting/model.py 가 파일을 불러 씀).
 ponytail: 등록·배포(쓰기)는 ai 쓰기 계정이 생긴 뒤 — 배포 시 같은 공정 기존 배포 해제는 DB 트리거가 처리.
@@ -29,7 +29,7 @@ SQL = """
 SELECT r.model_registry_idx, r.model_name, r.version, r.process_code, r.description, r.file_name, r.deployed,
        to_char(r.created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS created,
        o.pr_auc_score,
-       COALESCE(q.accuracy_score, g.accuracy_score) AS accuracy_score,
+       q.accuracy_score, g.map50_score,
        COALESCE(o.recall_score, q.recall_score, g.recall_score) AS recall_score,
        COALESCE(o.precision_score, q.precision_score, g.precision_score) AS precision_score,
        COALESCE(o.f1_score, q.f1_score, g.f1_score) AS f1_score
@@ -88,7 +88,7 @@ def _models(deployed_only: bool) -> list[dict]:
             "id": r["model_registry_idx"], "name": r["model_name"], "version": r["version"],
             "processCode": r["process_code"], "createdAt": r["created"], "description": r["description"] or "",
             "fileName": r["file_name"], "deployed": r["deployed"],
-            "metrics": {"prAuc": num(r["pr_auc_score"]), "accuracy": num(r["accuracy_score"]),
+            "metrics": {"prAuc": num(r["pr_auc_score"]), "accuracy": num(r["accuracy_score"]), "map50": num(r["map50_score"]),
                         "recall": num(r["recall_score"]), "precision": num(r["precision_score"]),
                         "f1": num(r["f1_score"])},
         }

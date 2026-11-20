@@ -9,19 +9,23 @@ const ALLOWED_EXT = [".pkl", ".pt", ".onnx", ".joblib"];
 // ponytail: ai 쓰기 계정(MS) 전이라 저장 안 함 — 입력 검사만. 계정이 생기면 submit 에서 POST /api/models 호출
 const SAVE_BLOCKED = "DB 쓰기 계정 연결 전이라 아직 저장할 수 없습니다. 입력값 검사만 했습니다.";
 
-const EMPTY: Draft = { name: "", version: "", process: "", description: "", accuracy: "", prAuc: "", recall: "", precision: "", f1: "" };
+const EMPTY: Draft = { name: "", version: "", process: "", description: "", accuracy: "", prAuc: "", map50: "", recall: "", precision: "", f1: "" };
 
-/** 모델 등록 팝업 — 지금은 입력 검사까지 (DB 저장은 쓰기 계정 연결 후) */
-export default function ModelForm({ onClose }: { onClose: () => void }) {
-  const [draft, setDraft] = useState<Draft>(EMPTY);
+/**
+ * 모델 등록 팝업 — 지금은 입력 검사까지 (DB 저장은 쓰기 계정 연결 후)
+ * process: 공정 탭에서 열면 그 관리공정으로 고정 (전체 탭에서 열면 직접 선택)
+ */
+export default function ModelForm({ process, onClose }: { process?: Process; onClose: () => void }) {
+  const [draft, setDraft] = useState<Draft>({ ...EMPTY, process: process ?? "" });
   const [blocked, setBlocked] = useState(false);
   const [fileName, setFileName] = useState("");
   const [errors, setErrors] = useState<Errors>({});
   const firstRef = useRef<HTMLSelectElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 열릴 때 한 번만 첫 칸에 포커스
-  useEffect(() => firstRef.current?.focus(), []);
+  // 열릴 때 한 번만 첫 입력 칸에 포커스 (공정이 정해져 있으면 모델명)
+  useEffect(() => (process ? nameRef.current : firstRef.current)?.focus(), [process]);
 
   // Esc로 닫기
   useEffect(() => {
@@ -77,7 +81,8 @@ export default function ModelForm({ onClose }: { onClose: () => void }) {
         <div className={`${styles.formGrid} ${styles.formGrid3}`}>
           <label className={styles.field}>
             <span>관리공정 *</span>
-            <select ref={firstRef} value={draft.process} onChange={(e) => set("process", e.target.value)}>
+            <select ref={firstRef} value={draft.process} onChange={(e) => set("process", e.target.value)} disabled={!!process}
+              title={process ? "공정 탭에서 열어 관리공정이 정해져 있습니다" : undefined}>
               <option value="">선택</option>
               {(Object.keys(PROCESS) as Process[]).map((p) => (
                 <option key={p} value={p}>{PROCESS[p].label} ({PROCESS[p].code})</option>
@@ -87,14 +92,15 @@ export default function ModelForm({ onClose }: { onClose: () => void }) {
           </label>
           <label className={styles.field}>
             <span>모델명 *</span>
-            {/* DieCasting_ + 알고리즘 — 날짜·순번은 등록 시 자동 */}
+            {/* 공정별 앞부분(DieCasting_ / PPE_) + 알고리즘 — 날짜·순번은 등록 시 자동 */}
             <span className={styles.prefixInput}>
               {prefix && <span className={styles.prefix}>{prefix}_</span>}
               <input
+                ref={nameRef}
                 value={draft.name}
                 onChange={(e) => set("name", e.target.value)}
                 disabled={!prefix}
-                placeholder={prefix ? "XGB, LGBM …" : "관리공정을 먼저 선택"}
+                placeholder={prefix ? PROCESS[draft.process as Process].algoHint : "관리공정을 먼저 선택"}
                 aria-label={prefix ? `모델명 (${prefix}_ 뒤 알고리즘)` : undefined}
                 maxLength={30}
               />

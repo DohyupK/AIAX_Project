@@ -5,28 +5,29 @@
 /** 화면 공정 키 ↔ DB process_code (CAST-QC1 / CAST-QC2 / SAFE-PPE) */
 export type Process = "qc1" | "qc2" | "ppe";
 
-/** 관리 공정: 화면 표시명 + DB 공정 코드 + 모델명 앞부분 + 배포 모델을 쓰는 화면 */
-export const PROCESS: Record<Process, { label: string; code: string; prefix: string; usedBy: string }> = {
-  qc1: { label: "품질 1차 검사", code: "CAST-QC1", prefix: "DieCasting", usedBy: "품질 검사 대시보드 1차(ML) 판정" },
-  qc2: { label: "품질 2차 검사", code: "CAST-QC2", prefix: "DieCasting", usedBy: "품질 검사 대시보드 2차(DL) 검사" },
-  ppe: { label: "보호구 착용 위반", code: "SAFE-PPE", prefix: "DieCasting", usedBy: "보호구 착용 위반 대시보드 판정" },
+/** 관리 공정: 화면 표시명 + DB 공정 코드 + 모델명 앞부분(등록된 모델 이름 기준) + 알고리즘 예시 + 배포 모델을 쓰는 화면 */
+export const PROCESS: Record<Process, { label: string; code: string; prefix: string; algoHint: string; usedBy: string }> = {
+  qc1: { label: "품질 1차 검사", code: "CAST-QC1", prefix: "DieCasting", algoHint: "XGB, LGBM, CatB …", usedBy: "품질 검사 대시보드 1차(ML) 판정" },
+  qc2: { label: "품질 2차 검사", code: "CAST-QC2", prefix: "DieCasting", algoHint: "CNXV2T …", usedBy: "품질 검사 대시보드 2차(DL) 검사" },
+  ppe: { label: "보호구 착용 위반", code: "SAFE-PPE", prefix: "PPE", algoHint: "YOLO26n, YOLO26s …", usedBy: "보호구 착용 위반 대시보드 판정" },
 };
 const BY_CODE = Object.fromEntries(Object.entries(PROCESS).map(([k, v]) => [v.code, k as Process]));
 
 /** 성과지표 종류 — 공정마다 쓰는 4개가 다름 (DB 지표 테이블 칼럼과 같게) */
-export type MetricKey = "accuracy" | "prAuc" | "recall" | "precision" | "f1";
+export type MetricKey = "accuracy" | "prAuc" | "map50" | "recall" | "precision" | "f1";
 export const METRIC_LABEL: Record<MetricKey, string> = {
   accuracy: "Accuracy",
   prAuc: "PR-AUC",
+  map50: "mAP50",
   recall: "Recall",
   precision: "Precision",
   f1: "F1-Score",
 };
-/** 공정별 지표 4개 (화면 카드·등록 폼 순서). 품질 1차 = ai.model_metric_cast_qc1, 2차 = _cast_qc2, 보호구 = _safe_ppe */
+/** 공정별 지표 4개 (화면 카드·등록 폼 순서). 품질 1차 = ai.model_metric_cast_qc1, 2차 = _cast_qc2, 보호구(검출) = _safe_ppe */
 export const PROCESS_METRICS: Record<Process, MetricKey[]> = {
   qc1: ["prAuc", "recall", "precision", "f1"],
   qc2: ["accuracy", "recall", "precision", "f1"],
-  ppe: ["accuracy", "recall", "precision", "f1"],
+  ppe: ["map50", "recall", "precision", "f1"],
 };
 
 /** 0~1. DB 지표 행이 없으면 null */

@@ -25,7 +25,7 @@ export const ALGO_NAME_RE = /^[A-Za-z][A-Za-z0-9]*$/;
 /** 등록 입력값 검사 — 고른 공정의 지표 4개만 검사. 오류가 없으면 빈 객체 */
 export function validateDraft(d: Draft, processes: ProcessTable, metricsOf: Record<Process, MetricKey[]>): Errors {
   const e: Errors = {};
-  // name = DieCasting_ 뒤에 붙는 알고리즘 (예: XGB, LGBM)
+  // name = 공정별 앞부분(DieCasting_ / PPE_) 뒤에 붙는 알고리즘 (예: XGB, YOLO26s)
   if (!d.name.trim()) e.name = "알고리즘을 입력하세요 (예: XGB)";
   else if (!ALGO_NAME_RE.test(d.name.trim())) e.name = "영문·숫자만 가능 (예: XGB, CatB)";
   if (!d.version.trim()) e.version = "버전을 입력하세요";

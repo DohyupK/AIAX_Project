@@ -212,7 +212,7 @@ export default function ModelManagement() {
                         <small>{METRIC_LABEL[k]}</small>
                         <b>{num2(selected.metrics[k])}</b>
                         {/* 괄호 = 강건성 조건 평균 (팝업 「조건 평균」과 같은 값) */}
-                        {robustAvg && k !== "prAuc" && (
+                        {robustAvg && k !== "prAuc" && k !== "map50" && (
                           <em className={styles.robustAvg} title={`강건성 평균 (손상 조건 ${robust!.rows!.length}개)`}>({num2(robustAvg[k])})</em>
                         )}
                       </span>
@@ -290,7 +290,7 @@ export default function ModelManagement() {
       </>
       )}
 
-      {formOpen && canEdit && <ModelForm onClose={() => setFormOpen(false)} />}
+      {formOpen && canEdit && <ModelForm process={tab === "all" ? undefined : tab} onClose={() => setFormOpen(false)} />}
       {robustOpen && selected && robust?.id === selected.id && (
         <RobustnessDialog model={selected} rows={robust.rows} error={robust.error} onClose={closeRobust} />
       )}
