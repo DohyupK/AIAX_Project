@@ -22,20 +22,20 @@ r"""보호구 게이트 판정 프로그램 (2026-11-20, MS)
   모델 = DB 의 보호구 배포 모델(file_path), 없거나 파일이 없으면 --model 또는 004 기본 경로
 설정: 이 폴더의 .env  →  DATABASE_URL=postgresql://<계정>:<비밀번호>@49.50.143.236:5432/<DB이름>
 
-실시간 화면 송출 (2026-11-20): 박스 친 화면을 초당 --stream-fps 장씩 서버 사진 받기 API 로 보냄
-  웹에서 보기: <img src="https://gknushift.freemyip.com/api/images/gate/a/stream">
-  키 = .env 의 IMAGE_API_KEY (이 폴더 .env → 없으면 저장소 루트 .env). 키가 없거나 --no-stream 이면 송출 안 함
-  송출이 끊겨도 판정은 그대로 계속됨 (별도 스레드, 실패하면 몇 초 뒤 다시 시도)
+판정 사진 (2026-11-20): 판정 3초 동안 박스 친 화면을 Kafka aiax.ppe.frame 으로 보냄 (초당 --frame-fps 장)
+  화면마다 세션 번호(태깅 1번)와 "잡힌 보호구 수·신뢰도 합"을 같이 보내고, 판정이 끝나면 결과(판정 번호)를 보냄
+  → Flink ppe_frame_select 가 세션별로 중요한 장면 1장을 골라 서버(/api/images/ppe/<판정번호>)에 저장
+  Kafka = 루트 .env AIAX_KAFKA_BOOTSTRAP_HOST (기본 localhost:9094). 끊겨도 판정은 계속 (--no-kafka 로 끄기)
+  필요 패키지: D:\cas_image\.venv\Scripts\python.exe -m pip install confluent-kafka
 """
 from __future__ import annotations
 
 import argparse
-import http.client
+import base64
+import json
 import os
 import sys
-import threading
 import time
-from urllib.parse import urlparse
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -79,54 +79,58 @@ def load_env(path: Path) -> None:
 
 
 # ---------------------------------------------------------------- 판정 (카메라·DB 와 무관, 단독 시험 가능)
-class Streamer:
-    """최신 화면 1장을 들고 있다가 별도 스레드가 서버로 POST (keep-alive). 느리면 중간 화면은 건너뜀"""
+class KafkaFrames:
+    """판정 화면·결과를 Kafka 로 (기다리지 않고 보냄). Kafka 가 꺼져 있어도 판정은 계속"""
 
-    def __init__(self, url: str, key: str):
-        self.url, self.key = urlparse(url), key
-        self.frame: bytes | None = None
-        self.lock = threading.Lock()
-        self.new = threading.Event()
-        self.conn = None
-        self.sent = 0
-        self.fail_logged = 0.0
-        threading.Thread(target=self._run, daemon=True).start()
+    def __init__(self, bootstrap: str, topic: str):
+        self.topic, self.prod, self.failed_at = topic, None, 0.0
+        try:
+            from confluent_kafka import Producer
+            self.prod = Producer({"bootstrap.servers": bootstrap, "linger.ms": 5,
+                                  "message.max.bytes": 2_000_000, "message.timeout.ms": 30_000})
+            log(f"판정 사진 → Kafka {bootstrap} 토픽 {topic}")
+        except Exception as e:   # 패키지 없음 등
+            log(f"Kafka 사용 안 함 ({e}) — 판정 사진이 저장되지 않음. pip install confluent-kafka")
 
-    def put(self, jpg: bytes) -> None:
-        with self.lock:
-            self.frame = jpg
-        self.new.set()
+    def _send(self, session: str, body: dict) -> None:
+        if self.prod is None:
+            return
+        try:
+            self.prod.produce(self.topic, key=session.encode(), value=json.dumps(body).encode(),
+                              callback=self._done)
+            self.prod.poll(0)
+        except Exception as e:   # 대기열이 가득 찬 경우 등
+            self._fail(e)
 
-    def _connect(self):
-        cls = http.client.HTTPSConnection if self.url.scheme == "https" else http.client.HTTPConnection
-        return cls(self.url.hostname, self.url.port, timeout=5)
+    def _done(self, err, _msg) -> None:
+        if err is not None:
+            self._fail(err)
 
-    def _run(self) -> None:
-        while True:
-            self.new.wait()
-            self.new.clear()
-            with self.lock:
-                jpg = self.frame
-            try:
-                if self.conn is None:
-                    self.conn = self._connect()
-                self.conn.request("POST", self.url.path, body=jpg,
-                                  headers={"Content-Type": "image/jpeg", "X-API-Key": self.key})
-                res = self.conn.getresponse()
-                res.read()
-                if res.status != 200:
-                    raise RuntimeError(f"HTTP {res.status}")
-                self.sent += 1
-                if self.sent == 1:
-                    log(f"실시간 화면 송출 시작 → {self.url.geturl().replace('/frame', '/stream')}")
-            except Exception as e:   # 서버·네트워크 문제 — 판정은 계속, 3초 뒤 다시
-                if self.conn is not None:
-                    self.conn.close()
-                self.conn = None
-                if time.monotonic() - self.fail_logged > 30:
-                    self.fail_logged = time.monotonic()
-                    log(f"화면 송출 실패 (판정은 계속): {e}")
-                time.sleep(3)
+    def _fail(self, e) -> None:
+        if time.monotonic() - self.failed_at > 30:
+            self.failed_at = time.monotonic()
+            log(f"Kafka 전송 실패 (판정은 계속): {e}")
+
+    def frame(self, session: str, gate: str, count: int, score: float, jpg: bytes) -> None:
+        self._send(session, {"type": "frame", "session": session, "gate": gate, "count": count,
+                             "score": round(score, 4), "ts": time.time(),
+                             "image_base64": base64.b64encode(jpg).decode()})
+
+    def result(self, session: str, gate: str, check_idx: int | None, result: str, who: str) -> None:
+        self._send(session, {"type": "result", "session": session, "gate": gate, "ppe_check_idx": check_idx,
+                             "result": result, "who": who, "ts": time.time()})
+        if self.prod is not None:
+            self.prod.flush(5)
+
+
+def frame_quality(detections: list[tuple[str, float]], thresholds: dict[str, float] = THRESHOLDS) -> tuple[int, float]:
+    """화면 1장의 (잡힌 보호구 수, 신뢰도 합). 보호구마다 착용·미착용 박스 중 신뢰도 높은 것 하나만 셈"""
+    best: dict[str, float] = {}
+    for item, (wear, no) in ITEMS.items():
+        for label, conf in detections:
+            if label in (wear, no) and conf >= thresholds.get(label, 0.5):
+                best[item] = max(best.get(item, 0.0), conf)
+    return len(best), sum(best.values())
 
 
 def observe(detections: list[tuple[str, float]], thresholds: dict[str, float] = THRESHOLDS) -> dict:
@@ -282,6 +286,8 @@ class Gate:
         self.deadline = 0.0
         self.tagged_at: datetime | None = None
         self.alarm: dict | None = None   # {"idx", "result", "card", "items"}
+        self.session = ""                # 태깅 1번 = 세션 1개 (판정 사진 묶음)
+        self.kafka: KafkaFrames | None = None
         self.manager: dict | None = None
         self.last_beep = 0.0
 
@@ -306,6 +312,7 @@ class Gate:
             return
         self.card, self.tally = card, Tally()
         self.tagged_at = datetime.now(KST)
+        self.session = f"{self.args.gate}-{self.tagged_at:%Y%m%d%H%M%S%f}"
         self.deadline = time.monotonic() + self.args.seconds
         self.state, self.message = "judging", f"Scanning {card['who']} - stand still"
         log(f"카드 {card['who']} — {self.args.seconds:g}초 판정 시작")
@@ -314,6 +321,8 @@ class Gate:
         items = self.tally.items(self.args.ratio, self.args.min_person)
         result = decide(items, self.rules[self.args.gate])
         idx = self.db.record(self.card, self.args.gate, self.tagged_at, items, result)
+        if self.kafka is not None:
+            self.kafka.result(self.session, self.args.gate, idx, result, self.card["who"])
         log(f"{self.card['who']} gate={self.args.gate} {result} {items} "
             f"(frames {self.tally.frames}, person {self.tally.person}) check={idx}")
         if result == "pass":
@@ -401,10 +410,9 @@ def main() -> None:
     ap.add_argument("--no-db", action="store_true", help="DB 없이 판정만")
     ap.add_argument("--no-mirror", action="store_true")
     ap.add_argument("--env", default=str(HERE / ".env"))
-    ap.add_argument("--no-stream", action="store_true", help="실시간 화면 송출 안 함")
-    ap.add_argument("--stream-url", default="https://gknushift.freemyip.com/api/images/gate/{gate}/frame")
-    ap.add_argument("--stream-fps", type=float, default=30, help="초당 송출 장수 (노트북 판정 속도보다 빠르면 그 속도만큼만 나감)")
-    ap.add_argument("--stream-width", type=int, default=640, help="송출 화면 가로 크기(px)")
+    ap.add_argument("--no-kafka", action="store_true", help="판정 사진을 Kafka 로 보내지 않음")
+    ap.add_argument("--frame-fps", type=float, default=10, help="판정 3초 동안 Kafka 로 보낼 초당 화면 수")
+    ap.add_argument("--frame-width", type=int, default=640, help="판정 사진 가로 크기(px)")
     args = ap.parse_args()
     if not 0 < args.ratio <= 1 or not 0 <= args.min_person <= 1 or args.seconds <= 0:
         ap.error("--ratio 0~1, --min-person 0~1, --seconds > 0")
@@ -416,7 +424,7 @@ def main() -> None:
 
     log("시작 — 설정 읽는 중")
     load_env(Path(args.env))
-    load_env(HERE.parents[1] / ".env")   # IMAGE_API_KEY 는 저장소 루트 .env 에 있어도 됨 (이미 있는 값은 안 덮음)
+    load_env(HERE.parents[1] / ".env")   # Kafka 주소 등은 저장소 루트 .env 에 있어도 됨 (이미 있는 값은 안 덮음)
     url = None if args.no_db else os.environ.get("DATABASE_URL")
     if not args.no_db and not url:
         raise SystemExit(f"[gate] {args.env} 에 DATABASE_URL 이 없습니다 (DB 없이 시험: --no-db)")
@@ -441,12 +449,11 @@ def main() -> None:
     if not cap.isOpened():
         raise SystemExit(f"[gate] 카메라 {args.camera} 를 열 수 없습니다 (--camera 1 시도)")
     conf = min(THRESHOLDS.values())
-    key = os.environ.get("IMAGE_API_KEY", "").strip()
-    streamer = None
-    if args.no_stream or not key:
-        log("실시간 화면 송출 안 함" + ("" if args.no_stream else " (.env 에 IMAGE_API_KEY 없음)"))
+    if args.no_kafka:
+        log("판정 사진 Kafka 송출 안 함 (--no-kafka)")
     else:
-        streamer = Streamer(args.stream_url.format(gate=args.gate), key)
+        gate.kafka = KafkaFrames(os.environ.get("AIAX_KAFKA_BOOTSTRAP_HOST", "localhost:9094"),
+                                 os.environ.get("AIAX_TOPIC_PPE_FRAME", "aiax.ppe.frame"))
     next_push = 0.0
     log("준비 완료 — 'PPE gate' 카메라 창을 클릭한 뒤 카드 번호 입력 + Enter (콘솔에 입력하면 안 됨), Esc 종료")
     try:
@@ -457,20 +464,24 @@ def main() -> None:
             if not args.no_mirror:
                 frame = cv2.flip(frame, 1)
             result = model.predict(frame, imgsz=args.imgsz, conf=conf, device=device, verbose=False)[0]
-            if gate.state == "judging":
-                gate.tally.add(observe(detections_of(result, names)))
-                if time.monotonic() >= gate.deadline:
-                    gate.finish()
+            judging = gate.state == "judging"
+            if judging:
+                dets = detections_of(result, names)
+                gate.tally.add(observe(dets))
             gate.beep()
             shown = draw(cv2, frame, result, names, gate)
             cv2.imshow("PPE gate", shown)
-            if streamer is not None and time.monotonic() >= next_push:
-                next_push = time.monotonic() + 1 / args.stream_fps
+            # 판정 중 화면 → Kafka (세션 번호 + 잡힌 보호구 수·신뢰도 합). 결과는 finish() 가 보냄
+            if judging and gate.kafka is not None and time.monotonic() >= next_push:
+                next_push = time.monotonic() + 1 / args.frame_fps
                 h, w = shown.shape[:2]
-                small = cv2.resize(shown, (args.stream_width, int(h * args.stream_width / w))) if w > args.stream_width else shown
-                ok_jpg, buf = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                small = cv2.resize(shown, (args.frame_width, int(h * args.frame_width / w))) if w > args.frame_width else shown
+                ok_jpg, buf = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if ok_jpg:
-                    streamer.put(buf.tobytes())
+                    count, score = frame_quality(dets)
+                    gate.kafka.frame(gate.session, args.gate, count, score, buf.tobytes())
+            if judging and time.monotonic() >= gate.deadline:
+                gate.finish()
             if not gate.key(cv2.waitKey(1) & 0xFF):
                 break
     finally:

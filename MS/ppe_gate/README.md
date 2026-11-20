@@ -24,13 +24,19 @@
 - 카드에 그 게이트 출입 권한(`org.gate_card`)이 없으면 판정하지 않고 "NO ACCESS"를 띄워요.
 - 알람 중에는 다른 작업자 카드를 받지 않아요. 안전관리자 확인이 먼저예요.
 
+## 판정 사진 (Kafka → Flink → 서버)
+
+판정 3초 동안 박스 친 화면을 Kafka `aiax.ppe.frame` 으로 보내요 (초당 `--frame-fps`, 기본 10장). 판정이 끝나면 결과(판정 번호)도 보내요.
+MS PC 의 Flink `ppe_frame_select` 가 판정마다 **보호구 5개가 다 잡힌 화면 중 신뢰도 합이 가장 높은 1장**을 골라 서버에 저장해요 (`/api/images/ppe/<판정번호>`).
+화면마다 세션 번호(태깅 1번)를 붙여서, 다른 사람 판정과 섞이지 않아요. Kafka 가 꺼져 있어도 판정은 계속돼요 (`--no-kafka` 로 끄기).
+
 ## 준비
 
 1. DB에 `MS/db/init/25_보호구_게이트기록.sql`이 실행돼 있어야 해요. 확인 시각 칸과 번호 자동 증가가 필요해요.
 2. 이 노트북 IP가 서버 방화벽에 허용돼 있어야 해요 (DH).
 3. `D:\cas_image` 가상환경에 DB 접속 패키지를 설치해요.
    ```powershell
-   D:\cas_image\.venv\Scripts\python.exe -m pip install "psycopg[binary]"
+   D:\cas_image\.venv\Scripts\python.exe -m pip install "psycopg[binary]" confluent-kafka
    ```
 4. 이 폴더에 `.env`를 만들어요 (`.env.example` 참고, Git에 올리지 않음).
 

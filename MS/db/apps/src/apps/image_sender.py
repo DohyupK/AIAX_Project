@@ -1,12 +1,13 @@
-r"""양품 샷 이미지 전송기 — mes 에 새로 들어온 양품 샷에 사진을 붙여 Kafka 로 보냄 (2026-11-20, MS)
+r"""1차 양품 샷 이미지 전송기 — 1차 검사에서 양품으로 통과한 샷에 사진을 붙여 Kafka 로 보냄 (2026-11-20, MS)
 
 DH image_pipeline.producer 와 같은 메시지(E1a)·토픽. 차이: 한 장씩 손으로 보내는 대신
-mes 를 주기적으로 확인해 「양품(passorfail = 0)인데 이미지 없는 샷」을 찾아 자동으로 보냄.
+mes·ai 를 주기적으로 확인해 「1차 양품인데 이미지 없는 샷」을 찾아 자동으로 보냄.
 
 흐름: mes.investment_casting (새 양품 샷) → 이 프로그램 → Kafka aiax.image.ingest
       → Flink image_ingest (MS/db/flink/jobs/image_ingest.py) → mes.casting_image
 
-사진: --image-dir 아래 ok_front(양품 사진) / def_front(불량 사진), 불량 사진 비율 --defect-image-rate (기본 5%)
+대상: 1차 양품 샷 (ai.quality_prediction.qc1_result = 'pass') — 2026-11-20 변경 (전에는 정답 passorfail = 0)
+사진: --image-dir 아래 ok_front(양품 사진) / def_front(불량 사진). 무작위로 불량 사진 --defect-image-rate (기본 5%). 정답(passorfail)은 안 봄
       같은 사진 재사용 허용. 메시지의 image_label(ok / defect) = 붙인 사진의 정답 (Flink 가 서버 API 로 같이 보냄 → mes.casting_image.image_label)
 
 실행 (MS/db/apps 에서)
@@ -40,12 +41,13 @@ IMAGE_DIR = r"D:\AIAX_data\casting_images_300"   # 300x300 사진 (원본 cas_im
 SINCE_DEFAULT = "2026-11-01 00:00"   # 이 시각 이후 사진 없는 양품 샷은 켤 때마다 다 채움 (끊겼다 다시 켜도 밀린 것 채움)
 RESEND_AFTER = 300   # 보냈는데 이 시간(초) 지나도 DB 에 없으면 다시 보냄 (Flink 중단 등)
 
-# 양품 + 이미지 없음 + 샷 시각이 since ~ 지금(KST) 사이. 미래 시각 샷(미리 넣어 둔 데이터)은 건너뜀
+# 1차 양품(ai.quality_prediction.qc1_result = 'pass') + 이미지 없음 + 샷 시각이 since ~ 지금(KST) 사이 (2026-11-20 변경, JH 요청)
+# 1차 판정이 아직 없는 샷은 기다림. 미래 시각 샷(미리 넣어 둔 데이터)은 건너뜀
 TARGET_SQL = """
 SELECT c.casting_id
 FROM mes.investment_casting c
-WHERE c.passorfail = 0
-  AND (c."timestamp" + c.date) >= %(since)s
+JOIN ai.quality_prediction q ON q.casting_id = c.casting_id AND q.qc1_result = 'pass'
+WHERE (c."timestamp" + c.date) >= %(since)s
   AND (c."timestamp" + c.date) <= (now() AT TIME ZONE 'Asia/Seoul')
   AND NOT EXISTS (SELECT 1 FROM mes.casting_image i WHERE i.casting_id = c.casting_id)
 ORDER BY c."timestamp", c.date, c.production_count
@@ -67,7 +69,7 @@ def load_env() -> None:
 
 
 class Images:
-    """붙일 사진 고르기 (불량 사진 비율대로)"""
+    """붙일 사진 고르기 — 무작위, 불량 사진 비율대로 (정답 passorfail 은 보지 않음)"""
 
     def __init__(self, root: str, defect_rate: float, rng: random.Random):
         self.ok = sorted(Path(root, "ok_front").glob("*.jp*g"))
@@ -166,7 +168,7 @@ class Sender:
 
     def run(self) -> None:
         log(f"시작 — 토픽={self.topic} Kafka={self.bootstrap} 확인 간격={self.args.interval}초 "
-            f"불량 사진 비율={self.args.defect_image_rate} 대상=샷 시각 {self.args.since:%Y-%m-%d %H:%M} 이후"
+            f"대상=1차 양품, 불량 사진 비율={self.args.defect_image_rate}, 샷 시각 {self.args.since:%Y-%m-%d %H:%M} 이후"
             + (" (dry-run: 보내지 않음)" if self.args.dry_run else ""))
         try:
             while True:
@@ -188,7 +190,7 @@ def main() -> None:
     load_env()
     ap = argparse.ArgumentParser(description="양품 샷 이미지 전송기 (mes → Kafka aiax.image.ingest)")
     ap.add_argument("--interval", type=float, default=10, help="새 샷 확인 간격(초)")
-    ap.add_argument("--defect-image-rate", type=float, default=0.05, help="불량 사진 비율")
+    ap.add_argument("--defect-image-rate", type=float, default=0.05, help="불량 사진 비율 (무작위)")
     ap.add_argument("--image-dir", default=IMAGE_DIR)
     ap.add_argument("--since", default=SINCE_DEFAULT, help=f'이 시각(KST) 이후 샷부터, 예 "2026-11-19 00:00". 기본 {SINCE_DEFAULT}')
     ap.add_argument("--batch", type=int, default=200, help="한 번에 보낼 최대 샷 수")
