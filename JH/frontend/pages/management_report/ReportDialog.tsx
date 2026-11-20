@@ -20,6 +20,7 @@ const PRINT_CSS = `@media print {
 
 const PREV_LABEL = { daily: '전일', weekly: '전주', monthly: '전월' } as const;
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+type ExportTarget = 'notion' | 'slack';
 
 function apiDetail(detail: unknown, status: number, fallback: string): string {
   if (typeof detail === 'string') return detail;
@@ -33,13 +34,14 @@ function apiDetail(detail: unknown, status: number, fallback: string): string {
   return `${fallback} (HTTP ${status})`;
 }
 
-/** 리포트 팝업 — PDF 출력 + 일일만 노션/슬랙 수동 전송 */
+/** 리포트 팝업 — PDF 출력 + 일일만 보낼 곳(노션/슬랙) 선택 후 보내기 */
 export default function ReportDialog({ item, report, prev, printedAt, onClose }: {
   item: ReportItem; report: PeriodReport; prev: PeriodReport | null; printedAt: string; onClose: () => void;
 }) {
   const isDaily = item.period === 'daily';
+  const [target, setTarget] = useState<ExportTarget>('notion');
   const [msg, setMsg] = useState('');
-  const [busy, setBusy] = useState<'notion' | 'slack' | null>(null);
+  const [busy, setBusy] = useState(false);
 
   // Esc 로 닫기
   useEffect(() => {
@@ -56,10 +58,10 @@ export default function ReportDialog({ item, report, prev, printedAt, onClose }:
     document.title = prevTitle;
   }
 
-  async function send(kind: 'notion' | 'slack') {
-    setBusy(kind);
+  async function send() {
+    setBusy(true);
     setMsg('');
-    const path = kind === 'notion' ? '/api/report/notion/daily' : '/api/report/slack/daily';
+    const path = target === 'notion' ? '/api/report/notion/daily' : '/api/report/slack/daily';
     try {
       const res = await fetch(`${API_BASE}${path}`, {
         method: 'POST',
@@ -71,9 +73,9 @@ export default function ReportDialog({ item, report, prev, printedAt, onClose }:
         detail?: unknown; url?: string; permalink?: string; created?: boolean;
       };
       if (!res.ok) {
-        throw new Error(apiDetail(data.detail, res.status, kind === 'notion' ? '노션 전송에 실패했습니다.' : '슬랙 전송에 실패했습니다.'));
+        throw new Error(apiDetail(data.detail, res.status, target === 'notion' ? '노션 전송에 실패했습니다.' : '슬랙 전송에 실패했습니다.'));
       }
-      if (kind === 'notion') {
+      if (target === 'notion') {
         setMsg(data.created === false ? '노션 페이지를 갱신했습니다.' : '노션 페이지를 만들었습니다.');
         if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer');
       } else {
@@ -81,10 +83,10 @@ export default function ReportDialog({ item, report, prev, printedAt, onClose }:
         if (data.permalink) window.open(data.permalink, '_blank', 'noopener,noreferrer');
       }
     } catch (e: unknown) {
-      console.error(`[management_report] ${kind} 전송 실패`, e);
+      console.error(`[management_report] ${target} 전송 실패`, e);
       setMsg(e instanceof Error ? e.message : '전송에 실패했습니다.');
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
@@ -98,11 +100,21 @@ export default function ReportDialog({ item, report, prev, printedAt, onClose }:
           <button type="button" className={`${po.btn} ${s.pdfBtn}`} onClick={printPdf}>PDF 출력</button>
           {isDaily && (
             <>
-              <button type="button" className={s.exportBtn} onClick={() => send('notion')} disabled={busy !== null}>
-                {busy === 'notion' ? '전송 중…' : '노션으로 보내기'}
-              </button>
-              <button type="button" className={s.exportBtn} onClick={() => send('slack')} disabled={busy !== null}>
-                {busy === 'slack' ? '전송 중…' : '슬랙으로 보내기'}
+              <fieldset className={s.exportTarget} aria-label="보낼 곳">
+                <legend className={s.exportLegend}>보낼 곳</legend>
+                <label className={s.exportRadio}>
+                  <input type="radio" name="mgmt-export-target" value="notion" checked={target === 'notion'}
+                    onChange={() => setTarget('notion')} disabled={busy} />
+                  노션
+                </label>
+                <label className={s.exportRadio}>
+                  <input type="radio" name="mgmt-export-target" value="slack" checked={target === 'slack'}
+                    onChange={() => setTarget('slack')} disabled={busy} />
+                  슬랙
+                </label>
+              </fieldset>
+              <button type="button" className={s.exportBtn} onClick={send} disabled={busy}>
+                {busy ? '전송 중…' : '보내기'}
               </button>
             </>
           )}

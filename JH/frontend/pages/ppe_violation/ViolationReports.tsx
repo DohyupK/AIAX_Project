@@ -94,8 +94,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
 /** 출력본 양식 그대로의 월간 보고서 */
 function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void }) {
   const docTitle = `보호구_착용_위반_보고서_${r.title.replace(/\s/g, "")}`;
+  const [target, setTarget] = useState<"notion" | "slack">("notion");
   const [exportMsg, setExportMsg] = useState("");
-  const [busy, setBusy] = useState<"notion" | "slack" | null>(null);
+  const [busy, setBusy] = useState(false);
 
   function printPdf() {
     // PDF 기본 파일명 = 문서 제목 → 인쇄 동안만 보고서 제목으로 바꿈
@@ -116,10 +117,10 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
     return `${fallback} (HTTP ${status})`;
   }
 
-  async function sendExport(kind: "notion" | "slack") {
-    setBusy(kind);
+  async function sendExport() {
+    setBusy(true);
     setExportMsg("");
-    const path = kind === "notion" ? "/api/ppe/notion" : "/api/ppe/slack";
+    const path = target === "notion" ? "/api/ppe/notion" : "/api/ppe/slack";
     try {
       const res = await fetch(`${API_BASE}${path}`, {
         method: "POST",
@@ -134,10 +135,10 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
         throw new Error(parseDetail(
           data.detail,
           res.status,
-          kind === "notion" ? "노션 전송에 실패했습니다." : "슬랙 전송에 실패했습니다.",
+          target === "notion" ? "노션 전송에 실패했습니다." : "슬랙 전송에 실패했습니다.",
         ));
       }
-      if (kind === "notion") {
+      if (target === "notion") {
         setExportMsg(data.created === false ? "노션 페이지를 갱신했습니다." : "노션 페이지를 만들었습니다.");
         if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
       } else {
@@ -145,10 +146,10 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
         if (data.permalink) window.open(data.permalink, "_blank", "noopener,noreferrer");
       }
     } catch (e: unknown) {
-      console.error(`[ppe_violation] ${kind} 전송 실패`, e);
+      console.error(`[ppe_violation] ${target} 전송 실패`, e);
       setExportMsg(e instanceof Error ? e.message : "전송에 실패했습니다.");
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
@@ -159,11 +160,21 @@ function ReportDialog({ r, onClose }: { r: MonthlyReport; onClose: () => void })
       <div className={s.toolbar} data-print-hide>
         <button type="button" className={s.backBtn} onClick={onClose}>← 목록</button>
         <button type="button" className={s.printBtn} onClick={printPdf}>PDF 출력</button>
-        <button type="button" className={s.notionBtn} onClick={() => sendExport("notion")} disabled={busy !== null}>
-          {busy === "notion" ? "전송 중…" : "노션으로 보내기"}
-        </button>
-        <button type="button" className={s.notionBtn} onClick={() => sendExport("slack")} disabled={busy !== null}>
-          {busy === "slack" ? "전송 중…" : "슬랙으로 보내기"}
+        <fieldset className={s.exportTarget} aria-label="보낼 곳">
+          <legend className={s.exportLegend}>보낼 곳</legend>
+          <label className={s.exportRadio}>
+            <input type="radio" name="ppe-export-target" value="notion" checked={target === "notion"}
+              onChange={() => setTarget("notion")} disabled={busy} />
+            노션
+          </label>
+          <label className={s.exportRadio}>
+            <input type="radio" name="ppe-export-target" value="slack" checked={target === "slack"}
+              onChange={() => setTarget("slack")} disabled={busy} />
+            슬랙
+          </label>
+        </fieldset>
+        <button type="button" className={s.notionBtn} onClick={sendExport} disabled={busy}>
+          {busy ? "전송 중…" : "보내기"}
         </button>
         <button type="button" className={s.closeBtn} onClick={onClose} aria-label="닫기" autoFocus>×</button>
       </div>

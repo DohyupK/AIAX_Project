@@ -69,6 +69,33 @@
 /* 팝업 머리글 + 결재란 */
 .reportHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
 .toolbar { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.exportTarget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+.exportLegend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.exportRadio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.exportRadio input { margin: 0; accent-color: var(--accent); }
 .exportBtn {
   font: inherit;
   font-size: 12.5px;

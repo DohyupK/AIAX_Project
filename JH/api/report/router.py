@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from datetime import date as Date
 from datetime import timedelta
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from notion_client.errors import APIResponseError
@@ -34,8 +35,9 @@ MAX_RANGE_DAYS = 220  # 월간 목록(7개월) 한 번에 조회
 
 
 class DailyPushBody(BaseModel):
-    """date 를 주면 그 날, 없으면 어제(KST). 크론·수동 공통."""
+    """date 를 주면 그 날, 없으면 어제(KST). target = 보낼 곳(기본 노션)."""
     date: Date | None = None
+    target: Literal["notion", "slack"] = "notion"
 
 
 # 하위 호환 별칭
@@ -223,24 +225,12 @@ def slack_daily(body: DailyPushBody = DailyPushBody()) -> dict:
 
 @router.post("/push/daily")
 def push_daily(body: DailyPushBody = DailyPushBody()) -> dict:
-    """크론용 — 노션+슬랙 둘 다. 한쪽만 실패해도 다른 쪽 결과와 오류를 같이 반환.
+    """크론용 — target 한 곳만 (기본 notion). 슬랙은 target=slack.
 
-    서버 크론 예: curl -X POST http://127.0.0.1:8000/api/report/push/daily
+    예: curl -X POST http://127.0.0.1:8000/api/report/push/daily
+         curl -X POST …/push/daily -H 'Content-Type: application/json' -d '{"target":"slack"}'
     """
     day = body.date if body.date else target_date()
-    out: dict = {"ok": True, "date": day.isoformat(), "notion": None, "slack": None, "errors": {}}
-    try:
-        out["notion"] = _push_notion_daily(day)
-    except HTTPException as e:
-        out["ok"] = False
-        out["errors"]["notion"] = e.detail
-        log.error("push/daily 노션 실패 day=%s detail=%s", day, e.detail)
-    try:
-        out["slack"] = _push_slack_daily(day)
-    except HTTPException as e:
-        out["ok"] = False
-        out["errors"]["slack"] = e.detail
-        log.error("push/daily 슬랙 실패 day=%s detail=%s", day, e.detail)
-    if not out["ok"] and out["notion"] is None and out["slack"] is None:
-        raise HTTPException(503, out["errors"])
-    return out
+    if body.target == "slack":
+        return _push_slack_daily(day)
+    return _push_notion_daily(day)

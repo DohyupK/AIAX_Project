@@ -41,18 +41,23 @@ uv run uvicorn main:app --host 127.0.0.1 --port 8000
 
 | 방식 | 엔드포인트 |
 |------|------------|
-| 크론 (노션+슬랙) | `POST /api/report/push/daily` |
+| 크론 (보낼 곳 하나) | `POST /api/report/push/daily` — body `target`: `notion`(기본) \| `slack` |
 | 노션만 | `POST /api/report/notion/daily` |
 | 슬랙만 | `POST /api/report/slack/daily` |
 
-기본 대상일 = 어제(KST). body `{ "date": "YYYY-MM-DD" }` 로 특정일(화면 수동).
+기본 대상일 = 어제(KST). 화면은 보낼 곳 라디오(노션/슬랙) + 「보내기」. body `{ "date": "YYYY-MM-DD" }` 로 특정일.
 
 ```bash
-# 서버 크론 / Windows 작업 스케줄러 예 (매일 08:05)
+# 서버 크론 — 기본 노션만
 curl -sS -X POST http://127.0.0.1:8000/api/report/push/daily
+# 슬랙만
+curl -sS -X POST http://127.0.0.1:8000/api/report/push/daily \
+  -H "Content-Type: application/json" -d "{\"target\":\"slack\"}"
 ```
 
 ### 보호구 착용 위반 보고서 (수동)
+
+화면에서 보낼 곳(노션/슬랙) 선택 후 「보내기」.
 
 - 노션: `POST /api/ppe/notion` `{ "month": "YYYY-MM" }`
 - 슬랙: `POST /api/ppe/slack` `{ "month": "YYYY-MM" }`
