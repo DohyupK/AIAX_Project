@@ -98,18 +98,19 @@ CREATE TABLE ai.model_metric_cast_qc2 (
 );
 COMMENT ON TABLE ai.model_metric_cast_qc2 IS '공정 2차 검사(CAST-QC2) 모델 성과지표';
 
--- 안전구 착용 위반(SAFE-PPE) 성과지표
+-- 보호구 착용 위반(SAFE-PPE) 성과지표 (검출 모델 → 대표 지표 mAP50. 처음엔 accuracy_score 였고 서버는 24 에서 이름 변경)
 CREATE TABLE ai.model_metric_safe_ppe (
     model_name       text        NOT NULL,
     version          text        NOT NULL,
-    accuracy_score   numeric(5,4) NOT NULL CHECK (accuracy_score  BETWEEN 0 AND 1),
+    map50_score      numeric(5,4) NOT NULL CHECK (map50_score     BETWEEN 0 AND 1),
     recall_score     numeric(5,4) NOT NULL CHECK (recall_score    BETWEEN 0 AND 1),
     precision_score  numeric(5,4) NOT NULL CHECK (precision_score BETWEEN 0 AND 1),
     f1_score         numeric(5,4) NOT NULL CHECK (f1_score        BETWEEN 0 AND 1),
     PRIMARY KEY (model_name, version),
     FOREIGN KEY (model_name, version) REFERENCES ai.model_registry (model_name, version) ON DELETE CASCADE
 );
-COMMENT ON TABLE ai.model_metric_safe_ppe IS '안전구 착용 위반(SAFE-PPE) 모델 성과지표';
+COMMENT ON TABLE ai.model_metric_safe_ppe IS '보호구 착용 위반(SAFE-PPE) 검출 모델 성과지표 — mAP50·Recall·Precision·F1';
+COMMENT ON COLUMN ai.model_metric_safe_ppe.map50_score IS 'mAP50 (검출 모델 대표 지표, 0~1)';
 
 GRANT SELECT ON ai.model_metric_cast_qc1, ai.model_metric_cast_qc2, ai.model_metric_safe_ppe TO role_lake, role_spark;
 
