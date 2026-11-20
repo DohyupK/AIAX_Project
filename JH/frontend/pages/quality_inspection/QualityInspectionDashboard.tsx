@@ -394,14 +394,13 @@ function ShotAnalysis({ shot, model, th, results }: {
         #{shot.shotId} · {shot.time} · 1차 점수 <span className={po.num}>{shot.prob.toFixed(3)}</span> ({st === 'first' ? '불량' : '양품'})
         {' '}· 실제 {shot.actual === 1 ? '불량' : shot.actual === 0 ? '양품' : '미판정'}
       </span>
-      {/* 판정 대기는 박스 없음 — 목록 2차 열·상단 「대기 N샷」으로 표시 */}
-      {st !== 'pending' && (
-        <div className={s.slot}>
-          {st === 'first' ? `#${shot.shotId} · 1차 불량 확정 — 2차 검사 대상 아님`
-            : st === 'noImage' ? '2차(DL) 검사 대상 · 샷 이미지 없음 (이미지 수집 전)'
-            // slot 이 flex 라 조각 사이 공백이 사라짐 → 한 span 으로 묶음
-            : <span>2차(DL) <b>{st.result === 'fail' ? '불량' : '양품'}</b> · 불량 확률 <span className={po.num}>{st.confidenceScore.toFixed(3)}</span> · {st.modelName}</span>}
-        </div>
+      {/* 사진 없는 경우만 안내 박스. 사진 있는 샷은 박스 없이 결과 한 줄 + 사진 */}
+      {st === 'first' && <div className={s.slot}>#{shot.shotId} · 1차 불량 확정 — 2차 검사 대상 아님</div>}
+      {st === 'noImage' && <div className={s.slot}>2차(DL) 검사 대상 · 샷 이미지 없음 (이미지 수집 전)</div>}
+      {typeof st === 'object' && (
+        <span className={po.sub}>
+          2차(DL) <b>{st.result === 'fail' ? '불량' : '양품'}</b> · 불량 확률 <span className={po.num}>{st.confidenceScore.toFixed(3)}</span> · {st.modelName}
+        </span>
       )}
       {/* key: 샷을 바꾸면 「이미지 없음」 상태 초기화 */}
       {imageId && <ShotImage key={imageId} castingId={imageId} className={s.shotImage} />}
