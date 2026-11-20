@@ -68,7 +68,11 @@ def load_env(path: str | None = None) -> None:
     else:   # 이 폴더 → 위쪽 폴더 순서로 처음 나오는 .env (저장소에서 돌리면 루트 .env)
         f = next((d / ".env" for d in (HERE, *HERE.parents) if (d / ".env").is_file()), None)
     if f is not None and f.exists():
-        for line in f.read_text(encoding="utf-8").splitlines():
+        try:
+            text = f.read_text(encoding="utf-8")
+        except OSError:   # systemd(DynamicUser)는 .env 를 못 읽음 — 값은 EnvironmentFile 로 이미 들어옴
+            return
+        for line in text.splitlines():
             if line.strip().startswith("#") or "=" not in line:
                 continue
             k, v = line.split("=", 1)
