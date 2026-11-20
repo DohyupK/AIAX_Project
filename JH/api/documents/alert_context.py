@@ -80,14 +80,14 @@ def _card_block(c: AlertCard) -> str:
 
 
 def _alert_budget(query: str, path: str) -> int:
-    """화면·질문에 따라 알림 개수 상한."""
+    """화면·질문에 따라 알림 개수 상한. 관련 없으면 0 (문서 질문 노이즈 방지)."""
     p = (path or "").lower()
     q = query or ""
     if "process-optimization" in p or _ALERT_KW.search(q):
         return MAX_ALERTS
     if "quality-inspection" in p or _QUALITY_KW.search(q):
         return 2
-    return 2
+    return 0
 
 
 def _prefer_lines(path: str, actions: list[dict[str, Any]]) -> set[str] | None:

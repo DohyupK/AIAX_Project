@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -311,12 +312,20 @@ def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
                     "file_name": r["file_name"],
                     "category": r["category"],
                     "chunk_no": int(r["chunk_no"]),
-                    "content": r["content"][:400],
+                    "content": r["content"][:1200],
                 },
             )
         )
     scored.sort(key=lambda x: x[0], reverse=True)
     return [item for _, item in scored[:limit]]
+
+
+def _wants_quality_kpi(query: str, path: str) -> bool:
+    """품질 KPI는 품질·불량 질문/화면일 때만."""
+    p = (path or "").lower()
+    if "quality-inspection" in p or "defect-labeling" in p:
+        return True
+    return bool(re.search(r"불량|품질|kpi|양품|검.?사|불량률", query or "", re.I))
 
 
 @router.post("/search")
@@ -329,7 +338,7 @@ def search_documents(body: SearchBody):
 
 @router.post("/ask")
 def ask_documents(body: SearchBody):
-    """Shift 봇: 문서 + 알림 + KPI + 화면 맥락 + 멀티턴 Chat. 대화 DB 저장 없음."""
+    """Shift 봇: 문서 + (관련 시) 알림·KPI + 화면 맥락 + 멀티턴 Chat. 대화 DB 저장 없음."""
     from documents.alert_context import collect_alert_context
     from documents.quality_context import collect_quality_context
 
@@ -338,10 +347,13 @@ def ask_documents(body: SearchBody):
         raise HTTPException(400, "검색어를 입력하세요.")
     ui = body.ui_context
     ui_dict = ui.model_dump() if ui else None
+    path = (ui.path if ui else "") or ""
     hits = _retrieve_hits(q, body.limit)
     alert_sources, alert_text = collect_alert_context(query=q, ui_context=ui_dict)
-    quality_sources, quality_text = collect_quality_context()
-    # 문서·알림·KPI 없어도 화면 맥락·멀티턴만으로 분석 답 가능
+    if _wants_quality_kpi(q, path):
+        quality_sources, quality_text = collect_quality_context()
+    else:
+        quality_sources, quality_text = [], ""
     doc_sources = [{**h, "kind": "company_document"} for h in hits]
     history = [m.model_dump() for m in body.history]
     try:
