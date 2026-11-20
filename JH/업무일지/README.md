@@ -4,6 +4,8 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-21 | 품질 검사 1차: TM CatBoost v2 모델 연결(catboost 승인·설치, 입력 12개 전처리), TM 검증 예시 3샷 일치 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
+| 2026-11-21 | Model Management: 「배포」 버튼 → 실제 배포(DB 저장), 품질 검사 1차·2차 화면 다음 판정부터 새 모델, 못 쓰는 모델은 거절 | [model_management](../기능표.md#model-management-model_management) |
 | 2026-11-21 | 메인 대시보드: 오른쪽 위 사용자 표시 삭제 (헤더 계정 정보와 겹침) | [main_dashboard](../기능표.md#메인-대시보드-main_dashboard) |
 | 2026-11-21 | 인사 관리·Model Management 목업 계정 삭제 → 로그인 권한, 관리자 = 모든 권한(문서함 삭제 포함) | [hr_management](../기능표.md#인사-관리-hr_management) · [model_management](../기능표.md#model-management-model_management) · [company_documents](../기능표.md#사내-문서함-company_documents) |
 | 2026-11-21 | 사이드바 로고 → Shift 로고 (펼침 = 전체 로고, PC 접힘 = 원형 엠블럼만) | [platform_index](../기능표.md#공정-안전-플랫폼-인덱스-platform_index) |
