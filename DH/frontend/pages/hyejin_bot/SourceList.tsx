@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { ChatSource } from "./sources";
 import s from "./HyejinBot.module.css";
 
-/** 답변에서 인용 ID 추출 → 해당 출처를 위에 펼침 */
+/** 답변에서 인용 ID — 정렬용(인용 먼저). 펼침 없음 */
 function citedIds(answer: string): Set<string> {
   const ids = new Set<string>();
   const re = /\[(DOC-\d+|ALERT-[^\]]+|QKPI-[^\]]+)\]/gi;
@@ -24,65 +24,31 @@ function isCited(docNo: string, cited: Set<string>): boolean {
   return false;
 }
 
-function SourceItem({ src, open }: { src: ChatSource; open: boolean }) {
-  const [expanded, setExpanded] = useState(open);
-  return (
-    <li>
-      <button
-        type="button"
-        className={s.srcToggle}
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <span className={s.srcTitle}>
-          {src.doc_no} · {src.title}
-        </span>
-        <span className={s.srcChevron}>{expanded ? "▾" : "▸"}</span>
-      </button>
-      {expanded && (
-        <div className={s.srcBody}>
-          <div className={s.srcMeta}>
-            {src.kind === "process_alert" ? (
-              <>
-                관리도 알림
-                {src.category ? ` · ${src.category}` : ""}
-                {src.file_name ? ` · ${src.file_name}` : ""}
-              </>
-            ) : src.kind === "quality_kpi" ? (
-              <>
-                품질 검사 KPI
-                {src.line ? ` · ${src.line}` : ""}
-                {src.file_name ? ` · ${src.file_name}` : ""}
-              </>
-            ) : (
-              <>
-                {src.file_name}
-                {src.category ? ` · ${src.category}` : ""} · chunk {src.chunk_no} · score{" "}
-                {src.score}
-              </>
-            )}
-          </div>
-          {src.snippet && <p className={s.snippet}>{src.snippet}</p>}
-          {src.kind === "company_document" && src.file_url ? (
-            <a className={s.fileLink} href={src.file_url} target="_blank" rel="noreferrer">
-              원문 다운로드
-            </a>
-          ) : src.kind === "process_alert" ? (
-            <a className={s.fileLink} href="/casting/process-optimization">
-              공정 최적화 · 관리도 알림
-            </a>
-          ) : src.kind === "quality_kpi" ? (
-            <a className={s.fileLink} href="/casting/quality-inspection">
-              품질 검사 대시보드
-            </a>
-          ) : null}
-        </div>
-      )}
-    </li>
-  );
+function rowLabel(src: ChatSource): string {
+  if (src.kind === "process_alert") {
+    return src.title || src.doc_no;
+  }
+  if (src.kind === "quality_kpi") {
+    return src.title || src.doc_no;
+  }
+  return `${src.doc_no} · ${src.title}`;
 }
 
-/** kind별 접힘 + 인용 출처 우선 펼침 */
+function rowHref(src: ChatSource): string {
+  if (src.kind === "company_document" && src.file_url) return src.file_url;
+  if (src.kind === "process_alert") return "/casting/process-optimization";
+  if (src.kind === "quality_kpi") return "/casting/quality-inspection";
+  return "";
+}
+
+function rowLinkText(src: ChatSource): string {
+  if (src.kind === "company_document") return "원문";
+  if (src.kind === "process_alert") return "관리도";
+  if (src.kind === "quality_kpi") return "품질";
+  return "열기";
+}
+
+/** 출처 = 한 줄(제목+링크). 스니펫·펼침 없음 */
 export default function SourceList({
   sources,
   answer,
@@ -103,7 +69,7 @@ export default function SourceList({
     return { docs, alerts, kpi };
   }, [sources]);
 
-  const [panelOpen, setPanelOpen] = useState(cited.size > 0);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const ordered = useMemo(() => {
     const hit: ChatSource[] = [];
@@ -137,17 +103,27 @@ export default function SourceList({
       </button>
       {panelOpen && (
         <ul className={s.sources} aria-label="출처">
-          {ordered.map((src) => (
-            <SourceItem
-              key={`${src.kind}-${src.doc_no}-${src.chunk_no}-${src.file_name}`}
-              src={src}
-              open={isCited(src.doc_no, cited)}
-            />
-          ))}
+          {ordered.map((src) => {
+            const href = rowHref(src);
+            return (
+              <li key={`${src.kind}-${src.doc_no}-${src.chunk_no}-${src.file_name}`} className={s.srcRow}>
+                <span className={s.srcRowLabel} title={rowLabel(src)}>
+                  {rowLabel(src)}
+                </span>
+                {href ? (
+                  <a
+                    className={s.srcRowLink}
+                    href={href}
+                    target={src.kind === "company_document" ? "_blank" : undefined}
+                    rel={src.kind === "company_document" ? "noreferrer" : undefined}
+                  >
+                    {rowLinkText(src)}
+                  </a>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
-      )}
-      {!panelOpen && cited.size > 0 && (
-        <p className={s.citedHint}>인용 {cited.size}건 — 펼쳐서 확인</p>
       )}
     </div>
   );

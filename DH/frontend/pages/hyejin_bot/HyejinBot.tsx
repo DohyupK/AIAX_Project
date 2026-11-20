@@ -45,17 +45,18 @@ export default function HyejinBot() {
 
     setTurns((t) => [...t, { role: "user", content: text, sources: [] }]);
     setBusy(true);
+    requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     try {
       const res = await askShiftBot(text, {
         history,
         uiContext: snapshotUiContext(),
       });
       setTurns((t) => [...t, { role: "assistant", content: res.answer, sources: res.sources }]);
-      requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+      requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     }
   }
 
@@ -94,8 +95,8 @@ export default function HyejinBot() {
             </div>
           )}
 
-          <div className={s.thread} aria-live="polite">
-            {turns.length === 0 && (
+          <div className={s.thread} aria-live="polite" aria-busy={busy}>
+            {turns.length === 0 && !busy && (
               <p className={s.empty}>질문을 입력하세요. 새 채팅으로 이전 대화를 끊을 수 있습니다.</p>
             )}
             {turns.map((turn, i) =>
@@ -110,6 +111,16 @@ export default function HyejinBot() {
                   <SourceList sources={turn.sources} answer={turn.content} />
                 </div>
               ),
+            )}
+            {busy && (
+              <div className={s.bubbleBot} aria-label="Shift 답변 생성 중">
+                <div className={s.botLabel}>Shift</div>
+                <div className={s.typingDots} aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
             )}
             <div ref={bottomRef} />
           </div>
