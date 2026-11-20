@@ -6,7 +6,10 @@ DB 공정 코드 → 화면 이름 (MS 가 2026-11-18 코드·테이블 이름 �
   SAFE-PPE = 보호구 착용 위반     지표 ai.model_metric_safe_ppe : mAP50·Recall·Precision·F1 (검출 모델, 2026-11-20 서버 칼럼 accuracy → map50)
 강건성(품질 2차 팝업) = ai.model_robustness : 조건별 Accuracy·Recall·Precision·F1 (원본 = 위 성과지표)
 각 공정의 배포(deployed) 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차는 casting/model.py 가 파일을 불러 씀).
-ponytail: 등록·배포(쓰기)는 ai 쓰기 계정이 생긴 뒤 — 배포 시 같은 공정 기존 배포 해제는 DB 트리거가 처리.
+배포(POST /{id}/deploy, edit 권한) = app_ai(AI_DATABASE_URL) 로 deployed=true — 같은 공정 기존 배포 해제는 DB 트리거.
+  배포 전 모델 파일을 실제로 열어 지금 코드로 쓸 수 있는지 확인 (못 쓰면 거절 → 품질 검사 화면 멈춤 방지).
+  품질 1차·2차는 다음 판정부터 새 배포 모델을 씀(casting/model·dl_model 이 매번 DB 배포 행 확인). 보호구는 게이트 프로그램(MS) 재시작 시 적용.
+ponytail: 모델 등록(쓰기)은 아직 — 등록 폼은 입력 검사까지.
 권한 = org 원본 권한 표(access_code + model_management_page) 실시간 — 인사 변경이 바로 반영.
 ponytail: lake 복제(Spark)가 아직 없어 org 원본을 직접 읽음. lake 연결 시 ACCESS_SQL 두 테이블만 lake 사본으로.
 권한 사번 = 로그인 세션 (auth/core.acting_employee). 관리자 = edit.
@@ -17,7 +20,8 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from auth.core import acting_employee
+from auth.core import acting_employee, require_session
+from casting import dl_model, model as qc1_model
 
 from common.db import connect
 
@@ -110,6 +114,60 @@ def models(_: str = Depends(can_read)) -> list[dict]:
 def deployed() -> list[dict]:
     """공정별 배포 모델만 — 다른 대시보드(보호구 등)의 모델 이름 표시용, 계정 불필요"""
     return _models(True)
+
+
+# ---------- 배포 ----------
+PPE_NOTE = "보호구 판정 프로그램(게이트 PC)을 다시 시작하면 새 모델이 적용됩니다."
+
+
+def _check_usable(process_code: str, file_name: str | None) -> None:
+    """배포하려는 모델을 지금 서버 코드로 쓸 수 있는지 — 못 쓰면 이유와 함께 ValueError"""
+    try:
+        if process_code == "CAST-QC1":
+            qc1_model._load(qc1_model._path(file_name))      # pkl 형식(v1 XGB 8개 / v2 CatBoost 12개) 확인 (패키지 없으면 여기서 실패)
+        elif process_code == "CAST-QC2":
+            dl_model._load(dl_model._path(file_name))        # onnx 파일·입출력 형식 확인
+        # SAFE-PPE: 모델 파일이 게이트 PC 에 있어 서버에서 확인 불가 — 배포만 바꿈
+    except (qc1_model.ModelError, dl_model.ModelError) as e:
+        raise ValueError(str(e)) from e
+    except Exception as e:   # 예: catboost 패키지 없음(ModuleNotFoundError), 깨진 파일
+        raise ValueError(f"이 모델을 지금 서버에서 불러올 수 없습니다: {type(e).__name__}: {e}") from e
+
+
+@router.post("/{model_id}/deploy")
+def deploy(model_id: int, request: Request, level: str = Depends(access_level)) -> dict:
+    """모델 1개를 배포 — 같은 공정의 기존 배포는 DB 트리거가 해제. edit 권한(관리자 포함)만"""
+    if level != "edit":
+        raise HTTPException(403, "배포 권한이 없습니다. (Model Management 수정 권한 필요)")
+    try:
+        with connect(DB) as conn:
+            row = conn.execute(
+                "SELECT model_name, version, process_code, file_name, deployed FROM ai.model_registry WHERE model_registry_idx = %s",
+                (model_id,),
+            ).fetchone()
+    except Exception:
+        log.exception("배포 대상 모델 조회 실패 model_id=%s", model_id)
+        raise HTTPException(503, "모델 레지스트리 조회에 실패했습니다.")
+    if not row:
+        raise HTTPException(404, "모델을 찾을 수 없습니다.")
+    note = PPE_NOTE if row["process_code"] == "SAFE-PPE" else "다음 판정부터 새 모델이 적용됩니다."
+    if row["deployed"]:
+        return {"ok": True, "note": note}
+    try:
+        _check_usable(row["process_code"], row["file_name"])
+    except ValueError as e:
+        log.warning("배포 거절 model_id=%s %s %s: %s", model_id, row["model_name"], row["version"], e)
+        raise HTTPException(409, f"배포할 수 없습니다 — {e}")
+    try:
+        with connect("AI_DATABASE_URL") as conn:   # app_ai — model_registry UPDATE 권한 (MS init 17)
+            conn.execute("UPDATE ai.model_registry SET deployed = true WHERE model_registry_idx = %s", (model_id,))
+    except Exception:
+        log.exception("모델 배포 저장 실패 model_id=%s", model_id)
+        raise HTTPException(503, "배포 저장에 실패했습니다.")
+    who = require_session(request)
+    log.info("모델 배포 %s %s (%s) by %s", row["model_name"], row["version"], row["process_code"],
+             f"admin:{who.user_id}" if who.admin else who.employee_no)
+    return {"ok": True, "note": note}
 
 
 # 강건성 = 손상 조건별 성능 (ai.model_robustness, 품질 2차 「강건성」 팝업). 「원본」 줄은 화면이 성과지표로 채움

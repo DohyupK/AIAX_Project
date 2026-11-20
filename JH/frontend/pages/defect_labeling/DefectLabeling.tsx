@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import ShotImage from '../../common/casting/ShotImage';
 import { LINES, type Line } from '../../common/casting/api';
 import {
-  DEFECT_TYPES, fetchDefectDates, fetchDefects, sortByStatus, toggleType, typesOf,
+  DEFECT_TYPES, fetchDefectDates, fetchDefects, saveLabel, sortByStatus, toggleType, typesOf,
   type DefectCode, type DefectShot, type LabelStatus,
 } from './labels';
 import po from '../process_optimization/ProcessOptimization.module.css';
@@ -21,7 +21,7 @@ const LOAD_ERROR = 'JH API 서버(127.0.0.1:8000)를 확인해 주세요.';
 
 /**
  * 불량 유형 라벨링 — 그날 2차(DL) 판정 불량 샷 목록(ai.quality_prediction), 클릭 시 전문가 라벨링 팝업
- * 라벨 상태는 ai.defect_label·ai.defect_discard 에서 읽음. 저장은 ai 쓰기 계정 연결 전이라 막혀 있음 (labels.ts)
+ * 라벨 상태는 ai.defect_label·ai.defect_discard 에서 읽고, 팝업 「완료」로 저장 (labels.ts saveLabel)
  */
 export default function DefectLabeling() {
   const [line, setLine] = useState<Line>('line_no1'); // 기본 line_no1, 공정 최적화·품질 검사와 같은 라인 목록
@@ -103,7 +103,7 @@ export default function DefectLabeling() {
 
       <div className={po.banner}>
         불량 샷은 2차(DL) 검사에서 불량으로 판정된 샷이며(품질 검사 화면에서 판정·저장), 사진은 서버 이미지 API에서 불러옵니다.
-        라벨 상태는 DB에서 읽어 오고, <b>저장은 DB 쓰기 계정 연결 전이라 아직 할 수 없습니다.</b>
+        유형을 고르고 <b>완료</b>를 누르면 DB에 저장됩니다(불량 유형 라벨링 수정 권한 필요).
       </div>
 
       {error && <div className={po.errorBox} role="alert">데이터를 불러오지 못했습니다: {error}</div>}
@@ -154,15 +154,39 @@ export default function DefectLabeling() {
         </section>
       )}
 
-      {opened && <LabelDialog key={opened.castingId} line={line} shot={opened} onClose={() => setOpenId(null)} />}
+      {opened && (
+        <LabelDialog key={opened.castingId} line={line} shot={opened} onClose={() => setOpenId(null)}
+          onSaved={saved => {
+            // 저장 성공 → 그 샷 상태만 바꾸고 팝업 닫기 (목록 재조회 없음)
+            setShots(sh => sh && sh.map(d => (d.castingId === opened.castingId ? { ...d, ...saved } : d)));
+            setOpenId(null);
+          }} />
+      )}
     </div>
   );
 }
 
-/** 라벨링 팝업 — 샷 이미지 + 저장된 유형 표시. 유형은 골라 볼 수 있지만 저장(완료)은 쓰기 계정 연결 전이라 막힘 */
-function LabelDialog({ line, shot, onClose }: { line: Line; shot: DefectShot; onClose: () => void }) {
+/** 라벨링 팝업 — 샷 이미지 + 유형 선택 → 「완료」로 저장 */
+function LabelDialog({ line, shot, onClose, onSaved }: {
+  line: Line; shot: DefectShot; onClose: () => void;
+  onSaved: (saved: Pick<DefectShot, 'status' | 'types'>) => void;
+}) {
   const [selected, setSelected] = useState<DefectCode[]>(() => typesOf(shot));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const status = shot.status;
+
+  const save = () => {
+    setSaving(true);
+    setSaveError(null);
+    saveLabel(shot.castingId, selected)
+      .then(onSaved)
+      .catch((e: Error) => {
+        console.error('[defect_labeling] 라벨 저장 실패', shot.castingId, selected, e);
+        setSaveError(e.message);
+        setSaving(false);
+      });
+  };
 
   // Esc 로 닫기
   useEffect(() => {
@@ -205,10 +229,12 @@ function LabelDialog({ line, shot, onClose }: { line: Line; shot: DefectShot; on
             {selected.includes('UNDECIDABLE') && (
               <p className={s.warnNote}>완료하면 이 샷은 라벨 목록에서 빠지고 폐기 테이블로 이동합니다.</p>
             )}
-            <p className={s.errorNote}>DB 쓰기 계정 연결 전이라 저장할 수 없습니다 (보기만 가능).</p>
+            {saveError && <p className={s.errorNote} role="alert">저장하지 못했습니다: {saveError}</p>}
             <div className={s.actions}>
               <button type="button" className={po.btn} onClick={onClose}>닫기</button>
-              <button type="button" className={s.doneBtn} disabled title="DB 쓰기 계정 연결 전">완료</button>
+              <button type="button" className={s.doneBtn} disabled={saving || !selected.length} onClick={save}>
+                {saving ? '저장 중…' : '완료'}
+              </button>
             </div>
           </fieldset>
         </div>

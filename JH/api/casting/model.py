@@ -2,7 +2,10 @@
 
 배포 모델 = ai.model_registry 의 CAST-QC1·deployed 행 → file_name 으로 TM/model_ml/<이름>/<파일> 을 불러옴.
 배포 모델이 없으면 기본 모델(TM 배포 DieCasting_XGB_20261114_09)을 씀 — 레지스트리 등록 전까지 (사용자 결정 1a).
-pkl 형식: TM 최종 모델 형식(dict: model·features·threshold·thresholds). 명세: TM/기능표.md
+pkl 형식 2가지 (TM 최종 모델 dict: model·features·threshold):
+  v1 XGBoost  — 입력 8개, 첫 칸 pressure_low(압력<600). 결측은 NaN 그대로 (XGBoost 가 처리). 명세: TM/기능표.md
+  v2 CatBoost — 입력 12개(원본 8 + 파생 4) + medians. 명세: TM/model_ml/DieCasting_CatB_20261115_03/*_INPUT.md
+    순서: 금형 온도 4개 중 1000 초과 → 결측 / 파생(결측 빼고 평균) / 남은 결측 → medians / float32
 보안: pickle 은 불러올 때 코드가 실행되므로 TM/model_ml 폴더 안 .pkl 만 허용 (DB 값이라도 다른 경로·형식 거절).
 판정 저장: run_batch 가 샷을 미리 판정해 ai.quality_prediction 1차 칸(qc1_*)에 저장 — 백그라운드 작업(dl_model._loop)이 2차보다 먼저 호출.
 화면 API 는 지금처럼 요청 때 점수를 계산 (같은 모델이라 저장값과 같음).
@@ -29,6 +32,11 @@ DEFAULT_FILE = f"{DEFAULT_NAME}.pkl"
 PROCESS_CODE = "CAST-QC1"                              # DB 코드 = 화면 「품질 1차 검사」
 FILE_RE = re.compile(r"^[A-Za-z0-9_.-]+\.pkl$")        # 파일 이름만 (경로 구분자 금지)
 PRESSURE_LOW = 600                                     # pressure_low = injection_pressure < 600 (TM 전처리 규칙)
+# v2 입력 순서 (TM INPUT.md 4번). DB 칼럼은 소문자 (facility_CycleTime → facility_cycletime)
+V2_FEATURES = ["top_temp1", "top_temp2", "bottom_temp1", "bottom_temp2", "injection_pressure", "biscuit_thickness",
+               "mechanical_strength", "facility_CycleTime", "top_mean", "bottom_mean", "mold_mean", "tb_diff"]
+V2_TEMPS = V2_FEATURES[:4]
+V2_TEMP_MAX = 1000                                     # 금형 온도 1000 초과 = 불가능값 → 그 칸만 결측
 BATCH = 2000                                           # 한 번에 판정·저장할 샷 수 (2,000샷 점수 계산 약 0.7초)
 
 _lock = threading.Lock()
@@ -63,7 +71,10 @@ def _load(path: Path) -> dict:
     if not isinstance(obj, dict) or {"model", "features", "threshold"} - obj.keys():
         raise ModelError(f"모델 형식이 다릅니다 ({path.name}): TM 최종 모델 형식(model·features·threshold) pkl 만 사용 가능")
     feats = list(obj["features"])
-    if len(feats) != 8 or feats[0] != "pressure_low":
+    if feats == V2_FEATURES:
+        if not isinstance(obj.get("medians"), dict) or set(V2_FEATURES) - obj["medians"].keys():
+            raise ModelError(f"v2 모델에 결측 채움 값(medians)이 없습니다 ({path.name})")
+    elif len(feats) != 8 or feats[0] != "pressure_low":
         raise ModelError(f"모델 입력 형식이 다릅니다 ({path.name}): {feats}")
     return obj
 
@@ -86,6 +97,31 @@ def current() -> tuple[dict, dict]:
         return _current["obj"], _current["meta"]
 
 
+def _num(r: dict, k: str) -> float:
+    v = r.get(k.lower(), r.get(k))   # DB 행은 소문자 칼럼
+    return math.nan if v is None else float(v)
+
+
+def _mean(*vals: float) -> float:
+    """결측 빼고 평균, 전부 결측이면 결측 (pandas mean(axis=1) 과 같음)"""
+    ok = [v for v in vals if not math.isnan(v)]
+    return sum(ok) / len(ok) if ok else math.nan
+
+
+def _row_v2(r: dict, medians: dict) -> list[float]:
+    """v2(CatBoost) 입력 12개 — TM INPUT.md 순서 그대로 (파생 계산이 결측 채우기보다 먼저)"""
+    x = {k: _num(r, k) for k in V2_FEATURES[:8]}
+    for k in V2_TEMPS:                                   # ① 불가능한 온도 → 그 칸만 결측
+        if x[k] > V2_TEMP_MAX:
+            x[k] = math.nan
+    x["top_mean"] = _mean(x["top_temp1"], x["top_temp2"])        # ② 파생 (채우기 전)
+    x["bottom_mean"] = _mean(x["bottom_temp1"], x["bottom_temp2"])
+    both = not (math.isnan(x["top_mean"]) or math.isnan(x["bottom_mean"]))
+    x["mold_mean"] = (x["top_mean"] + x["bottom_mean"]) / 2 if both else math.nan
+    x["tb_diff"] = x["top_mean"] - x["bottom_mean"] if both else math.nan
+    return [float(medians[k]) if math.isnan(x[k]) else x[k] for k in V2_FEATURES]   # ③ 남은 결측 → 중앙값
+
+
 def _row(r: dict, features: list[str]) -> list[float]:
     p = r.get("injection_pressure")
     # pandas (x < 600).astype(int) 와 같게: 결측이면 0 — 나머지 7개 결측은 NaN 으로 두면 XGBoost 가 처리
@@ -99,7 +135,10 @@ def scores(rows: list[dict]) -> list[float]:
     if not rows:
         return []
     m, _ = current()
-    x = np.array([_row(r, m["features"]) for r in rows], dtype=float)
+    if "medians" in m:   # v2 CatBoost — float32 입력 (TM 학습과 같게)
+        x = np.array([_row_v2(r, m["medians"]) for r in rows], dtype=np.float32)
+    else:
+        x = np.array([_row(r, m["features"]) for r in rows], dtype=float)
     return [float(v) for v in m["model"].predict_proba(x)[:, 1]]
 
 
@@ -162,7 +201,7 @@ def info() -> dict:
     return {
         **meta,
         "threshold": float(m["threshold"]),
-        "trainedOn": m.get("trained_on", ""),
+        "trainedOn": m.get("trained_on") or m.get("train", ""),   # v1 trained_on / v2 train
         "features": list(m["features"]),
         "test": {k: float(v) for k, v in test.items() if k in ("Recall", "Precision", "F1")},
     }

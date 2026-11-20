@@ -326,6 +326,16 @@
 
 .btnPrimary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btnPrimary:hover { background: #2563eb; }
+.btn:disabled { opacity: 0.6; cursor: wait; }
+
+/* 배포 버튼·결과 — 배포 여부 배지 옆 */
+.deployBtn { margin-left: 8px; padding: 3px 14px; font-size: 13px; }
+.deployOk, .deployErr { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; }
+.deployOk { color: var(--ok, #16875b); }
+.deployErr { color: var(--bad, #cf2f2f); word-break: break-word; }
+@media (max-width: 460px) {
+  .deployBtn { min-height: 40px; padding: 6px 18px; }
+}
 
 
 @media (max-width: 900px) {

@@ -63,6 +63,23 @@ async function get<T>(path: string): Promise<T> {
   }
 }
 
+/**
+ * 모델 배포 — 같은 공정 기존 배포는 서버(DB 트리거)가 해제. 서버가 모델 파일을 열어 보므로 시간 여유 60초
+ * 실패 시 서버 안내 문구(detail)를 그대로 던짐 (예: 「배포할 수 없습니다 — … catboost」)
+ */
+export async function deployModel(id: number): Promise<{ note: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api/models/${id}/deploy`, { method: "POST", cache: "no-store", signal: AbortSignal.timeout(60_000) });
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) throw new Error("배포 요청 시간 초과 (60초)");
+    throw new Error("JH API 서버에 연결할 수 없습니다.");
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(typeof body?.detail === "string" ? body.detail : `배포 실패 (HTTP ${res.status})`);
+  return { note: String(body?.note ?? "") };
+}
+
 /** Model Management 권한 — none: 접근 불가 / read: 보기 / edit: 보기 + 등록·배포 */
 export type AccessLevel = "none" | "read" | "edit";
 export async function fetchAccess(): Promise<AccessLevel> {

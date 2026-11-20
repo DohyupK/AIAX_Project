@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "./ModelManagement.module.css";
 import ModelForm from "./ModelForm";
 import RobustnessDialog from "./RobustnessDialog";
-import { METRIC_LABEL, PROCESS, PROCESS_METRICS, fetchAccess, fetchModels, fetchRobustness, type AccessLevel, type Model, type Process, type RobustnessRow } from "./data";
+import { METRIC_LABEL, PROCESS, PROCESS_METRICS, deployModel, fetchAccess, fetchModels, fetchRobustness, type AccessLevel, type Model, type Process, type RobustnessRow } from "./data";
 import po from "../process_optimization/ProcessOptimization.module.css";
 import { averageRobustness, orderRobustness, sortModels, type SortKey } from "./logic";
 
@@ -30,7 +30,7 @@ const ACCESS_LABEL: Record<AccessLevel, string> = { none: "접근 불가", read:
 
 /**
  * Model Management — 공정별 모델 목록·성과지표 조회 (서버 DB, 읽기 전용)
- * 공정별 배포 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차 → 품질 검사 1차 판정 등). 등록·배포 저장은 쓰기 계정 연결 후
+ * 공정별 배포 모델 = 그 화면이 실제로 쓰는 모델 (품질 1차 → 품질 검사 1차 판정 등). 「배포」 버튼 → 서버 저장 → 각 화면 다음 판정부터 적용 (등록 저장은 아직)
  * 로그인 계정의 사번 → 서버 페이지 권한(관리자 = edit): none 화면 차단 / read 보기만 / edit 등록(+)·배포 안내 보임
  */
 export default function ModelManagement() {
@@ -46,6 +46,9 @@ export default function ModelManagement() {
   const [robust, setRobust] = useState<{ id: number; rows: RobustnessRow[] | null; error: string } | null>(null);
   // 팝업 Esc 리스너가 매 렌더 다시 붙지 않도록 같은 함수 유지
   const closeRobust = useCallback(() => setRobustOpen(false), []);
+  const [reload, setReload] = useState(0); // 배포 후 목록 다시 조회
+  const [deploying, setDeploying] = useState(false);
+  const [deployMsg, setDeployMsg] = useState<{ id: number; ok: boolean; text: string } | null>(null); // 그 모델을 고른 동안만 표시
 
   // 로그인 계정 권한 → (보기 권한이면) 모델 목록
   useEffect(() => {
@@ -64,7 +67,25 @@ export default function ModelManagement() {
         setModels([]);
       });
     return () => { alive = false; };
-  }, []);
+  }, [reload]);
+
+  async function onDeploy(m: Model) {
+    const prev = models?.find((x) => x.process === m.process && x.deployed);
+    const label = PROCESS[m.process].label;
+    if (!window.confirm(`${m.name} ${m.version} 모델을 「${label}」에 배포할까요?${prev ? `\n기존 배포 모델 ${prev.name} ${prev.version} 는 해제됩니다.` : ""}`)) return;
+    setDeploying(true);
+    setDeployMsg(null);
+    try {
+      const { note } = await deployModel(m.id);
+      setDeployMsg({ id: m.id, ok: true, text: `배포 완료 — ${note}` });
+      setReload((n) => n + 1);
+    } catch (e) {
+      console.error("[model_management] 배포 실패", e);
+      setDeployMsg({ id: m.id, ok: false, text: (e as Error).message });
+    } finally {
+      setDeploying(false);
+    }
+  }
   const canEdit = access === "edit";
 
   const visible = sortModels(
@@ -147,7 +168,15 @@ export default function ModelManagement() {
                   <span className={`${styles.badge} ${selected.deployed ? styles.badgeOn : ""}`}>
                     {selected.deployed ? "Y · 배포" : "N · 미배포"}
                   </span>
-                  {canEdit && !selected.deployed && <span className={styles.muted}> 배포 변경: {DB_WRITE_PENDING}</span>}
+                  {canEdit && !selected.deployed && (
+                    <button type="button" className={`${styles.btn} ${styles.btnPrimary} ${styles.deployBtn}`} disabled={deploying}
+                      onClick={() => onDeploy(selected)}>
+                      {deploying ? "배포 중…" : "배포"}
+                    </button>
+                  )}
+                  {deployMsg?.id === selected.id && (
+                    <p className={deployMsg.ok ? styles.deployOk : styles.deployErr} role={deployMsg.ok ? "status" : "alert"}>{deployMsg.text}</p>
+                  )}
                 </dd>
                 {selected.deployed && (
                   <>
