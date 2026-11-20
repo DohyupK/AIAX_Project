@@ -6,7 +6,7 @@
 
 - TM 규칙(실시간용 규칙 1~6)으로 라인 3개의 샷을 만들어 **`mes.investment_casting`에 바로 저장**해요. Kafka는 거치지 않아요.
 - 라인마다 약 150초에 1샷을 만들어요(1배속). 켜지면 **DB의 라인별 마지막 샷에서 이어서** 만들어요.
-- 시연 배속: `mes.shot_generator_control.speed`(1 또는 20). JH 공정최적화 실시간 ×20 → `PUT /api/casting/demo-speed`. 20배면 벽시계 기준 약 7.5초마다 INSERT하고, DB에 넣는 시각은 벽시계로 찍어요(`/live`가 받게).
+- 시연 배속: `mes.shot_generator_control.speed`(1 또는 20). JH 공정최적화 실시간 ×20 → `PUT /api/casting/demo-speed`. 20배면 **사이클 값·샷 간격**을 ÷20(~150→~7.5초)으로 넣고, DB 시각은 벽시계로 찍어요(`/live`가 받게).
 - 꺼져 있던 동안의 샷은 다시 켜질 때 한꺼번에 채워요. 그래서 공백이 생기지 않아요.
 - DB가 끊기면 같은 샷을 10초마다 다시 시도해요. 샷을 버리지 않아요.
 - 이미지는 다루지 않아요. MS PC의 `MS/db/apps` 안에 있는 `apps.image_sender`가 따로 붙여요.

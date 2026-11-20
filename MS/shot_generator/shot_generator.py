@@ -14,7 +14,8 @@ r"""실시간 샷 생성기 — TM 「시연 데이터 생성 규칙 (실시간�
   run  : 운영. DB 의 라인별 마지막 샷에서 이어서, 샷 시각이 되면 mes 에 저장
          꺼져 있던 동안의 샷은 다시 켜질 때 한꺼번에 채움. DB 가 끊기면 같은 샷을 계속 다시 시도
          --speed 로 초기 배속(기본 1). 운영 중에는 mes.shot_generator_control.speed 를 읽어 바꿈
-         (JH 공정최적화 ×20 → /api/casting/demo-speed). 배속>1 이면 INSERT 시각은 벽시계로 찍어 live 조회에 보이게 함
+         (JH 공정최적화 ×20 → /api/casting/demo-speed). 배속>1 이면 사이클·샷간격 ÷speed(~150/20),
+         INSERT 시각은 벽시계로 찍어 live 조회에 보이게 함
          --table 로 시험 테이블에 넣어 볼 수 있음 (예: mes.investment_casting_test, 같은 구조)
 설정: 환경변수 또는 .env 파일 (--env 로 지정, 없으면 이 폴더의 .env → 위쪽 폴더의 .env 순서로 찾음)
   DATABASE_URL = app_mes 계정 (mes 읽기·쓰기)
@@ -168,12 +169,13 @@ class Generator:
         self.rng = random.Random(seed)
         self.model = Model(p, self.rng, np.random.default_rng(seed))
         self.p = p
+        self.speed = 1.0   # 시연 배속 — 시각 진행·사이클 저장값 ÷speed (1이면 원본)
 
     def new_run(self, ln: Line, min_hours: float = 0.0) -> None:
         """규칙 1: 런 끝 → 정지 시간 → 새 런 (런 길이는 원본 62개 중 하나)"""
-        ln.t += timedelta(seconds=self.rng.choice(self.p["stop_seconds"]))
+        ln.t += timedelta(seconds=self.rng.choice(self.p["stop_seconds"]) / self.speed)
         hours = [h for h in self.p["run_hours"] if h > min_hours] or self.p["run_hours"]
-        ln.run_end = ln.t + timedelta(hours=self.rng.choice(hours))
+        ln.run_end = ln.t + timedelta(hours=self.rng.choice(hours) / self.speed)
         ln.count = 0
 
     def next_shot(self, ln: Line) -> dict:
@@ -196,14 +198,18 @@ class Generator:
         ln.under_streak = ln.under_streak + 1 if kind == "under" else 0
         fail = int(self.rng.random() < m.defect_prob(v, kind != "normal", ln.prev_fail))
         ln.prev_fail = fail
-        # 규칙 1: 시각 — 런 첫 샷은 정지가 끝난 시각, 그 뒤는 앞 샷 + 이번 생산 사이클
+        # 시연 배속: 사이클 값·샷 간격 모두 ÷speed (×20 → ~150/20≈7.5초)
+        sp = self.speed if self.speed > 0 else 1.0
+        prod_ct = v["production_cycletime"] / sp
+        fac_ct = v["facility_cycletime"] / sp
+        # 규칙 1: 시각 — 런 첫 샷은 정지가 끝난 시각, 그 뒤는 앞 샷 + 이번 생산 사이클(배속 반영)
         if not first:
-            ln.t += timedelta(seconds=v["production_cycletime"])
+            ln.t += timedelta(seconds=prod_ct)
         ln.count += 1
         shot = {"line_unit": ln.name, "production": "CylinderHead", "timestamp": ln.t.strftime("%Y-%m-%d"),
                 "date": f"{ln.t.hour}:{ln.t:%M:%S}", "production_count": ln.count,
-                "mold_temperature": v["mold_temperature"], "facility_CycleTime": v["facility_cycletime"],
-                "production_CycleTime": v["production_cycletime"], "mechanical_strength": v["mechanical_strength"],
+                "mold_temperature": v["mold_temperature"], "facility_CycleTime": fac_ct,
+                "production_CycleTime": prod_ct, "mechanical_strength": v["mechanical_strength"],
                 "molten_capacity": v["molten_capacity"], "injection_pressure": v["injection_pressure"],
                 "sleeve_temperature": v["sleeve_temperature"], "top_temp1": v["top_temp1"], "top_temp2": v["top_temp2"],
                 "top_temp3": v["top_temp3"], "top_temp4": v["top_temp4"], "bottom_temp1": v["bottom_temp1"],
@@ -355,12 +361,32 @@ class Db:
 
 
 def _stamp_wall(shot: dict) -> dict:
-    """배속 INSERT 시 live(date<=now)에 보이도록 시각만 벽시계로 바꿈 (사이클 피처값은 그대로)"""
+    """배속 INSERT 시 live(date<=now)에 보이도록 시각만 벽시계로 바꿈 (사이클 값은 이미 ÷speed)"""
     now = datetime.now(KST).replace(tzinfo=None)
     out = dict(shot)
     out["timestamp"] = now.strftime("%Y-%m-%d")
     out["date"] = f"{now.hour}:{now:%M:%S}"
     return out
+
+
+def _apply_speed_change(
+    gen: Generator, lines: dict[str, Line], pending: dict[str, dict],
+    old: float, new: float,
+) -> tuple[datetime, float]:
+    """배속 변경 — 남은 due·대기 샷 사이클을 old→new 비율로 맞추고 wait 기준점 재설정"""
+    now_t = datetime.now(KST).replace(tzinfo=None)
+    gen.speed = new
+    for name, ln in lines.items():
+        if ln.t > now_t:
+            rem = (ln.t - now_t).total_seconds()
+            ln.t = now_t + timedelta(seconds=rem * old / new)
+        sh = pending[name]
+        for key in ("facility_CycleTime", "production_CycleTime"):
+            sh[key] = float(sh[key]) * old / new
+        sh["timestamp"] = ln.t.strftime("%Y-%m-%d")
+        sh["date"] = f"{ln.t.hour}:{ln.t:%M:%S}"
+    log(f"배속 변경 {old:g} → {new:g}")
+    return now_t, time.monotonic()
 
 
 def run_stream(gen: Generator, mode: str, speed: float, max_shots: int | None, table: str) -> None:
@@ -400,6 +426,7 @@ def run_stream(gen: Generator, mode: str, speed: float, max_shots: int | None, t
     else:
         for name in LINES:
             lines[name] = Line(name, now - timedelta(seconds=gen.rng.randint(0, 150)))   # 설비마다 시작 시점 다르게
+    gen.speed = speed
     log(f"모드={mode} 저장={table if db else '안 함(화면 출력)'} 배속={speed}")
 
     pending = {name: gen.next_shot(ln) for name, ln in lines.items()}
@@ -407,40 +434,37 @@ def run_stream(gen: Generator, mode: str, speed: float, max_shots: int | None, t
     sent = dup = 0
     try:
         while max_shots is None or sent < max_shots:
-            # 운영: JH 가 바꾼 배속을 매 루프 반영. 바뀌면 wait 기준점 재보정
+            # 운영: JH 가 바꾼 배속을 매 루프 반영 (사이클·due 이미 ÷speed 이므로 wait 에 다시 나누지 않음)
             if db is not None:
                 new_speed = db.read_speed(speed)
                 if new_speed != speed:
-                    log(f"배속 변경 {speed} → {new_speed}")
+                    start_sim, start_wall = _apply_speed_change(gen, lines, pending, speed, new_speed)
                     speed = new_speed
-                    due0 = min(lines[k].t for k in lines)
-                    start_sim, start_wall = due0, time.monotonic()
             name = min(pending, key=lambda k: lines[k].t)          # 가장 이른 샷부터
             shot = pending[name]
             due = lines[name].t
             # 샷 시각이 될 때까지 기다림 (지난 시각이면 바로 — 꺼져 있던 동안 밀린 샷 채우기)
-            # 1초 단위로 잘라 자며, 중간에 배속이 바뀌면 바로 다시 계산 (×20 켠 뒤 150초 대기 방지)
+            # due 가 이미 ÷speed 압축됨 → wait 에서 speed 로 또 나누지 않음. 1초 단위로 자며 배속 변경 반영
             while True:
-                wait = (due - start_sim).total_seconds() / speed - (time.monotonic() - start_wall)
+                wait = (due - start_sim).total_seconds() - (time.monotonic() - start_wall)
                 if wait <= 0:
                     break
                 time.sleep(min(wait, 1.0))
                 if db is not None:
                     new_speed = db.read_speed(speed)
                     if new_speed != speed:
-                        log(f"배속 변경 {speed} → {new_speed}")
+                        start_sim, start_wall = _apply_speed_change(gen, lines, pending, speed, new_speed)
                         speed = new_speed
-                        start_sim, start_wall = due, time.monotonic()
-                        wait = 0
-                        break
+                        due = lines[name].t
             body = {k: v for k, v in shot.items() if not k.startswith("_")}
-            # 배속>1: 시뮬 시각은 규칙대로 앞서가되, DB 시각은 벽시계로 찍어 /live 가 받게 함
+            # 배속>1: DB 시각은 벽시계로 찍어 /live 가 받게 함 (사이클 값은 이미 ÷speed)
             if mode == "run" and speed != 1.0:
                 body = _stamp_wall(body)
             cid = casting_id(body)
             if db is None or db.insert(body):
                 sent += 1
-                log(f"샷 {cid} {shot['_kind']} PassOrFail={body['PassOrFail']} ×{speed:g}")
+                log(f"샷 {cid} {shot['_kind']} PassOrFail={body['PassOrFail']} "
+                    f"cycle={body['production_CycleTime']:.1f}s ×{speed:g}")
             else:
                 dup += 1
                 log(f"샷 {cid} 이미 있음 — 건너뜀")

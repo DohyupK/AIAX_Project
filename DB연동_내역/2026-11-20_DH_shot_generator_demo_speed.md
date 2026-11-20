@@ -21,3 +21,4 @@
 
 - 스키마 변경 이유: JH(app_lake)와 MS 생성기 사이 HTTP 없이 배속 공유.
 - 서버에 init 28 적용 후 JH API·생성기 재시작. 페이지 이탈 시 speed=1 로 되돌림.
+- 배속 20: `facility_cycletime`·`production_cycletime` 도 ÷20 저장(~7.5초). JH live 장면은 최근 샷 사이클·sceneSpeed=1.
