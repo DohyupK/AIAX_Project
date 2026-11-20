@@ -45,3 +45,6 @@ Thumbs.db
 # 런타임 로그
 **/logs/*.log
 *.log
+
+# MS 게이트 판정 모델 파일 (크기가 커서 Git 제외)
+MS/db/apps/models/

@@ -19,6 +19,18 @@ MS PC image_sender → Kafka → Flink image_ingest ──POST /api/images──
 | 저장 | `/root/images/L{라인}/{yymmdd}/{casting_id}.jpg` |
 | 보기 | `GET /api/images/{casting_id}` → jpg |
 
+## 보호구 판정 사진 (init 29)
+
+판정 1건마다 사진 1장. 게이트 → Kafka `aiax.ppe.frame` → Flink `ppe_frame_select`(중요한 장면 고름) → 이 API.
+
+| 주소 | 뜻 |
+|---|---|
+| `POST /api/images/ppe/{판정번호}` | Flink 가 보냄 (헤더 `X-API-Key`, 본문 `{"image_base64", "detected_count", "score"}`) → `/root/images/ppe/<판정번호>.jpg` + `ai.ppe_check_image` |
+| `GET /api/images/ppe/{판정번호}` | 그 판정의 사진 (웹: 판정 기록 행 → `<img src=…>`) |
+
+- 같은 판정번호는 덮어써요. 없는 판정번호는 400.
+- 코드를 받은 뒤 API만 다시 시작: `sudo systemctl restart image_api`
+
 ## 서버에 올리기 (DH)
 
 1. DB: `MS/db/init/27_주조이미지_경로라벨.sql` (`image_path`·`image_label` 칸) — 2026-11-20 서버 적용 완료
