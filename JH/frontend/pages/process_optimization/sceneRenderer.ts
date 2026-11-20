@@ -490,16 +490,17 @@ export function createDiecastScene(svg: SVGSVGElement, o: SceneOptions) {
     const lead = el('polyline', { class: c.lead }, g);
     const ring = el('circle', { class: c.ring, r: 3 }, g), anc = el('circle', { class: c.anc, r: 3 }, g);
     const b = el('g', { transform: `translate(${bx},${by})`, class: c.hit, tabindex: 0, role: 'button', 'aria-label': `${o.label(id)} — 공정 변수 모니터로 이동` }, g);
-    el('rect', { class: c.box, width: W, height: Hh, rx: 6 }, b);
-    el('rect', { class: c.stat, x: 0, y: 10, width: 5, height: Hh - 20, rx: 2.5 }, b);
-    el('text', { class: c.nm, x: 14, y: 24 }, b).textContent = o.label(id);
-    const val = el('text', { class: c.val, x: 14, y: 56 }, b);
+    // Mosaic 카드 라벨 — 둥근 상자 + 오른쪽 위 상태 배지(바탕 사각형 + 글자). 색은 DiecastScene.module.css
+    el('rect', { class: c.box, width: W, height: Hh, rx: 12 }, b);
+    const sbBg = el('rect', { class: c.sbBg, x: W - 54, y: 9, width: 46, height: 22, rx: 11 }, b);
+    el('text', { class: c.nm, x: 12, y: 25 }, b).textContent = o.label(id);
+    const val = el('text', { class: c.val, x: 12, y: 58 }, b);
     const unit = el('tspan', { class: c.un, dx: 4 });
-    const sb = el('text', { class: c.sb, x: W - 10, y: 24, 'text-anchor': 'end' }, b);
+    const sb = el('text', { class: c.sb, x: W - 31, y: 25, 'text-anchor': 'middle' }, b);
     const pick = () => o.onPick(id);
     b.addEventListener('click', pick);
     b.addEventListener('keydown', e => { const k = (e as KeyboardEvent).key; if (k === 'Enter' || k === ' ') { e.preventDefault(); pick(); } });
-    return { id, bx, by, g, lead, ring, anc, val, unit, sb, shown: NaN };
+    return { id, bx, by, g, lead, ring, anc, val, unit, sb, sbBg, shown: NaN };
   });
   function anchorOf(id: FeatureKey, face: number): V {
     switch (id) {
@@ -715,6 +716,7 @@ export function createDiecastScene(svg: SVGSVGElement, o: SceneOptions) {
       const tone = st === 'bad' ? c.alarm : st === 'warn' || st === 'na' ? c.warn : live ? c.live : '';
       l.g.setAttribute('class', `${c.lbl} ${tone}`);
       l.sb.textContent = rec ? STATUS_TEXT[st] : '';
+      l.sbBg.style.display = rec ? '' : 'none'; // 샷 없을 때는 배지도 숨김
       const a = P(anchorOf(l.id, face));
       l.lead.setAttribute('points', `${a[0]},${a[1]} ${clamp(a[0], l.bx, l.bx + W)},${clamp(a[1], l.by, l.by + Hh)}`);
       circleAt(l.anc, a); circleAt(l.ring, a);

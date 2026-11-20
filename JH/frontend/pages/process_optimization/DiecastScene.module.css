@@ -1,6 +1,9 @@
-/* 다이캐스팅 설비 장면 — 밝은 테마. 설비 색상은 sceneRenderer.ts 안에 원본 그대로 */
+/* 다이캐스팅 설비 장면 — 밝은 테마 고정(다크 모드에서도 그대로). 설비 색상은 sceneRenderer.ts 안에 원본 그대로
+   색 변수는 예전 페이지 공용 값(ProcessOptimization .page)과 같은 값을 장면에 고정 — 페이지가 Tailwind로 바뀌어도 장면 모양 유지 */
 .scene {
-  position: relative; overflow: hidden; padding: 0;
+  --ink: #0f1b2d; --muted: #5b6779; --accent: #2563c9; --ok: #16875b; --warn: #b97707; --bad: #cf2f2f;
+  --mono: ui-monospace, 'IBM Plex Mono', Consolas, monospace;
+  position: relative; overflow: hidden; padding: 0; color: var(--ink);
   background: radial-gradient(ellipse at 55% 45%, #ffffff 0%, #eef2f6 75%);
 }
 .svg { display: block; width: 100%; height: auto; }
@@ -11,18 +14,24 @@
 .bannerE { font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
 
 .legend { position: absolute; right: 14px; bottom: 8px; display: flex; gap: 14px; color: var(--muted); font-size: 11px; }
+/* 폰: 장면이 카드 안에서 좌우로 밀리므로 범례를 겹치지 않게 장면 아래 줄로 */
+@media (max-width: 460px) {
+  .legend { position: static; justify-content: flex-end; padding: 6px 14px 10px; }
+}
 .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 
-/* 센서 라벨 (SVG) */
-.box { fill: rgba(255, 255, 255, 0.94); stroke: #c9d1db; stroke-width: 1; }
-.svg .nm { fill: #5b6779; font-size: 16px; }
-.svg .val { fill: #0f1b2d; font-family: var(--mono); font-size: 27px; font-weight: 600; }
-.svg .un { fill: #5b6779; font-family: var(--mono); font-size: 15px; }
-.svg .sb { fill: #5b6779; font-size: 14px; font-weight: 600; }
+/* 센서 라벨 (SVG) — Mosaic 카드: 흰 바탕·옅은 테두리·그림자, 이름 회색 / 값 굵게, 오른쪽 위 상태 배지
+   색 = 앱 공용 Mosaic 값 (gray-200·500·800, green·yellow·red-500/700, brand-700) */
+.box { fill: #ffffff; stroke: #e5e7eb; stroke-width: 1.5; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.08)); }
+.svg .nm { fill: #6b7280; font-size: 16px; font-weight: 500; }
+.svg .val { fill: #1f2937; font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.svg .un { fill: #9ca3af; font-size: 15px; font-weight: 500; }
+/* 상태 배지 — 기본(정상) 초록 */
+.sbBg { fill: rgb(62 201 114 / 0.2); }
+.svg .sb { fill: #239f52; font-size: 13px; font-weight: 600; }
 .lead { stroke: #9aa6b4; stroke-width: 1; fill: none; }
 .anc { fill: #7a8696; }
 .ring { fill: none; stroke: #7a8696; stroke-width: 1; opacity: 0; }
-.stat { fill: #16875b; }
 .lbl { pointer-events: auto; }
 /* 품질 검사 이동 버튼 (장면 안) */
 .qcBtn { cursor: pointer; }
@@ -32,15 +41,18 @@
 .qcBtn:focus { outline: none; }
 .qcBtn:focus-visible .qcBox { stroke: var(--ink); stroke-width: 3; }
 .hit { cursor: pointer; }
-.hit:hover .box { stroke: var(--accent); stroke-width: 1.5; }
+.hit:hover .box { stroke: #bfc4cd; }
 .hit:focus { outline: none; }
-.hit:focus-visible .box { stroke: var(--accent); stroke-width: 2; }
+.hit:focus-visible .box { stroke: #1d5fae; stroke-width: 2.5; }
 
-.live .stat { fill: var(--accent); }
-.warn .box { stroke: var(--warn); } .warn .stat, .warn .anc { fill: var(--warn); } .warn .lead { stroke: #d9b066; }
-.alarm .box { stroke: var(--bad); animation: pulse 1s infinite; } .alarm .stat, .alarm .anc { fill: var(--bad); } .alarm .lead { stroke: #e08a8a; }
+/* 사출 중(사출 압력) = 남색 테두리 · 주의 = 노랑 · 이탈 = 빨강(깜빡임) */
+.live .box { stroke: #002c5f; stroke-width: 2; }
+.warn .box { stroke: #f0bb33; stroke-width: 2; } .warn .sbBg { fill: rgb(240 187 51 / 0.2); } .svg .warn .sb { fill: #bc9021; }
+.warn .anc { fill: #f0bb33; } .warn .lead { stroke: #d9b066; }
+.alarm .box { stroke: #ff5656; stroke-width: 2; animation: pulse 1s infinite; } .alarm .sbBg { fill: rgb(255 86 86 / 0.2); } .svg .alarm .sb { fill: #e63939; }
+.alarm .anc { fill: #ff5656; } .alarm .lead { stroke: #e08a8a; }
 .warn .ring, .alarm .ring { animation: ring 1.4s infinite; }
-.warn .ring { stroke: var(--warn); } .alarm .ring { stroke: var(--bad); }
+.warn .ring { stroke: #f0bb33; } .alarm .ring { stroke: #ff5656; }
 @keyframes pulse { 50% { stroke-opacity: 0.25; } }
 @keyframes ring { 0% { r: 3; opacity: 0.9; } 100% { r: 16; opacity: 0; } }
 
@@ -54,7 +66,6 @@
   .alarm .box, .warn .ring, .alarm .ring, .flow, .flicker { animation: none; }
 }
 
-/* 배속 버튼 — 장면 위 별도 줄 (센서 라벨과 겹치지 않게) */
+/* 배속 버튼 — 장면 위 별도 줄 (센서 라벨과 겹치지 않게). 버튼 모양은 DiecastScene.tsx(Tailwind) */
 .speed { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 10px 14px 0; }
 .speedInfo { font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
-.speedOn { background: var(--accent); border-color: var(--accent); color: #ffffff; }
