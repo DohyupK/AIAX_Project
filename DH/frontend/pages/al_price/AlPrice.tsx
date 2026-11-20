@@ -152,16 +152,17 @@ export default function AlPrice() {
   // 페이지 탭 (부팅 후)
   useEffect(() => {
     if (!booted || !meta?.max_date || loading) return;
+    const maxDate = meta.max_date; // string | null 좁히기 (tsc — loadPage/prefetchPage 인자)
     let alive = true;
     (async () => {
       try {
         if (page === 1 && yearRows.length) {
           setTableRows(yearRows);
         } else {
-          const rows = await loadPage(meta.max_date, page);
+          const rows = await loadPage(maxDate, page);
           if (alive) setTableRows(rows);
         }
-        prefetchPage(meta.max_date, page + 1, pages);
+        prefetchPage(maxDate, page + 1, pages);
       } catch (e) {
         if (alive) setError((e as Error).message);
       }

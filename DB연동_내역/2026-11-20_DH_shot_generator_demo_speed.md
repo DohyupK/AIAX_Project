@@ -8,7 +8,7 @@
 | 기능표 링크 | [JH 공정 최적화](../JH/기능표.md#공정-최적화-대시보드-process_optimization) · [MS 실시간 샷 생성기](../MS/기능표.md#실시간-샷-생성기-2026-11-20) |
 | DB 종류 | PostgreSQL (NCP `aiax`) |
 | DB 상대경로 | `MS/db/init/28_shot_generator_control.sql` |
-| 목적 | 시연 시 ~150초/샷 적재를 20배속으로 맞추고, JH ×20 버튼과 동기화 |
+| 목적 | (철회) 시연 배속 표·API — **사용 안 함**. 가속은 생성기 `--speed 20` 만 |
 
 ## 테이블·연동
 
@@ -20,5 +20,5 @@
 ## 메모
 
 - 스키마 변경 이유: JH(app_lake)와 MS 생성기 사이 HTTP 없이 배속 공유.
-- 서버에 init 28 적용 후 JH API·생성기 재시작. 페이지 이탈 시 speed=1 로 되돌림.
-- 배속 20: `facility_cycletime`·`production_cycletime` 도 ÷20 저장(~7.5초). JH live 장면은 최근 샷 사이클·sceneSpeed=1.
+- **2026-11-21 철회:** JH `demo-speed`·control 표 연동 제거. init 28은 적용하지 않아도 됨. 시연은 `shot_generator --speed 20`.
+- 배속 20 시 생성기가 `facility`/`production` cycletime·간격을 ÷20 저장.
