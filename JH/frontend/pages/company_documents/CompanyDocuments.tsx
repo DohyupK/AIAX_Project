@@ -6,7 +6,7 @@ import {
   type Category, type DocMeta, type UploadDraft,
 } from './docs';
 import { addDoc, deleteDoc, getDocBlob, getDocPreview, getDocText, listDocs, searchDocs, type SearchHit } from './docStore';
-import { getCurrentUser } from '../../common/currentUser';
+import { useCurrentUser } from '../../common/currentUser';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import s from './CompanyDocuments.module.css';
 
@@ -181,7 +181,7 @@ function UploadDialog({ defaultCategory, onClose, onUploaded }: {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   useEscape(onClose);
-  const user = getCurrentUser();
+  const user = useCurrentUser();
 
   const draft: UploadDraft = { title, category, file: file && { name: file.name, size: file.size } };
   const errors = validateUpload(draft);
@@ -270,7 +270,7 @@ function DetailDialog({ doc, onClose, onDeleted }: { doc: DocMeta; onClose: () =
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   useEscape(onClose);
-  const deletable = canDelete(doc, getCurrentUser());
+  const deletable = canDelete(doc, useCurrentUser());
 
   async function remove() {
     if (!window.confirm(`「${doc.title}」 문서를 삭제할까요?\n삭제하면 되돌릴 수 없습니다.`)) return;

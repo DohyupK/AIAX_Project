@@ -29,6 +29,8 @@
 | management_report | 경영 관리자 리포트 | JH | JH/main/management_report | 루트 `app/management-report/page.tsx`에서 호출. 일일·주간·월간 목업 리포트 | 2026-11-14 |
 | ppe_violation | 보호구 착용 위반 대시보드 | JH | JH/main/ppe_violation | 루트 `app/safety/ppe-violation/page.tsx`에서 호출 (DH 승인). 옛 이름 작업자 안전 관리(worker_safety)에서 명칭·경로 변경. 검색대 기록·월간 위반 보고서는 목업(DB 연결 전) | 2026-11-17 |
 | al_price | 알루미늄 가격 | DH | DH/main/al_price | 루트 `app/al-price/page.tsx`. 조회 `/al-price/api/prices`→serve :8766. `org.aluminum_price` | 2026-11-20 |
+| login | 로그인 (사이드바 없음) | JH | JH/main/auth | 루트 `app/login/page.tsx`. 미로그인 시 모든 페이지 → 여기 (루트 `middleware.ts` → `JH/main/auth_gate`, DH 승인). JH API `/api/auth/login` | 2026-11-21 |
+| signup | 회원가입 (사이드바 없음) | JH | JH/main/auth | 루트 `app/signup/page.tsx`. 이름·사번(org 직원 확인)·이메일·아이디·비밀번호. JH API `/api/auth/signup`. 계정 저장은 DB 테이블 확정 전 `JH/data/auth.db` | 2026-11-21 |
 
 ## 추가할 때 채울 열
 

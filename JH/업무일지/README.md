@@ -4,6 +4,7 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-21 | 로그인·회원가입: 관리자 1개(모든 권한), 사번 확인 가입·즉시 사용, 미로그인 시 로그인 화면, 권한은 세션 사번(인사·Model Management·문서함), 계정은 DB 테이블 전 임시 SQLite (DH 승인) | [auth](../기능표.md#로그인회원가입-auth) |
 | 2026-11-21 | 메인 일일 공지 503 수정: DB 테이블 대신 브라우저 캐시 (PR #56 revert 후 공지 부분만 재적용, 화면 디자인은 그대로) | [main_dashboard](../기능표.md#메인-대시보드-main_dashboard) |
 | 2026-11-20 | UI 템플릿(Mosaic) 이식 1·3단계: Tailwind v4 도입(사용자·DH 승인), 디자인 값·라이트/다크 모드 기반, 사이드바·헤더 셸 교체(PC 접힘·모바일 서랍) | [platform_index](../기능표.md#공정-안전-플랫폼-인덱스-platform_index) |
 | 2026-11-20 | 공정 최적화 live ×20 ↔ MS 샷 생성 배속 (`/api/casting/demo-speed`, DH 구현·승인) | [process_optimization](../기능표.md#공정-최적화-대시보드-process_optimization) |

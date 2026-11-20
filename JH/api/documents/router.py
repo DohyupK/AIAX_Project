@@ -7,7 +7,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile
+
+from auth.core import acting_employee
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -24,8 +26,11 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 DB = "DOCS_DATABASE_URL"
 
 
-def _resolve_uploader(x_employee_no: str | None) -> str:
-    no = (x_employee_no or "e0001").strip()
+def _resolve_uploader(request: Request, x_employee_no: str | None) -> str:
+    """올린 사람 사번 = 로그인 세션 사번. 관리자는 보기 전환 사번, 없으면 e0001
+    ponytail: 관리자 전용 사번이 org 에 없어 기본 e0001 로 기록 — 관리자 사번 정해지면 교체"""
+    emp, _ = acting_employee(request, x_employee_no)
+    no = (emp or "e0001").strip()
     with connect(DB) as conn:
         row = conn.execute("SELECT employee_no FROM org.employee WHERE employee_no = %s", [no]).fetchone()
     if not row:
@@ -76,12 +81,13 @@ def list_documents():
 
 @router.post("", status_code=201)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
     category: str = Form(""),
     x_employee_no: str | None = Header(None, alias="X-Employee-No"),
 ):
-    uploader = _resolve_uploader(x_employee_no)
+    uploader = _resolve_uploader(request, x_employee_no)
     name = file.filename or "file"
     ext = ext_of(name)
     if ext not in ALLOWED_EXT:
@@ -202,10 +208,11 @@ def document_text(doc_idx: int):
 
 @router.delete("/{doc_idx}", status_code=204)
 def delete_document(
+    request: Request,
     doc_idx: int,
     x_employee_no: str | None = Header(None, alias="X-Employee-No"),
 ):
-    uploader = _resolve_uploader(x_employee_no)
+    uploader = _resolve_uploader(request, x_employee_no)
     with connect(DB) as conn:
         row = conn.execute(
             "SELECT file_path, uploaded_by FROM org.company_document WHERE company_document_idx = %s",
