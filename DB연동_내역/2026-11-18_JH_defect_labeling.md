@@ -16,7 +16,7 @@
 
 | 테이블명 | 주요 컬럼 | 읽기/쓰기 | 연동 화면·API | 비고 |
 |----------|-----------|-----------|---------------|------|
-| `lake.lake_investment_casting` | `casting_id`, `timestamp`(날짜), `date`(시각), `passorfail` | 읽기 | `/api/casting/defect-dates`, `/api/casting/defects?date=` | 불량 샷 = `passorfail = 1` (DL 모델 연결 전). 라인 칼럼 없음(전부 line_no1) |
+| `ai.quality_prediction` + `mes.investment_casting` | `casting_id`, `result` / `timestamp`(날짜), `date`(시각), `line_unit` | 읽기 | `/api/casting/defect-dates`, `/api/casting/defects?date=` | (2026-11-20 변경) 불량 샷 = 2차 판정 `result = 'fail'`. 이전: lake `passorfail = 1`. 사진 = MS 이미지 API `GET /api/images/{casting_id}` |
 | `ai.defect_label` | `casting_id`, `blowhole`, `edge_burr`, `surface_rough`, `labeled_at` | 읽기 | `/api/casting/defects` (LEFT JOIN) | 라벨 완료 상태·유형 |
 | `ai.defect_discard` | `casting_id`, `discarded_at` | 읽기 | `/api/casting/defects` (LEFT JOIN) | 판정 불가(폐기) 상태 |
 

@@ -9,7 +9,7 @@
 |---------|-------------------|--------------|------|
 | platform_index | ../frontend/pages/platform_index | (없음) | 공통 셸, `main/index.ts` 에서 export. 제목 클릭 → `/` |
 | process_optimization | ../frontend/pages/process_optimization (+ ../frontend/common/casting) | (목업 JSON, 실제 API 미연결) | `main/process_optimization.ts` → 루트 app/casting/process-optimization |
-| defect_labeling | ../frontend/pages/defect_labeling (+ quality_inspection 의 inspection·KeyVariables, common/casting/MockShotImage) | (목업 JSON + 라벨은 브라우저 localStorage, `labels.ts`. DB API 연결 예정) | `main/defect_labeling.ts` → 루트 app/casting/defect-labeling |
+| defect_labeling | ../frontend/pages/defect_labeling (+ quality_inspection 의 inspection·KeyVariables, common/casting/ShotImage) | 2차 판정 불량 샷 = `ai.quality_prediction` result='fail', 사진 = MS 이미지 API `/api/images/{casting_id}`, 라벨 상태 = `ai.defect_label`·`defect_discard` (`labels.ts`) | `main/defect_labeling.ts` → 루트 app/casting/defect-labeling |
 | company_documents | ../frontend/pages/company_documents | ../api/documents (FastAPI, `app_docs`, DOCUMENT_ROOT + org). **루트 `.env` `OPENAI_API_KEY`** 필수(임베딩·검색). 청킹 2회→5분→00시 rechunk | `main/company_documents.ts` → 루트 app/documents |
 | quality_inspection | ../frontend/pages/quality_inspection (+ process_optimization 의 SensorMonitor·CSS 재사용) | (목업 JSON. 2차(DL) 판정은 실제 라벨로 대체, `inspection.ts`) | `main/quality_inspection.ts` → 루트 app/casting/quality-inspection |
 | management_report | ../frontend/pages/management_report (+ ppe_violation 의 GEAR_LABEL 참조) | (목업 data.ts, 실제 API 미연결) | `main/management_report.ts` → 루트 app/management-report |

@@ -191,12 +191,12 @@ def model_info() -> dict:
         raise HTTPException(503, "1차 검사 모델을 불러오지 못했습니다.")
 
 
-# ---- 2차(DL) 검사 — mes.casting_image 이미지가 있는 샷만 ----
+# ---- 2차(DL) 검사 — mes.casting_image 이미지가 있는 샷만. 판정은 백그라운드 작업이 미리 저장 (dl_model.start_worker) ----
 @router.get("/second")
 def second(date: Date, line: str = LINE) -> dict:
-    """그날 그 라인의 이미지가 있는 샷 2차 판정 + 쓴 모델. 1차 양품만 2차 대상인 건 화면이 거름"""
+    """그날 그 라인의 이미지 샷 중 지금 모델로 판정이 끝난 결과 + 판정 대기 수. 1차 양품만 2차 대상인 건 화면이 거름"""
     try:
-        model_meta = dl_model.current()[1]   # 배포 모델이 바뀌었으면 여기서 교체 (캐시도 비움)
+        model_meta = dl_model.info()
     except dl_model.ModelError as e:
         log.error("2차 검사 배포 모델 사용 불가: %s", e)
         raise HTTPException(503, str(e))
@@ -205,48 +205,48 @@ def second(date: Date, line: str = LINE) -> dict:
         raise HTTPException(503, "2차 검사 모델을 불러오지 못했습니다.")
     try:
         with connect(DB) as conn:
-            shots = conn.execute(
-                """SELECT i.casting_id, i.updated_at FROM mes.casting_image i
+            rows = conn.execute(
+                """SELECT i.casting_id, i.updated_at, q.model_name, q.version, q.result, q.confidence_score,
+                          q.predicted_at, q.qc1_result
+                   FROM mes.casting_image i
                    JOIN mes.investment_casting m USING (casting_id)
+                   LEFT JOIN ai.quality_prediction q USING (casting_id)
                    WHERE m.line_unit = %s AND m."timestamp" = %s""",
                 (line, date),
             ).fetchall()
-            hits = {s["casting_id"]: dl_model.cached(s["casting_id"], s["updated_at"]) for s in shots}
-            miss = [cid for cid, h in hits.items() if h is None]
-            # 이미지(장당 수백 KB)는 캐시에 없는 샷만 받음
-            images = conn.execute(
-                "SELECT casting_id, updated_at, image_base64, content_type FROM mes.casting_image WHERE casting_id = ANY(%s)",
-                (miss,),
-            ).fetchall() if miss else []
     except Exception:
-        log.exception("2차 검사 이미지 조회 실패 line=%s date=%s", line, date)
+        log.exception("2차 검사 결과 조회 실패 line=%s date=%s", line, date)
         raise HTTPException(503, "공정 DB 조회에 실패했습니다.")
-    results = [h for h in hits.values() if h is not None]
-    for r in images:
-        try:
-            results.append(dl_model.predict(r["casting_id"], r["updated_at"], r["image_base64"], r["content_type"]))
-        except ValueError as e:   # 이미지 하나가 깨져도 나머지는 계속 — 그 샷은 「이미지 없음」으로 보임
-            log.warning("2차 검사 이미지 사용 불가 casting_id=%s: %s", r["casting_id"], e)
-        except Exception:
-            log.exception("2차 검사 추론 실패 casting_id=%s", r["casting_id"])
-            raise HTTPException(503, "2차 검사 모델을 실행하지 못했습니다.")
-    return {"model": model_meta, "results": results}
+    results, pending = [], 0
+    for r in rows:
+        done = (r["result"] is not None and r["model_name"] == model_meta["name"]
+                and r["version"] == model_meta["version"] and r["predicted_at"] >= r["updated_at"])
+        if done:
+            results.append({
+                "castingId": r["casting_id"], "modelName": r["model_name"], "version": r["version"],
+                "result": r["result"], "confidenceScore": float(r["confidence_score"]),
+                "predictedAt": r["predicted_at"].isoformat(),
+            })
+        elif r["qc1_result"] != "fail":   # 1차 불량은 2차 대상 아님 — 대기에 세지 않음
+            pending += 1
+    return {"model": model_meta, "results": results, "pending": pending}
 
 
-# ---- 불량 유형 라벨링 (lake 정제본 + ai 라벨) ----
-# ponytail: DL 모델 연결 전이라 「불량 샷」 = 실제 판정 passorfail = 1. 모델이 생기면 모델 판정으로 교체.
+# ---- 불량 유형 라벨링 (2차 판정 + ai 라벨) ----
+# 「불량 샷」 = 2차(DL) 판정 불량 ai.quality_prediction.result = 'fail' (/second 가 저장). 샷 날짜·시각·라인은 mes.investment_casting
 # 라인별 조회 (2026-11-19 lake 재생성으로 line_no1~3 이 모두 들어옴 — 화면 라인 선택, 기본 line_no1)
 DEFECT_TYPES = ("blowhole", "edge_burr", "surface_rough")   # ai.defect_label 칼럼 = 화면 코드 소문자
 
 
 @router.get("/defect-dates")
 def defect_dates(line: str = LINE) -> list[str]:
-    """그 라인의 불량 샷이 있는 날짜 (최근 날짜가 먼저)"""
+    """그 라인의 2차 판정 불량 샷이 있는 날짜 (최근 날짜가 먼저)"""
     try:
         with connect(DB) as conn:
             rows = conn.execute(
-                'SELECT DISTINCT "timestamp" AS d FROM lake.lake_investment_casting '
-                "WHERE passorfail = 1 AND line_unit = %s ORDER BY 1 DESC",
+                'SELECT DISTINCT m."timestamp" AS d FROM ai.quality_prediction q '
+                "JOIN mes.investment_casting m USING (casting_id) "
+                "WHERE q.result = 'fail' AND m.line_unit = %s ORDER BY 1 DESC",
                 (line,),
             ).fetchall()
     except Exception:
@@ -257,17 +257,18 @@ def defect_dates(line: str = LINE) -> list[str]:
 
 @router.get("/defects")
 def defects(date: Date, line: str = LINE) -> list[dict]:
-    """그 라인·그날 불량 샷 + 라벨 상태 (최신순). status: unlabeled / labeled / discarded"""
+    """그 라인·그날 2차 판정 불량 샷 + 라벨 상태 (최신순). status: unlabeled / labeled / discarded"""
     try:
         with connect(DB) as conn:
             rows = conn.execute(
-                """SELECT l.casting_id, l.date AS t, dl.blowhole, dl.edge_burr, dl.surface_rough,
+                """SELECT casting_id, m.date AS t, dl.blowhole, dl.edge_burr, dl.surface_rough,
                           dl.labeled_at, dd.discarded_at
-                   FROM lake.lake_investment_casting l
+                   FROM ai.quality_prediction q
+                   JOIN mes.investment_casting m USING (casting_id)
                    LEFT JOIN ai.defect_label dl USING (casting_id)
                    LEFT JOIN ai.defect_discard dd USING (casting_id)
-                   WHERE l."timestamp" = %s AND l.passorfail = 1 AND l.line_unit = %s
-                   ORDER BY l.date DESC, l.casting_id DESC""",
+                   WHERE m."timestamp" = %s AND q.result = 'fail' AND m.line_unit = %s
+                   ORDER BY m.date DESC, casting_id DESC""",
                 (date, line),
             ).fetchall()
     except Exception:

@@ -35,7 +35,7 @@ export interface MlModel {
   test: { Recall?: number; Precision?: number; F1?: number }; // TM 검증 성적
 }
 
-/** 2차(DL) 판정 1건 — 칼럼은 DB ai.quality_prediction 과 같음 (지금은 저장 없이 API 응답만) */
+/** 2차(DL) 판정 1건 — DB ai.quality_prediction 2차 칸 (서버 백그라운드 작업이 미리 판정·저장) */
 export interface SecondResult {
   castingId: string;
   modelName: string;
@@ -48,7 +48,8 @@ export interface SecondResult {
 /** 2차(DL) 검사 — JH API /api/casting/second (이미지 mes.casting_image 가 있는 샷만) */
 export interface SecondCheck {
   model: { name: string; version: string; source: 'registry' | 'default'; threshold: number };
-  results: SecondResult[];
+  results: SecondResult[];  // 지금 모델로 판정이 끝난 샷만
+  pending: number;          // 아직 판정 안 된 이미지 샷 수 (백그라운드 작업이 채우는 중)
 }
 
 /** 현재 배포된 모델 정보 (Model Management와 공유) */

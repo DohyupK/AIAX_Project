@@ -4,6 +4,8 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-20 | 품질 검사 2차(DL): 서버가 사진을 미리 판정해 DB(ai.quality_prediction)에 저장, 화면은 DB만 읽음(시간 초과 해결)·「판정 대기 N장」 표시 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
+| 2026-11-20 | 불량 유형 라벨링: 목록 = 2차 판정 불량(result='fail'), 실제 사진 연결(MS 이미지 API) | [defect_labeling](../기능표.md#불량-유형-라벨링-defect_labeling) |
 | 2026-11-18 | Model Management: 탭 이름 품질 1차 검사·품질 2차 검사·보호구 착용 위반, 세 탭 DB 연결. 배포 모델 = 실제 사용 모델 (품질 검사 1차 판정 모델 교체, 2차·보호구는 이름 표시) | [model_management](../기능표.md#model-management-model_management) |
 | 2026-11-18 | Model Management: 성과지표 공정별(공정 최적화 = PR-AUC·Recall·Precision·F1), 공정 최적화 탭 서버 DB 연결(읽기), 목업 56건·localStorage 배포 연동 삭제 | [model_management](../기능표.md#model-management-model_management) |
 | 2026-11-18 | 품질 검사: 1차·2차 카드 배치 복원 — 1차 = 실제 모델, 2차(DL)는 「연결 전」 자리 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
