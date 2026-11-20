@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { LABELS, fmt, severity, unitOf } from '../../common/casting/analysis';
 import type { FeatureKey, ModelInfo, Shot } from '../../common/casting/types';
 import { PHASES, createDiecastScene, type SceneShot } from './sceneRenderer';
-import po from './ProcessOptimization.module.css';
+import { CARD, FOCUS } from '../../common/ui';
 import s from './DiecastScene.module.css';
 
 // 품질 검사 페이지 주소 (루트 app/casting/quality-inspection, page_registry 등록)
@@ -58,18 +58,27 @@ export default function DiecastScene({ shots, model, playing, cycleSec, speed, s
   useEffect(() => { sceneRef.current?.setPaused(!playing); }, [playing]);
 
   const p = PHASES[ph.i];
+  // 장면 칸은 다크 모드에서도 밝은 그대로 (설비 장면은 그대로 둠 — 사용자 결정 2026-11-21) → 이 안의 버튼도 밝은 색 고정
   return (
-    <div className={`${po.panel} ${s.scene}`}>
+    <div className={`${CARD} ${s.scene}`}>
       <div className={s.speed}>
         <span className={s.speedInfo}>
           1 사이클 {cycleSec >= 10 ? Math.round(cycleSec) : cycleSec.toFixed(1)}초
           {animSpeed > 1 && ` → ${(cycleSec / animSpeed).toFixed(1)}초`}
         </span>
-        <button type="button" className={`${po.btn} ${speed > 1 ? s.speedOn : ''}`} aria-pressed={speed > 1}
+        <button type="button" aria-pressed={speed > 1}
+          className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-semibold shadow-sm transition phone:px-3 phone:py-2 ${FOCUS} ${
+            speed > 1 ? 'border-brand-700 bg-brand-700 text-white hover:bg-brand-900' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+          }`}
           title="과거 날짜: 장면·재생 20배속. 실시간 가속은 생성기 --speed 20" onClick={() => onSpeed(speed > 1 ? 1 : FAST)}>×{FAST}</button>
       </div>
-      <svg ref={svgRef} className={s.svg} viewBox="0 0 1200 770" preserveAspectRatio="xMidYMid meet"
-        role="group" aria-label="다이캐스팅 설비 장면 — 센서 라벨을 누르면 공정 변수 모니터로 이동" />
+      {/* 폰: 라벨 글자가 읽히는 최소 폭을 두고 카드 안에서만 좌우 스크롤 */}
+      <div className="phone:overflow-x-auto">
+        <svg ref={svgRef} className={`${s.svg} phone:min-w-[760px]`} viewBox="0 0 1200 770" preserveAspectRatio="xMidYMid meet"
+          role="group" aria-label="다이캐스팅 설비 장면 — 센서 라벨을 누르면 공정 변수 모니터로 이동" />
+      </div>
+      {/* 폰: 장면 아래 안내 (위쪽은 PHASE 표시와 겹침) */}
+      <p className="hidden px-3.5 pt-1.5 text-[11px] text-gray-500 phone:block">← 장면을 좌우로 밀어 전체 보기 →</p>
       <div className={s.banner} aria-live="off">
         <span className={s.bannerK}>PHASE {ph.i + 1}/{PHASES.length}{ph.time && ` · ${ph.time}`}</span>
         <span className={s.bannerV}>{p.n}</span>

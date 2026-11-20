@@ -4,6 +4,7 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-21 | 공정 최적화 Mosaic 이식(라이트/다크, PC·1180·860·460 구성) · 설비 장면은 그대로 두고 변수 라벨만 Mosaic 카드로 · JH 공용 스타일 `common/ui.ts` 신설 | [process_optimization](../기능표.md#공정-최적화-대시보드-process_optimization) |
 | 2026-11-21 | 메인 대시보드 Mosaic 이식(라이트/다크, PC 2단·860 1열·460 폰 구성) · 일일 공지 DB 테이블 대신 브라우저 캐시(503 해결 방향 변경) · 셸 서랍·사이드바가 떠 있는 버튼에 가리던 문제 수정 | [main_dashboard](../기능표.md#메인-대시보드-main_dashboard) |
 | 2026-11-20 | UI 템플릿(Mosaic) 이식 1·3단계: Tailwind v4 도입(사용자·DH 승인), 디자인 값·라이트/다크 모드 기반, 사이드바·헤더 셸 교체(PC 접힘·모바일 서랍) | [platform_index](../기능표.md#공정-안전-플랫폼-인덱스-platform_index) |
 | 2026-11-20 | 공정 최적화 live ×20 ↔ MS 샷 생성 배속 (`/api/casting/demo-speed`, DH 구현·승인) | [process_optimization](../기능표.md#공정-최적화-대시보드-process_optimization) |
