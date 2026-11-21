@@ -4,6 +4,7 @@
 
 | 날짜 | 주요 기능 | 기능표 링크 |
 |------|-----------|-------------|
+| 2026-11-21 | 보호구 착용 위반: 판정 결과 소리(효과음 + 한국어 음성) 토글, 켜면 행 선택·새 판정(5초 감시) 때 재생 — 패키지·음원 파일 없음 | [ppe_violation](../기능표.md#보호구-착용-위반-대시보드-ppe_violation) |
 | 2026-11-21 | 불량 유형 라벨링: 「완료」 → DB 저장 연결(쓰기 계정 app_ai, edit 권한만), 저장 후 카드 상태 갱신 | [defect_labeling](../기능표.md#불량-유형-라벨링-defect_labeling) |
 | 2026-11-21 | 품질 검사 1차: TM CatBoost v2 모델 연결(catboost 승인·설치, 입력 12개 전처리), TM 검증 예시 3샷 일치 | [quality_inspection](../기능표.md#품질-검사-대시보드-quality_inspection) |
 | 2026-11-21 | Model Management: 「배포」 버튼 → 실제 배포(DB 저장), 품질 검사 1차·2차 화면 다음 판정부터 새 모델, 못 쓰는 모델은 거절 | [model_management](../기능표.md#model-management-model_management) |
