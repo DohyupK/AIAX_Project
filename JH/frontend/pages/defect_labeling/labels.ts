@@ -1,6 +1,6 @@
 // 불량 유형 라벨링 — 유형 정의·선택 규칙·DB 조회 (화면·CSS import 없음) — 자체 점검: labels.check.ts
-// 데이터: JH API /api/casting/defects (샷 = lake.lake_investment_casting, 라벨 = ai.defect_label·ai.defect_discard)
-// 저장: POST /api/casting/defects/{casting_id}/label (서버가 쓰기 계정 app_ai 사용, 불량 유형 라벨링 edit 권한 필요)
+// 데이터: JH API /api/casting/defects (샷 = mes+ai.quality_prediction, 라벨 SoT = JH/data/defect_labels.db SQLite)
+// 저장: POST /api/casting/defects/{casting_id}/label → 서버 SQLite (이 페이지 「완료」만)
 
 /** 불량 유형 — code 는 화면 표시 값(= ai.defect_label 칼럼 대문자), ko 는 전문가용 보조 설명 */
 export const DEFECT_TYPES = [
@@ -65,12 +65,12 @@ export const fetchDefectDates = (line: string) => get<string[]>(`/api/casting/de
 export const fetchDefects = (line: string, date: string) =>
   get<DefectShot[]>(`/api/casting/defects?${new URLSearchParams({ line, date })}`);
 
-/** 라벨 저장 — 서버가 기존 라벨·폐기를 지우고 새로 넣음. 실패 시 서버 안내 문구(detail)를 그대로 던짐 */
+/** 라벨 저장 — 서버 JH/data/defect_labels.db (SQLite). 실패 시 서버 안내 문구(detail)를 그대로 던짐 */
 export async function saveLabel(castingId: string, types: DefectCode[]): Promise<Pick<DefectShot, 'status' | 'types'>> {
   let res: Response;
   try {
     res = await fetch(`${BASE}/api/casting/defects/${encodeURIComponent(castingId)}/label`, {
-      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10_000),
+      method: 'POST', cache: 'no-store', credentials: 'include', signal: AbortSignal.timeout(10_000),
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ types }),
     });
   } catch (e) {

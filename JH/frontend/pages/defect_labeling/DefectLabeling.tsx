@@ -21,7 +21,7 @@ const LOAD_ERROR = 'JH API 서버(127.0.0.1:8000)를 확인해 주세요.';
 
 /**
  * 불량 유형 라벨링 — 그날 2차(DL) 판정 불량 샷 목록(ai.quality_prediction), 클릭 시 전문가 라벨링 팝업
- * 라벨 상태는 ai.defect_label·ai.defect_discard 에서 읽고, 팝업 「완료」로 저장 (labels.ts saveLabel)
+ * 라벨 상태 SoT = JH/data/defect_labels.db (SQLite). 팝업 「완료」로 저장 (labels.ts saveLabel)
  */
 export default function DefectLabeling() {
   const [line, setLine] = useState<Line>('line_no1'); // 기본 line_no1, 공정 최적화·품질 검사와 같은 라인 목록
@@ -103,7 +103,7 @@ export default function DefectLabeling() {
 
       <div className={po.banner}>
         불량 샷은 2차(DL) 검사에서 불량으로 판정된 샷이며(품질 검사 화면에서 판정·저장), 사진은 서버 이미지 API에서 불러옵니다.
-        유형을 고르고 <b>완료</b>를 누르면 DB에 저장됩니다(불량 유형 라벨링 수정 권한 필요).
+        유형을 고르고 <b>완료</b>를 누르면 서버(SQLite)에 저장됩니다.
       </div>
 
       {error && <div className={po.errorBox} role="alert">데이터를 불러오지 못했습니다: {error}</div>}
