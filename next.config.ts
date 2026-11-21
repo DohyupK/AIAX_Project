@@ -4,6 +4,8 @@ import type { NextConfig } from "next";
 // Al 시세: app/al-price/api/prices/route.ts → :8766 (nginx /api/ 와 분리)
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // 개발 중 좌측 하단 Route Static N 배지 숨김 (에러 오버레이는 유지) — JH 요청 2026-11-21
+  devIndicators: false,
   // F12 콘솔에 앱 로그가 남지 않도록 빌드 산출물에서 console.* 제거
   compiler: {
     removeConsole: true,

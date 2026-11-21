@@ -43,33 +43,36 @@ export function sortByStatus<T extends { status: LabelStatus }>(items: T[]): T[]
 }
 
 // ---- 조회·저장 (JH API) ----
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+// 로그인과 같이 같은 출처 `/api` 만 사용 (배포: nginx→:8000 / 로컬: next.config JH_API_ORIGIN rewrite)
+// NEXT_PUBLIC_API_BASE_URL 로 원격만 치면 로컬·서버 SQLite 코드와 어긋남
 
 async function get<T>(path: string): Promise<T> {
   // 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지
   try {
-    const res = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(path, { cache: 'no-store', credentials: 'include', signal: AbortSignal.timeout(10_000) });
     if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
     return res.json() as Promise<T>;
   } catch (e) {
     if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
-      throw new Error(`${path} 요청 시간 초과 (10초) — 서버 DB(.env DATABASE_URL) 확인`);
+      throw new Error(`${path} 요청 시간 초과 (10초) — JH API·DB 확인`);
     }
     throw e;
   }
 }
 
 /** 그 라인의 불량 샷이 있는 날짜 (최근 날짜가 먼저) */
-export const fetchDefectDates = (line: string) => get<string[]>(`/api/casting/defect-dates?line=${encodeURIComponent(line)}`);
+export const fetchDefectDates = (line: string) =>
+  get<string[]>(`/api/casting/defect-dates?line=${encodeURIComponent(line)}`);
 /** 그 라인·그날 불량 샷 + 라벨 상태 (최신순) */
 export const fetchDefects = (line: string, date: string) =>
   get<DefectShot[]>(`/api/casting/defects?${new URLSearchParams({ line, date })}`);
 
 /** 라벨 저장 — 서버 JH/data/defect_labels.db (SQLite). 실패 시 서버 안내 문구(detail)를 그대로 던짐 */
 export async function saveLabel(castingId: string, types: DefectCode[]): Promise<Pick<DefectShot, 'status' | 'types'>> {
+  const path = `/api/casting/defects/${encodeURIComponent(castingId)}/label`;
   let res: Response;
   try {
-    res = await fetch(`${BASE}/api/casting/defects/${encodeURIComponent(castingId)}/label`, {
+    res = await fetch(path, {
       method: 'POST', cache: 'no-store', credentials: 'include', signal: AbortSignal.timeout(10_000),
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ types }),
     });
