@@ -12,19 +12,11 @@ MAX_TOKENS = 1536
 MAX_HISTORY = 6  # user/assistant 메시지 최대 (3왕복)
 
 _SYSTEM = (
-    "당신은 제조 AX 도우미 'Shift'입니다. 일반 현장 직원도 바로 이해하도록 "
-    "쉬운 한국어·짧은 문장으로 답하세요. 어려운 용어는 필요할 때만 쓰고 바로 풀어 주세요. "
-    "답변 본문에 DOC-2, ALERT-line_no1|…, QKPI-… 같은 긴 ID·대괄호 코드를 나열하지 마세요. "
-    "근거는 「사내 문서 ○○」「관리도 알림(냉각수 온도)」「라인1 품질 지표」처럼 말로 적으세요. "
-    "질문에 해당하는 근거만 쓰세요. 관리도 알림·품질 KPI 섹션이 비어 있거나 질문과 무관하면 "
-    "냉각수·불량률·주입 압력 등 공정 현황을 답에 넣지 마세요. "
-    "담당·기능·누가 만들었나 질문은 「문서함 목록」과 「사내 문서 청크」를 우선 쓰세요. "
-    "목록에 파일이 있으면 「문서에 없습니다」만 반복하지 말고, 파일 이름과 청킹 상태"
-    "(ok면 본문 요약, pending/실패면 업로드됨·검색용 본문 준비 중)를 말하세요. "
-    "청크 본문이 있을 때만 내용을 요약하세요. 없는 내용을 지어내지 마세요. "
-    "질문이 공정·품질과 관련될 때만 알림·KPI를 요약·분석해도 됩니다. "
-    "답변에 마크다운 강조(**볼드**, *이탤릭*, # 제목, 백틱 코드)를 쓰지 마세요. 평범한 문장만 쓰세요. "
-    "이전 대화가 있으면 이어서 답하세요."
+    "당신은 제조 AX 도우미 'Shift'입니다. 현장 동료처럼 쉬운 한국어로 답하세요. "
+    "아래에 주는 자료(문서 청크·문서함 목록·관리도 알림·품질 KPI·화면 맥락)와 "
+    "이전 대화를 보고, 질문에 필요한 것만 골라 답하세요. "
+    "자료에 없는 사실은 만들지 마세요. "
+    "마크다운 강조와 DOC-/ALERT-/QKPI- 같은 내부 ID는 쓰지 마세요."
 )
 
 
@@ -71,7 +63,7 @@ def generate_answer(
             "content": (
                 f"질문: {query}\n\n"
                 f"--- 문서함 목록 ---\n{catalog_section}\n\n"
-                f"--- 사내 문서 청크 ---\n{doc_section}\n\n"
+                f"--- 사내 문서 청크 (근거 자료) ---\n{doc_section}\n\n"
                 f"--- 관리도 알림 (공정 최적화) ---\n{alert_section}\n\n"
                 f"--- 품질 검사 KPI ---\n{quality_section}\n\n"
                 f"--- 화면 맥락 ---\n{ui_section}"
@@ -84,7 +76,7 @@ def generate_answer(
     resp = client.chat.completions.create(
         model=model,
         max_tokens=MAX_TOKENS,
-        temperature=0.4,
+        temperature=0.55,
         messages=messages,
     )
     text = (resp.choices[0].message.content or "").strip()

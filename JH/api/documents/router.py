@@ -277,7 +277,8 @@ def _ui_context_text(ui: UiContext | None) -> str:
 
 
 def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
-    """의미검색 top-k + min_score. 임베딩 실패는 HTTPException."""
+    """의미검색 top-k + min_score + 제목·파일명 소폭 가산. 임베딩 실패는 HTTPException."""
+    from documents.doc_expand import title_match_boost
     from documents.llm_client import embed_dim
 
     try:
@@ -307,8 +308,11 @@ def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
         # 이전 공급자 차원(1536↔2048) 벡터는 검색에서 제외
         if len(emb) != want_dim:
             continue
-        score = cosine(qvec, emb)
-        if score < MIN_SCORE:
+        base = cosine(qvec, emb)
+        boost = title_match_boost(query, r["title"] or "", r["file_name"] or "")
+        score = base + boost
+        # 코사인 미달이면 제외. 제목·파일명 일치(boost>0)면 통과 허용
+        if base < MIN_SCORE and boost <= 0:
             continue
         scored.append(
             (
@@ -347,12 +351,17 @@ def search_documents(body: SearchBody):
 
 @router.post("/ask")
 def ask_documents(body: SearchBody):
-    """Shift 봇: 문서(+목록·제목검색) + (관련 시) 알림·KPI + 멀티턴. 대화 DB 저장 없음."""
+    """Shift 봇: 문서(+목록·제목검색·후속 확장) + (관련 시) 알림·KPI + 멀티턴."""
     from documents.alert_context import collect_alert_context
     from documents.doc_catalog import (
         collect_catalog_text,
         ensure_live_bodies,
         wants_doc_catalog,
+    )
+    from documents.doc_expand import (
+        fetch_chunks_for_docs,
+        merge_expanded_hits,
+        resolve_doc_hint_ids,
     )
     from documents.quality_context import collect_quality_context
 
@@ -362,19 +371,34 @@ def ask_documents(body: SearchBody):
     ui = body.ui_context
     ui_dict = ui.model_dump() if ui else None
     path = (ui.path if ui else "") or ""
+    history = [m.model_dump() for m in body.history]
     hits = _retrieve_hits(q, body.limit)
     catalog_text = ""
     if wants_doc_catalog(q, path):
         catalog_text = collect_catalog_text(q)
         # 제목검색·메타만 청크 → 파일 즉시 추출 + 재청킹 예약
         hits = ensure_live_bodies(q, hits, limit=body.limit)
+
+    # 질의·히스토리 문서 힌트가 있으면 키워드 없이 해당 청크 확장
+    hint_ids = resolve_doc_hint_ids(q, history)
+    if not hint_ids and history:
+        for h in hits:
+            idx = int(h.get("company_document_idx") or 0)
+            if idx and idx not in hint_ids:
+                hint_ids.append(idx)
+            if len(hint_ids) >= 3:
+                break
+    if hint_ids:
+        expanded = fetch_chunks_for_docs(hint_ids)
+        if expanded:
+            hits = merge_expanded_hits(expanded, hits, limit=max(body.limit, 12))
+
     alert_sources, alert_text = collect_alert_context(query=q, ui_context=ui_dict)
     if _wants_quality_kpi(q, path):
         quality_sources, quality_text = collect_quality_context()
     else:
         quality_sources, quality_text = [], ""
     doc_sources = [{**h, "kind": "company_document"} for h in hits]
-    history = [m.model_dump() for m in body.history]
     try:
         answer = generate_answer(
             q,
