@@ -17,7 +17,7 @@ log = logging.getLogger("jh.documents.doc_catalog")
 DB = "DOCS_DATABASE_URL"
 MAX_LIST = 15
 MAX_LEXICAL_HITS = 8
-CONTENT_MAX = 1200
+CONTENT_MAX = 1100
 LIVE_CHUNK_CAP = 8  # 즉시 추출 시 LLM에 넣을 청크 수 (인벤 요약용)
 
 _OWNERSHIP_KW = re.compile(

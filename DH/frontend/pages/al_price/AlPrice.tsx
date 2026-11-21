@@ -98,7 +98,7 @@ export default function AlPrice() {
       prefetching.current.add(k);
       fetchRange(from, to)
         .then((rows) => putCache(from, to, rows))
-        .catch((e) => console.error("[al_price] prefetch", e))
+        .catch(() => {})
         .finally(() => prefetching.current.delete(k));
     },
     [putCache],
@@ -137,7 +137,6 @@ export default function AlPrice() {
         prefetchPage(m.max_date, 3, pageCount);
         setBooted(true);
       } catch (e) {
-        console.error("[al_price]", e);
         if (alive) setError((e as Error).message || "시세 조회 실패");
         setBooted(true);
       } finally {
@@ -183,7 +182,7 @@ export default function AlPrice() {
       .then((rows) => {
         if (alive) setChartRows(rows);
       })
-      .catch((e) => console.error("[al_price] chart", e));
+      .catch(() => {});
     return () => {
       alive = false;
     };

@@ -122,11 +122,7 @@ export default function HyejinBot() {
         hidden={!open}
       >
         <header className={s.panelHead}>
-          <div>
-            <div className={s.panelTitle}>Shift</div>
-            <p className={s.panelSub}>문서·관리도·품질 · 새 채팅 전까지 대화 유지</p>
-          </div>
-          <div className={s.headActions}>
+          <div className={s.headLeft}>
             <button
               type="button"
               className={s.newChatBtn}
@@ -135,6 +131,12 @@ export default function HyejinBot() {
             >
               {full ? "창 모드" : "전체화면"}
             </button>
+            <div>
+              <div className={s.panelTitle}>Shift</div>
+              <p className={s.panelSub}>문서·관리도·품질 · 새 채팅 전까지 대화 유지</p>
+            </div>
+          </div>
+          <div className={s.headActions}>
             <button
               type="button"
               className={s.newChatBtn}

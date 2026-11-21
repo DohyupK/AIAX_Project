@@ -13,8 +13,8 @@ ALLOWED_EXT = frozenset(
 # 텍스트 추출 대상 (이미지·zip·미지원 hwp는 빈 문자열 → 청크 0)
 EXTRACT_EXT = frozenset({"txt", "md", "pdf", "docx", "xlsx", "pptx", "hwp", "hwpx"})
 MAX_FILE_BYTES = 20 * 1024 * 1024
-CHUNK_CHARS = 800
-CHUNK_OVERLAP = 80
+CHUNK_CHARS = 1000
+CHUNK_OVERLAP = 100  # 10% 이어쓰기
 # 임베딩 모델·차원: documents.llm_client.embed_model() / embed_dim()
 JOB_TIMEOUT_SEC = 120  # 백그라운드 청킹 상한 2분
 

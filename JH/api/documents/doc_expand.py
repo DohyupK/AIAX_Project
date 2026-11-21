@@ -11,7 +11,7 @@ log = logging.getLogger("jh.documents.doc_expand")
 
 DB = "DOCS_DATABASE_URL"
 EXPAND_CHUNK_CAP = 12
-EXPAND_CONTENT_MAX = 2000
+EXPAND_CONTENT_MAX = 1100
 TITLE_BOOST = 0.08  # 코사인 점수에 제목·파일명 부분일치 가산
 
 _DOC_NO = re.compile(r"DOC-(\d+)", re.I)

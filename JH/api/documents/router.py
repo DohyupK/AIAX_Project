@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from common.db import connect
 from documents import preview
-from documents.chat import generate_answer
+from documents.chat import decide_full_read, fetch_full_document_texts, generate_answer
 from documents.embed import cosine, embed_texts
 from documents.extract import extract_text
 from documents.jobs import schedule_chunk_job
@@ -325,7 +325,7 @@ def _retrieve_hits(query: str, limit: int) -> list[dict[str, Any]]:
                     "file_name": r["file_name"],
                     "category": r["category"],
                     "chunk_no": int(r["chunk_no"]),
-                    "content": r["content"][:1200],
+                    "content": r["content"][:1100],
                 },
             )
         )
@@ -399,6 +399,15 @@ def ask_documents(body: SearchBody):
     else:
         quality_sources, quality_text = [], ""
     doc_sources = [{**h, "kind": "company_document"} for h in hits]
+    # 사용자 비공개 노력치: 전문 필요 시 서버에서만 추출 후 최종 답
+    full_text = ""
+    try:
+        need_full, full_ids = decide_full_read(q, hits, history)
+        if need_full and full_ids:
+            full_text = fetch_full_document_texts(full_ids)
+    except Exception:
+        log.exception("노력치 단계 실패 — 청크만으로 답변")
+        full_text = ""
     try:
         answer = generate_answer(
             q,
@@ -407,6 +416,7 @@ def ask_documents(body: SearchBody):
             quality_text=quality_text,
             ui_context_text=_ui_context_text(ui),
             catalog_text=catalog_text,
+            full_text=full_text,
             history=history,
         )
     except Exception as e:
