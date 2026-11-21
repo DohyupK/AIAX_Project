@@ -4,6 +4,7 @@ import styles from "./PpeViolation.module.css";
 import ScanView from "./ScanView";
 import ViolationReports from "./ViolationReports";
 import { fetchScanDates, fetchScanRecords, type ScanRecord } from "./data";
+import { playResult, unlockSound } from "./sound";
 import { fetchDeployedModel, type Model } from "../model_management/data";
 import { GEAR_LABEL, gearStatus, missingGear, violationMessage, type Gate, type Gear, type GearStatus } from "./rules";
 
@@ -36,6 +37,15 @@ const toRow = (r: ScanRecord): Row => ({
   missing: r.result === "undecidable" ? [] : missingGear(r.gate, r.detected),
   status: r.result === "pass" ? "pass" : r.result === "violation" ? "fail" : "check",
 });
+/** 결과 음성 문구 — 위반은 상세 배너의 「음성 안내」와 같은 문장 */
+const speak = (r: Row) =>
+  playResult(r.status, r.status === "pass" ? "통과입니다."
+    : r.status === "fail" ? `위반. ${violationMessage(r.missing)}`
+    : "판정 불가. 안전관리자 확인이 필요합니다.");
+/** KST 기준 'YYYY-MM-DD' (offset 일 전후) */
+const kstDate = (offset: number) => new Date(Date.now() + 9 * 3_600_000 + offset * 86_400_000).toISOString().slice(0, 10);
+/** 실시간 감시 조회 간격 — 소리 켜짐 동안만 */
+const LIVE_POLL_MS = 5_000;
 const badgeClass = (st: Status) => (st === "pass" ? styles.ok : st === "fail" ? styles.bad : styles.grey);
 
 // 업체 단위 = 본사(부서는 하위 선택) 또는 하청 업체명. 본사 사원의 company 는 부서명
@@ -105,6 +115,8 @@ export default function PpeViolationDashboard() {
   const [reportsOpen, setReportsOpen] = useState(false);
   // 판정 모델 = Model Management 「보호구 착용 위반」 배포 모델 (판정은 현장 카메라가 해서 ai.ppe_check 로 들어옴 — 여기선 이름 표시)
   const [ppeModel, setPpeModel] = useState<Model | null | undefined>(undefined);
+  // 결과 소리 (기본 꺼짐 — 브라우저가 클릭 전 자동 재생을 막음). 켜면 행 클릭 + 새 판정 때 재생
+  const [sound, setSound] = useState(false);
 
   useEffect(() => {
     // 표시용 — 실패해도 화면은 계속 (콘솔에만)
@@ -156,6 +168,37 @@ export default function PpeViolationDashboard() {
     return () => { alive = false; };
   }, [from, to, rangeError]);
 
+  // 실시간 소리 — 켜져 있는 동안 어제·오늘(KST, 야간 근무 포함) 판정을 주기 조회.
+  // 첫 조회는 기준점만 잡고, 이후 더 큰 id(새 판정)가 오면 최신 1건 소리 + 보고 있는 기간이면 표에 추가
+  useEffect(() => {
+    if (!sound) return;
+    let alive = true;
+    let lastId: number | undefined;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const recs = (await fetchScanRecords(kstDate(-1), kstDate(0))).map(toRow);
+        if (!alive) return;
+        const seen = lastId;
+        const fresh = seen === undefined ? [] : recs.filter((r) => r.id > seen); // 서버가 최신순으로 줌
+        lastId = Math.max(seen ?? 0, ...recs.map((r) => r.id));
+        if (fresh[0]) {
+          speak(fresh[0]);
+          setBounds((b) => ({ ...b, max: fresh[0].date > b.max ? fresh[0].date : b.max }));
+          setRows((prev) => prev && [
+            ...fresh.filter((r) => r.date >= from && r.date <= to && !prev.some((p) => p.id === r.id)),
+            ...prev,
+          ]);
+        }
+      } catch (e) {
+        console.error("[ppe_violation] 실시간 판정 조회 실패", e); // 다음 주기에 재시도
+      }
+      if (alive) timer = setTimeout(poll, LIVE_POLL_MS); // 응답 후 다음 조회 (요청 겹침 방지)
+    };
+    void poll();
+    return () => { alive = false; clearTimeout(timer); };
+  }, [sound, from, to]);
+
   // 기간이 잘못됐으면 이전 기간 기록을 보이지 않음
   const all = useMemo(() => (rangeError ? [] : rows ?? []), [rows, rangeError]);
   // 업체 목록 = 본사(기간 내 사원 기록이 있으면) + 하청 업체, 부서 목록 = 기간 내 본사 기록의 부서
@@ -180,6 +223,16 @@ export default function PpeViolationDashboard() {
     setPickTo(end);
     setFrom(pickFrom);
     setTo(end);
+  }
+  /** 표에서 행을 고를 때 — 소리 켜짐이면 그 판정 소리 */
+  function pickRow(r: Row) {
+    selectRow(r);
+    if (sound) speak(r);
+  }
+  function toggleSound() {
+    if (!sound) unlockSound();
+    else if ("speechSynthesis" in window) speechSynthesis.cancel();
+    setSound(!sound);
   }
   function changeOrgFilter(org: string) {
     setOrgFilter(org);
@@ -209,6 +262,10 @@ export default function PpeViolationDashboard() {
             : ppeModel ? <>판정 모델 <b>{ppeModel.name} {ppeModel.version}</b> (Model Management 「보호구 착용 위반」 배포)</>
             : "Model Management 「보호구 착용 위반」에 배포된 모델 없음"}
         </span>
+        <button type="button" className={`${styles.filterBtn} ${sound ? styles.filterOn : ""}`} aria-pressed={sound}
+          onClick={toggleSound} title="켜면 행을 누를 때와 새 판정이 들어올 때(5초마다 확인) 결과를 소리로 알림">
+          {sound ? "🔊 소리 켜짐 · 실시간" : "🔇 소리 꺼짐"}
+        </button>
         <button type="button" className={`${styles.filterBtn} ${styles.primaryBtn}`} onClick={() => setReportsOpen(true)}>
           위반 보고서
         </button>
@@ -312,8 +369,8 @@ export default function PpeViolationDashboard() {
               <tr
                 key={r.id}
                 className={r.id === selectedId ? styles.rowOn : undefined}
-                onClick={() => selectRow(r)}
-                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), selectRow(r))}
+                onClick={() => pickRow(r)}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), pickRow(r))}
                 tabIndex={0}
                 aria-selected={r.id === selectedId}
               >
