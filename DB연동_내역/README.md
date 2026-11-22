@@ -19,6 +19,7 @@
 
 | 파일 | 비고 |
 |------|------|
+| [2026-11-22_MS_sqlite_schema.md](2026-11-22_MS_sqlite_schema.md) | 서버 DB(`aiax`) 테이블 구조 84개를 SQLite 로 옮긴 판 — `MS/data/aiax_schema.sqlite.sql` (구조만) |
 | [2026-11-21_JH_auth_login.md](2026-11-21_JH_auth_login.md) | 로그인·회원가입 계정 — **임시** SQLite `JH/data/auth.db` (DB 테이블 확정 전) + `org.employee` 사번 확인 |
 | [2026-11-20_DH_shift_quality_kpi.md](2026-11-20_DH_shift_quality_kpi.md) | Shift 봇 ask 품질 KPI (`mes`+`ai.quality_prediction` 읽기) |
 | [2026-11-20_DH_shift_alert_context.md](2026-11-20_DH_shift_alert_context.md) | Shift 봇 ask 관리도 알림 컨텍스트 |
