@@ -1,4 +1,5 @@
-import type { ModelInfo, Shot } from './types';
+import type { MlModel, ModelInfo, SecondCheck, Shot } from './types';
+import type { ControlLimits } from './alerts';
 import mockModel from './mock/model.json';
 
 /**
@@ -10,9 +11,13 @@ import mockModel from './mock/model.json';
  * 목업 shots는 public/mocks 로 두어 클라이언트 번들에 244KB JSON이 들어가지 않게 함.
  */
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false';
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+// 기본: JH API 서버 (JH/api, 127.0.0.1:8000)
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+export const API_BASE = BASE;
 /** 정적 목업 샷 — Next public 경로 (번들 비포함) */
 const MOCK_SHOTS_URL = '/mocks/casting/shots.json';
+/** 브라우저 fetch 상한 — 무한 pending으로 「불러오는 중」고착 방지 */
+const FETCH_TIMEOUT_MS = 10_000;
 
 /**
  * 목업: 설비 예열 구간(1~100번 샷, 05:02~08:13) 제외 → 101~575번 샷(475샷)만 사용
@@ -28,14 +33,29 @@ export type Line = (typeof LINES)[number];
 export const MOCK_LINE = 'line_no1';
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
-  return res.json() as Promise<T>;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: ctrl.signal });
+    if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
+    return res.json() as Promise<T>;
+  } catch (e) {
+    // AbortController 타임아웃 — 브라우저별 Error/DOMException
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error(`${path} 요청 시간 초과 (${FETCH_TIMEOUT_MS / 1000}초)`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-/** 해당 날짜의 샷별 예측 결과 (shotId 오름차순) */
-export async function fetchShots(line: string, date: string): Promise<Shot[]> {
-  if (USE_MOCK) {
+/**
+ * 해당 날짜의 샷별 예측 결과 (shotId 오름차순)
+ * real=true 면 USE_MOCK 과 관계없이 실데이터(mes) — 공정 최적화만 먼저 전환 (품질 검사·라벨링은 모델 연결 전이라 목업)
+ */
+export async function fetchShots(line: string, date: string, real = false): Promise<Shot[]> {
+  if (USE_MOCK && !real) {
     // 목업 데이터는 line_no1 한 라인뿐 — 다른 라인은 빈 목록(화면에 「데이터 연결 전」 표시)
     if (line !== MOCK_LINE) return [];
     // 목업: 정적 파일 fetch — 첫 방문 시 캐시 가능, JS 번들과 분리
@@ -43,12 +63,62 @@ export async function fetchShots(line: string, date: string): Promise<Shot[]> {
     if (!res.ok) throw new Error(`${MOCK_SHOTS_URL} 요청 실패 (HTTP ${res.status})`);
     return ((await res.json()) as Shot[]).slice(MOCK_WARMUP_SHOTS);
   }
-  // ponytail: 매번 하루치 전체 조회. 샷이 많아지면 &since=<마지막 shotId>로 증분 조회로 바꾸세요
   return get<Shot[]>(`/api/casting/predictions?line=${encodeURIComponent(line)}&date=${date}`);
 }
 
-/** 현재 배포된 주조 불량 예측 모델 */
+/** 실시간 응답 — reset=true 면 목록 교체(첫 조회·날짜 바뀜), false 면 뒤에 붙임 */
+export interface LiveShots { date: string; reset: boolean; shots: Shot[] }
+
+/** 실시간 따라가기 — 오늘(KST) 현재 시각 이전 샷. after(마지막 castingId) 이후만 받음 */
+export function fetchLive(line: string, after?: string): Promise<LiveShots> {
+  const q = new URLSearchParams({ line, ...(after ? { after } : {}) });
+  return get<LiveShots>(`/api/casting/live?${q}`);
+}
+
+/** 관리도 기준선 (라인별·변수별 고정 표, 서버 casting/spc.py) */
+export interface SpcBaseline { cl: number; sigma: number; iLcl: number; iUcl: number; mrCl: number; mrUcl: number; ewmaLcl: number; ewmaUcl: number }
+/** 관리도 점 1개 — flow = 생산 흐름(0 = A), marks: n1 = 규칙 1(I 관리선 밖), n2·n3 = 규칙 2·3, mr·ewma = 관리선 밖 */
+export interface SpcPoint {
+  castingId: string; shotId: number; time: string; flow: number; runStart: boolean; approx: boolean;
+  value: number; mr: number | null; ewma: number; marks: ('n1' | 'n2' | 'n3' | 'mr' | 'ewma')[];
+}
+export interface SpcData { baseline: SpcBaseline; lambda: number; shots: SpcPoint[] }
+
+/** 관리도 — 보이는 구간(first~last castingId). EWMA·MR·넬슨 2·3 은 서버가 생산 흐름·런 첫 샷부터 계산 */
+export function fetchSpc(line: string, key: string, first: string, last: string): Promise<SpcData> {
+  return get<SpcData>(`/api/casting/spc?${new URLSearchParams({ line, key, first, last })}`);
+}
+
+/** 알림 판정용 관리선 + 기준 기간 (서버 casting/spc.py 고정 표 — 관리도와 같은 값, 판정은 alerts.ts) */
+export function fetchLimits(line: string): Promise<ControlLimits> {
+  return get<ControlLimits>(`/api/casting/limits?line=${encodeURIComponent(line)}`);
+}
+
+/** 오늘 날짜 (KST, 'YYYY-MM-DD') — 공정 최적화: 오늘이면 실시간, 지난 날짜면 재생 */
+export const todayKst = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+
+/**
+ * 2차(DL) 판정 — 그날 그 라인의 이미지가 있는 샷만 (1차 양품 거르기는 화면에서)
+ * 서버가 미리 판정해 둔 DB 결과만 읽음 (요청 중 추론 없음). 아직 판정 안 된 샷 수 = pending
+ */
+export function fetchSecond(line: string, date: string): Promise<SecondCheck> {
+  return get<SecondCheck>(`/api/casting/second?line=${encodeURIComponent(line)}&date=${date}`);
+}
+
+/** 실데이터가 있는 날짜 (최근 날짜가 먼저) */
+export function fetchDates(line: string): Promise<string[]> {
+  return get<string[]>(`/api/casting/dates?line=${encodeURIComponent(line)}`);
+}
+
+/** 1차(ML) 검사 모델 정보 — 실데이터 화면용 (JH API 가 TM 배포 pkl 로 점수 계산) */
+export function fetchMlModel(): Promise<MlModel> {
+  return get<MlModel>('/api/casting/model');
+}
+
+/**
+ * 공정 변수 정상 범위(bands)·변수 영향도 — 공정 모니터·주요 변수용 목업 (mock/model.json)
+ * ponytail: 정상 범위를 DB·모델에서 받게 되면 이 함수만 API 호출로 교체. 배포 모델 이름은 Model Management(DB)에서
+ */
 export function fetchActiveModel(): Promise<ModelInfo> {
-  if (USE_MOCK) return Promise.resolve(mockModel as unknown as ModelInfo);
-  return get<ModelInfo>('/api/models/active?process=casting');
+  return Promise.resolve(mockModel as unknown as ModelInfo);
 }

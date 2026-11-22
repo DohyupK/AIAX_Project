@@ -24,7 +24,8 @@
 .badge_discarded { background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
 
 /* 라벨링 팝업 */
-.dialog { width: min(980px, 100%); max-height: 92vh; }
+/* po.dialog(공정 최적화 CSS, 480px)와 같이 씀 — 같은 우선순위면 CSS 적용 순서에 따라 좁아짐(공정 최적화 → 화면 이동 시). 클래스 두 번 = 우선순위 높여 순서 무관하게 이 폭 */
+.dialog.dialog { width: min(980px, 100%); max-height: 92vh; }
 .body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-top: 10px; }
 .left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .image { width: 100%; height: auto; display: block; border-radius: 6px; }

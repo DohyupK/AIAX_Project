@@ -1,17 +1,14 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { LINES, USE_MOCK, fetchActiveModel, fetchShots, type Line } from '../../common/casting/api';
-import MockShotImage from '../../common/casting/MockShotImage';
-import type { ModelInfo, Shot } from '../../common/casting/types';
-import { secondFail } from '../quality_inspection/inspection';
+import ShotImage from '../../common/casting/ShotImage';
+import { LINES, type Line } from '../../common/casting/api';
 import {
-  DEFECT_TYPES, emptyStore, loadStore, persistStore, saveLabel, sortByStatus, statusOf, toggleType, typesOf,
-  type DefectCode, type LabelStatus, type LabelStore,
+  DEFECT_TYPES, fetchDefectDates, fetchDefects, saveLabel, sortByStatus, toggleType, typesOf,
+  type DefectCode, type DefectShot, type LabelStatus,
 } from './labels';
 import po from '../process_optimization/ProcessOptimization.module.css';
 import s from './DefectLabeling.module.css';
 
-const DATE = USE_MOCK ? '2021-10-07' : new Date().toISOString().slice(0, 10);
 type Filter = 'all' | LabelStatus;
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: '전체' },
@@ -20,46 +17,66 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'discarded', label: '폐기' },
 ];
 const STATUS_TEXT: Record<LabelStatus, string> = { unlabeled: '미라벨', labeled: '라벨 완료', discarded: '폐기' };
+const LOAD_ERROR = 'JH API 서버(127.0.0.1:8000)를 확인해 주세요.';
 
 /**
- * 불량 유형 라벨링 — 2차(DL) 검사에서 불량으로 판별된 샷 이미지 목록, 클릭 시 전문가 라벨링 팝업
- * 완료 → 라벨 테이블 저장 / UNDECIDABLE → 폐기 테이블로 이동 (목업: 브라우저 저장, labels.ts)
+ * 불량 유형 라벨링 — 그날 2차(DL) 판정 불량 샷 목록(ai.quality_prediction), 클릭 시 전문가 라벨링 팝업
+ * 라벨 상태는 ai.defect_label·ai.defect_discard 에서 읽고, 팝업 「완료」로 저장 (labels.ts saveLabel)
  */
 export default function DefectLabeling() {
-  const [line, setLine] = useState<Line>('line_no1');
-  const [model, setModel] = useState<ModelInfo | null>(null);
-  const [shots, setShots] = useState<Shot[] | null>(null);
+  const [line, setLine] = useState<Line>('line_no1'); // 기본 line_no1, 공정 최적화·품질 검사와 같은 라인 목록
+  const [dates, setDates] = useState<string[]>([]);
+  const [date, setDate] = useState('');
+  const [shots, setShots] = useState<DefectShot[] | null>(null); // null = 불러오는 중
   const [error, setError] = useState<string | null>(null);
-  const [store, setStore] = useState<LabelStore>(emptyStore);
   const [filter, setFilter] = useState<Filter>('all');
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);     // 팝업을 연 샷 casting_id
 
-  // 저장된 라벨은 브라우저에서만 읽음 (서버 렌더와 어긋나지 않게 마운트 후)
-  useEffect(() => setStore(loadStore()), []);
-
+  // 라인을 고를 때마다: 그 라인의 불량 샷이 있는 날짜 → 가장 최근 날
   useEffect(() => {
     let alive = true; // 라인을 빠르게 바꿀 때 이전 응답 무시
+    setDates([]);
+    setDate('');
     setShots(null);
     setError(null);
-    Promise.all([fetchShots(line, DATE), fetchActiveModel()])
-      .then(([sh, m]) => { if (alive) { setShots(sh); setModel(m); } })
-      .catch((e: Error) => { if (alive) setError(e.message); });
+    fetchDefectDates(line)
+      .then(d => {
+        if (!alive) return;
+        setDates(d);
+        if (d[0]) setDate(d[0]);
+        else setShots([]);
+      })
+      .catch((e: Error) => {
+        console.error('[defect_labeling] 날짜 조회 실패', line, e);
+        if (alive) setError(`${e.message} — ${LOAD_ERROR}`);
+      });
     return () => { alive = false; };
   }, [line]);
 
-  // 2차(DL) 불량 샷 — 최신순
-  const defects = useMemo(
-    () => (shots && model ? shots.filter(x => secondFail(x, model.threshold) === true).reverse() : []),
-    [shots, model],
-  );
+  useEffect(() => {
+    if (!date) return;
+    let alive = true; // 날짜를 빠르게 바꿀 때 이전 응답 무시
+    setShots(null);
+    setError(null);
+    setOpenId(null);
+    fetchDefects(line, date)
+      .then(sh => { if (alive) setShots(sh); })
+      .catch((e: Error) => {
+        console.error('[defect_labeling] 불량 샷 조회 실패', line, date, e);
+        if (alive) setError(`${e.message} — ${LOAD_ERROR}`);
+      });
+    return () => { alive = false; };
+  }, [line, date]);
+
+  const defects = useMemo(() => shots ?? [], [shots]);
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { all: defects.length, unlabeled: 0, labeled: 0, discarded: 0 };
-    for (const d of defects) c[statusOf(store, line, d.shotId)]++;
+    for (const d of defects) c[d.status]++;
     return c;
-  }, [defects, store, line]);
+  }, [defects]);
   // 전체: 미라벨이 위, 라벨 완료·폐기는 아래 (라벨링할 샷부터 보이게)
-  const visible = filter === 'all' ? sortByStatus(defects, store, line) : defects.filter(d => statusOf(store, line, d.shotId) === filter);
-  const opened = openId != null ? defects.find(d => d.shotId === openId) ?? null : null;
+  const visible = filter === 'all' ? sortByStatus(defects) : defects.filter(d => d.status === filter);
+  const opened = openId != null ? defects.find(d => d.castingId === openId) ?? null : null;
 
   return (
     <div className={po.page}>
@@ -71,33 +88,36 @@ export default function DefectLabeling() {
         <div className={po.chips}>
           <label className={po.chip}>
             라인
-            <select className={po.chipSelect} value={line} aria-label="라인 선택"
-              onChange={e => { setLine(e.target.value as Line); setOpenId(null); }}>
+            <select className={po.chipSelect} value={line} aria-label="라인 선택" onChange={e => setLine(e.target.value as Line)}>
               {LINES.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </label>
-          <span className={po.chip}>일자 <b>{DATE}</b></span>
+          <label className={po.chip}>
+            일자
+            <select className={po.chipSelect} value={date} aria-label="일자 선택" onChange={e => setDate(e.target.value)}>
+              {dates.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </label>
         </div>
       </header>
 
-      {USE_MOCK && (
-        <div className={po.banner}>
-          목업: 2차(DL) 불량 판정은 실제 라벨 기반, 이미지는 목업입니다. 라벨은 이 브라우저에만 저장되며 다른 사람과 공유되지 않습니다 (DB 연결 전).
-        </div>
-      )}
+      <div className={po.banner}>
+        불량 샷은 2차(DL) 검사에서 불량으로 판정된 샷이며(품질 검사 화면에서 판정·저장), 사진은 서버 이미지 API에서 불러옵니다.
+        유형을 고르고 <b>완료</b>를 누르면 DB에 저장됩니다(불량 유형 라벨링 수정 권한 필요).
+      </div>
 
       {error && <div className={po.errorBox} role="alert">데이터를 불러오지 못했습니다: {error}</div>}
       {!shots && !error && <div className={po.panel}>데이터를 불러오는 중입니다…</div>}
       {shots && !shots.length && !error && (
         <div className={`${po.panel} ${po.emptyLine}`} role="status">
-          <b>{line}</b> 데이터가 아직 연결되지 않았습니다.
+          <b>{line}{date && ` · ${date}`}</b> 불량 샷이 없습니다.
         </div>
       )}
 
       {shots && shots.length > 0 && (
         <section className={po.panel}>
           <div className={po.panelHead}>
-            <h3>DL 불량 판정 샷 · {defects.length}건</h3>
+            <h3>불량 샷 · {defects.length}건</h3>
             <div className={s.filters} role="group" aria-label="라벨 상태 필터">
               {FILTERS.map(f => (
                 <button key={f.key} type="button" aria-pressed={filter === f.key}
@@ -110,19 +130,18 @@ export default function DefectLabeling() {
           {visible.length ? (
             <ul className={s.grid}>
               {visible.map(d => {
-                const st = statusOf(store, line, d.shotId);
-                const types = typesOf(store, line, d.shotId);
+                const st = d.status;
                 return (
-                  <li key={d.shotId}>
-                    <button type="button" className={`${s.card} ${s[`card_${st}`]}`} onClick={() => setOpenId(d.shotId)}
+                  <li key={d.castingId}>
+                    <button type="button" className={`${s.card} ${s[`card_${st}`]}`} onClick={() => setOpenId(d.castingId)}
                       aria-label={`#${d.shotId} ${d.time} ${STATUS_TEXT[st]} — 라벨링 열기`}>
-                      <MockShotImage shotId={d.shotId} defect className={s.thumb} />
+                      <ShotImage castingId={d.castingId} className={s.thumb} />
                       <span className={s.cardMeta}>
                         <b className={po.num}>#{d.shotId}</b>
                         <span className={`${po.sub} ${po.num}`}>{d.time}</span>
                       </span>
                       <span className={`${s.badge} ${s[`badge_${st}`]}`}>
-                        {st === 'labeled' ? types.join(' · ') : STATUS_TEXT[st]}
+                        {st === 'labeled' ? d.types.join(' · ') : STATUS_TEXT[st]}
                       </span>
                     </button>
                   </li>
@@ -135,29 +154,39 @@ export default function DefectLabeling() {
         </section>
       )}
 
-      {opened && model && (
-        <LabelDialog key={opened.shotId} shot={opened} line={line}
-          initial={typesOf(store, line, opened.shotId)} status={statusOf(store, line, opened.shotId)}
-          onClose={() => setOpenId(null)}
-          onSave={types => {
-            const next = saveLabel(store, line, opened.shotId, types, new Date().toISOString());
-            if (!persistStore(next)) return false; // 저장 실패 → 팝업 유지 + 안내
-            setStore(next);
+      {opened && (
+        <LabelDialog key={opened.castingId} line={line} shot={opened} onClose={() => setOpenId(null)}
+          onSaved={saved => {
+            // 저장 성공 → 그 샷 상태만 바꾸고 팝업 닫기 (목록 재조회 없음)
+            setShots(sh => sh && sh.map(d => (d.castingId === opened.castingId ? { ...d, ...saved } : d)));
             setOpenId(null);
-            return true;
           }} />
       )}
     </div>
   );
 }
 
-/** 라벨링 팝업 — 샷 이미지 + 불량 유형 선택, 완료 시 저장 */
-function LabelDialog({ shot, line, initial, status, onClose, onSave }: {
-  shot: Shot; line: string; initial: DefectCode[]; status: LabelStatus;
-  onClose: () => void; onSave: (types: DefectCode[]) => boolean;
+/** 라벨링 팝업 — 샷 이미지 + 유형 선택 → 「완료」로 저장 */
+function LabelDialog({ line, shot, onClose, onSaved }: {
+  line: Line; shot: DefectShot; onClose: () => void;
+  onSaved: (saved: Pick<DefectShot, 'status' | 'types'>) => void;
 }) {
-  const [selected, setSelected] = useState<DefectCode[]>(initial);
-  const [failed, setFailed] = useState(false);
+  const [selected, setSelected] = useState<DefectCode[]>(() => typesOf(shot));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const status = shot.status;
+
+  const save = () => {
+    setSaving(true);
+    setSaveError(null);
+    saveLabel(shot.castingId, selected)
+      .then(onSaved)
+      .catch((e: Error) => {
+        console.error('[defect_labeling] 라벨 저장 실패', shot.castingId, selected, e);
+        setSaveError(e.message);
+        setSaving(false);
+      });
+  };
 
   // Esc 로 닫기
   useEffect(() => {
@@ -175,11 +204,11 @@ function LabelDialog({ shot, line, initial, status, onClose, onSave }: {
           <span className={`${s.badge} ${s[`badge_${status}`]}`}>{STATUS_TEXT[status]}</span>
           <button type="button" className={po.closeBtn} onClick={onClose} aria-label="닫기">×</button>
         </div>
-        <p className={po.sub}>{line} · {shot.time} · 2차(DL) 불량 판정</p>
+        <p className={po.sub}>{line} · {shot.time} · <span className={po.num}>{shot.castingId}</span> · 2차 판정 불량</p>
 
         <div className={s.body}>
           <div className={s.left}>
-            <MockShotImage shotId={shot.shotId} defect className={s.image} />
+            <ShotImage castingId={shot.castingId} className={s.image} />
           </div>
           <fieldset className={s.types}>
             <legend>불량 유형 <span className={po.sub}>(여러 개 선택 가능 · UNDECIDABLE 은 단독)</span></legend>
@@ -188,7 +217,7 @@ function LabelDialog({ shot, line, initial, status, onClose, onSave }: {
               return (
                 <button key={t.code} type="button" aria-pressed={on}
                   className={`${s.typeBtn} ${on ? s.typeOn : ''} ${t.code === 'UNDECIDABLE' ? s.typeUndecidable : ''}`}
-                  onClick={() => { setSelected(sel => toggleType(sel, t.code)); setFailed(false); }}>
+                  onClick={() => setSelected(sel => toggleType(sel, t.code))}>
                   <span className={s.check} aria-hidden="true">{on ? '✓' : ''}</span>
                   <span className={s.typeText}>
                     <b>{t.code}</b>
@@ -200,11 +229,12 @@ function LabelDialog({ shot, line, initial, status, onClose, onSave }: {
             {selected.includes('UNDECIDABLE') && (
               <p className={s.warnNote}>완료하면 이 샷은 라벨 목록에서 빠지고 폐기 테이블로 이동합니다.</p>
             )}
-            {failed && <p className={s.errorNote} role="alert">저장하지 못했습니다. 브라우저 저장 공간 설정을 확인해 주세요.</p>}
+            {saveError && <p className={s.errorNote} role="alert">저장하지 못했습니다: {saveError}</p>}
             <div className={s.actions}>
-              <button type="button" className={po.btn} onClick={onClose}>취소</button>
-              <button type="button" className={s.doneBtn} disabled={!selected.length}
-                onClick={() => setFailed(!onSave(selected))}>완료</button>
+              <button type="button" className={po.btn} onClick={onClose}>닫기</button>
+              <button type="button" className={s.doneBtn} disabled={saving || !selected.length} onClick={save}>
+                {saving ? '저장 중…' : '완료'}
+              </button>
             </div>
           </fieldset>
         </div>

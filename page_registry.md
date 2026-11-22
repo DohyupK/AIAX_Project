@@ -23,8 +23,14 @@
 | model_management | Model Management | JH | JH/main/model_management | 루트 `app/model-management/page.tsx`에서 호출 (DH 승인) | 2026-11-10 |
 | quality_inspection | 품질 검사 | JH | JH/main/quality_inspection | 루트 `app/casting/quality-inspection/page.tsx`에서 호출. ML/DL 미연결, 목업 데이터로 동작 | 2026-11-14 |
 | defect_labeling | 불량 유형 라벨링 | JH | JH/main/defect_labeling | 루트 `app/casting/defect-labeling/page.tsx`에서 호출. 주조 공정 대시보드 하위(품질 검사 다음). 2차(DL) 불량 샷 라벨링, 저장은 브라우저 목업(DB 연결 전) | 2026-11-15 |
-| company_documents | 사내 문서함 | JH | JH/main/company_documents | 루트 `app/documents/page.tsx`에서 호출. 사이드바 하단 고정. 카테고리 필터·업로드, 저장은 브라우저 IndexedDB 목업(DB·파일 서버 연결 전), 보안 등급은 표시용 | 2026-11-15 |
+| company_documents | 사내 문서함 | JH | JH/main/company_documents | 루트 `app/documents/page.tsx`. 사이드바 하단. JH API `/api/documents` → DOCUMENT_ROOT + org 문서/청크/임베딩. 의미검색·BG 청킹. (페이지 추가 아님·비고 갱신) | 2026-11-15 |
+| hyejin_bot | Shift | DH | DH/main/hyejin_bot | 표시명 Shift. 전역 FAB(`app/layout`). JH `/api/documents/ask` — 문서 RAG + 관리도 알림. `/hyejin-bot`→`/` | 2026-11-19 |
+| hr_management | 인사 관리 | JH | JH/main/hr_management | 루트 `app/hr/page.tsx`에서 호출. 사이드바 보호구 착용 위반 대시보드와 경영 관리자 리포트 사이. 데이터는 `JH/api` 인사 API(FastAPI)로 NCP DB `org` 원본 실시간 조회·변경. 로그인 전이라 목업 계정 선택, API는 127.0.0.1 전용 | 2026-11-16 |
 | management_report | 경영 관리자 리포트 | JH | JH/main/management_report | 루트 `app/management-report/page.tsx`에서 호출. 일일·주간·월간 목업 리포트 | 2026-11-14 |
+| ppe_violation | 보호구 착용 위반 대시보드 | JH | JH/main/ppe_violation | 루트 `app/safety/ppe-violation/page.tsx`에서 호출 (DH 승인). 옛 이름 작업자 안전 관리(worker_safety)에서 명칭·경로 변경. 검색대 기록·월간 위반 보고서는 목업(DB 연결 전) | 2026-11-17 |
+| al_price | 알루미늄 가격 | DH | DH/main/al_price | 루트 `app/al-price/page.tsx`. 조회 `/al-price/api/prices`→serve :8766. `org.aluminum_price` | 2026-11-20 |
+| login | 로그인 (사이드바 없음) | JH | JH/main/auth | 루트 `app/login/page.tsx`. 미로그인 시 모든 페이지 → 여기 (루트 `middleware.ts` → `JH/main/auth_gate`, DH 승인). JH API `/api/auth/login` | 2026-11-21 |
+| signup | 회원가입 (사이드바 없음) | JH | JH/main/auth | 루트 `app/signup/page.tsx`. 이름·사번(org 직원 확인)·이메일·아이디·비밀번호. JH API `/api/auth/signup`. 계정 저장은 DB 테이블 확정 전 `JH/data/auth.db` | 2026-11-21 |
 
 ## 추가할 때 채울 열
 

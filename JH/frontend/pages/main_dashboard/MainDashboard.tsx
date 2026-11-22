@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import styles from "./MainDashboard.module.css";
-import { CURRENT_USER, EVENTS, NOTICES, type Notice, type NoticeTag } from "./data";
+import { EVENTS, NOTICES, type Notice, type NoticeTag } from "./data";
+import { fetchDailyNotice } from "./noticeApi";
 
 // 메모 저장소: 백엔드 전까지 브라우저 쿠키 (같은 PC·브라우저에서만 유지)
 // ponytail: 쿠키 1개(약 4KB) 한도 — 메모가 많아지면 DB/API로 옮길 것
@@ -63,6 +64,7 @@ export default function MainDashboard() {
   const [content, setContent] = useState("");
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [openNotice, setOpenNotice] = useState<Notice | null>(null);
+  const [notices, setNotices] = useState<Notice[]>(NOTICES);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -71,6 +73,18 @@ export default function MainDashboard() {
     setMonth(new Date(now.getFullYear(), now.getMonth(), 1));
     setSelected(toKey(now));
     setMemos(loadMemos());
+  }, []);
+
+  // 전날 관리도 알람 AI 공지 — 성공 시 목록 맨 앞 (실패해도 하드코딩 공지만 유지)
+  useEffect(() => {
+    let cancelled = false;
+    fetchDailyNotice().then((daily) => {
+      if (cancelled || !daily) return;
+      setNotices((prev) => (prev.some((n) => n.id === daily.id) ? prev : [daily, ...prev]));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // 공지 팝업: 열리면 닫기 버튼에 포커스, Esc로 닫기
@@ -151,15 +165,6 @@ export default function MainDashboard() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.user}>
-          <span className={styles.avatar} aria-hidden>
-            {CURRENT_USER.name[0]}
-          </span>
-          {CURRENT_USER.name} · {CURRENT_USER.role}
-        </div>
-      </header>
-
       <section className={styles.card} aria-labelledby="notice-title">
         <div className={styles.cardHead}>
           <h2 id="notice-title" className={styles.cardTitle}>회사 전체 공지</h2>
@@ -167,7 +172,7 @@ export default function MainDashboard() {
           <a className={styles.more} href="#notices">전체 보기</a>
         </div>
         <ul className={styles.noticeList}>
-          {NOTICES.map((n) => (
+          {notices.map((n) => (
             <li key={n.id}>
               <button type="button" className={styles.notice} onClick={() => setOpenNotice(n)}>
                 <span className={`${styles.tag} ${TAG_CLASS[n.tag]}`}>{n.tag}</span>

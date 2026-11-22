@@ -1,0 +1,21 @@
+# 실시간 샷 생성기 — 서버 상시 실행 (systemd)
+# 설치: 같은 폴더 README.md 참고. 이 폴더를 /opt/aiax/shot_generator 에 통째로 복사한 기준
+[Unit]
+Description=AIAX realtime shot generator (mes.investment_casting)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/aiax/shot_generator
+EnvironmentFile=/opt/aiax/shot_generator/.env
+# 시연: --speed 20 (사이클·샷간격 ÷20). 표/API 없이 CLI 배속만 사용
+ExecStart=/opt/aiax/shot_generator/venv/bin/python -u shot_generator.py --mode run --speed 20
+Restart=always
+RestartSec=10
+DynamicUser=yes
+MemoryMax=200M
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

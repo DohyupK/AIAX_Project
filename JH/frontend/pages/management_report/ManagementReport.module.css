@@ -34,6 +34,16 @@
 .listTable td:last-child, .listTable th:last-child { text-align: left; }
 .listTable tbody tr { cursor: pointer; }
 .listTable tbody tr:hover { background: var(--soft); }
+/* 목록 아래 페이지 번호 — PC 32px, 폰 40px 터치 */
+.pager { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.pageBtn { font: inherit; font-size: 13px; min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.pageBtn:hover:not(:disabled) { border-color: var(--accent); }
+.pageBtn:disabled { color: var(--muted); opacity: 0.5; cursor: default; }
+.pageBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pageOn { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+@media (max-width: 460px) {
+  .pageBtn { min-width: 40px; height: 40px; }
+}
 .rowBtn { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 .rowBtn:hover { text-decoration: underline; }
 .rowBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -65,14 +75,52 @@
 .flat { color: var(--muted); }
 
 /* 품질 2행: 재활용 + 불량 유형 */
-.qRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; margin-top: 10px; }
-.types { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; font-size: 13px; }
-.types li { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.typeBar { display: block; height: 7px; border-radius: 4px; background: var(--bad); min-width: 6px; }
 
 /* 팝업 머리글 + 결재란 */
 .reportHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
-.toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 8px; }
+.toolbar { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.exportTarget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+.exportLegend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.exportRadio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.exportRadio input { margin: 0; accent-color: var(--accent); }
+.exportBtn {
+  font: inherit;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 600;
+}
+.exportBtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.exportBtn:disabled { opacity: 0.6; cursor: wait; }
+.exportBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.exportMsg { margin: 0 0 8px; font-size: 12px; color: var(--muted); text-align: right; }
 .sign { border-collapse: collapse; font-size: 12px; flex-shrink: 0; }
 .sign th, .sign td { border: 1px solid var(--line); text-align: center; }
 .sign th { width: 64px; padding: 4px; color: var(--muted); font-weight: 600; background: var(--soft); }
@@ -81,7 +129,6 @@
 
 @media (max-width: 860px) {
   .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cards3, .qRow { grid-template-columns: minmax(0, 1fr); }
-  .types { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cards3 { grid-template-columns: minmax(0, 1fr); }
   .reportHead { flex-direction: column; }
 }

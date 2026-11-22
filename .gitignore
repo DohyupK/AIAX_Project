@@ -29,6 +29,8 @@ dist/
 **/data/*.db
 **/data/*.sqlite
 **/data/*.sqlite3
+# DH 알루미늄 시세 백필 CSV (MS 적재 후 삭제 대상)
+DH/data/aluminum_price/*.csv
 *.db
 *.sqlite
 *.sqlite3
@@ -43,3 +45,6 @@ Thumbs.db
 # 런타임 로그
 **/logs/*.log
 *.log
+
+# MS 게이트 판정 모델 파일 (크기가 커서 Git 제외)
+MS/db/apps/models/

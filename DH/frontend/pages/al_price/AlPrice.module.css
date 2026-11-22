@@ -1,0 +1,249 @@
+/* 색 = 다른 본문 페이지와 같은 밝은 테마 (JH ProcessOptimization.module.css .page 변수와 같은 값, 2026-11-21 JH·DH 승인) */
+.page {
+  --al-bg: #eef1f5;
+  --al-panel: #ffffff;
+  --al-line: #dde3ea;
+  --al-text: #0f1b2d;
+  --al-muted: #5b6779;
+  --al-accent: #2563c9;
+  --al-up: #16875b;
+  --al-down: #cf2f2f;
+  --al-soft: #f4f6f9;
+  --al-on: #eaf1fe;
+  min-height: 100%;
+  padding: 1.5rem 1.75rem 2.5rem;
+  background: var(--al-bg);
+  color: var(--al-text);
+  font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+}
+
+.head {
+  margin-bottom: 1.25rem;
+}
+
+.headRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  margin: 0.35rem 0 0;
+  color: var(--al-muted);
+  font-size: 0.9rem;
+}
+
+.csvBtn {
+  border: 1px solid var(--al-line);
+  background: var(--al-panel);
+  color: var(--al-text);
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.csvBtn:hover:not(:disabled) {
+  border-color: var(--al-accent);
+  color: var(--al-accent);
+}
+
+.csvBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #fbe5e5;
+  border-radius: 6px;
+  color: var(--al-down);
+}
+
+.empty {
+  color: var(--al-muted);
+  padding: 1.25rem 0;
+}
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.kpi {
+  background: var(--al-panel);
+  border: 1px solid var(--al-line);
+  border-radius: 6px;
+  padding: 0.75rem 0.9rem;
+}
+
+.kpiLabel {
+  font-size: 0.75rem;
+  color: var(--al-muted);
+  margin-bottom: 0.25rem;
+}
+
+.kpiValue {
+  font-size: 1.15rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiUnit {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--al-muted);
+}
+
+.kpiSub {
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--al-muted);
+}
+
+.up {
+  color: var(--al-up);
+}
+
+.down {
+  color: var(--al-down);
+}
+
+.chartSection {
+  margin-bottom: 1.5rem;
+  background: var(--al-panel);
+  border: 1px solid var(--al-line);
+  border-radius: 6px;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.tab,
+.tabOn {
+  border: 1px solid var(--al-line);
+  background: transparent;
+  color: var(--al-muted);
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.tabOn {
+  background: var(--al-on);
+  color: #1d4ed8;
+  border-color: var(--al-accent);
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+  display: block;
+}
+
+.chartLabel {
+  fill: var(--al-muted);
+  font-size: 10px;
+}
+
+.tableHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--al-muted);
+  font-size: 0.85rem;
+}
+
+.tableWrap {
+  overflow: auto;
+  max-height: min(52vh, 480px);
+  border: 1px solid var(--al-line);
+  border-radius: 6px;
+  background: var(--al-panel);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.table th,
+.table td {
+  padding: 0.55rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.table th {
+  color: var(--al-muted);
+  font-weight: 600;
+  background: var(--al-soft);
+  position: sticky;
+  top: 0;
+}
+
+.table td.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.table tbody tr:hover {
+  background: var(--al-soft);
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.pageBtn,
+.pageOn {
+  min-width: 2rem;
+  border: 1px solid var(--al-line);
+  background: transparent;
+  color: var(--al-muted);
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.pageOn {
+  background: var(--al-accent);
+  color: #fff;
+  border-color: var(--al-accent);
+}

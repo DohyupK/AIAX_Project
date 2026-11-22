@@ -1,0 +1,65 @@
+# DB 연동 기록 — JH / 인사 관리 (hr_management) + lake 복제·변경 기록
+
+## 메타
+
+| 항목 | 내용 |
+|------|------|
+| 날짜 | 2026-11-16 |
+| 담당 폴더 | JH |
+| 기능명 | 인사 관리 페이지(`/hr`) + 인사 API(`JH/api/hr`) / mes·org → lake 복제·변경 기록 |
+| 기능표 링크 | [JH/main/README.md](../JH/main/README.md) |
+| DB 종류 | PostgreSQL (NCP `aiax`) — 목업 SQLite 아님 |
+| 목적 | 인사 화면이 org 원본을 실시간 조회·변경 / lake 자동 갱신 준비 |
+| 승인 | DH·MS (2026-11-16, 사용자 경유) |
+
+## 테이블·연동
+
+| 테이블명 | 주요 컬럼 | 읽기/쓰기 | 연동 화면·API | 비고 |
+|----------|-----------|-----------|---------------|------|
+| `org.employee`·`employee_info`·`employee_status` | 사번·부서·직급·팀 / 이름·나이·성별·전화·주소·이메일 / 근속·연차·초과근무 | 읽기·쓰기 | `/hr`, `GET/POST/PATCH/DELETE /api/hr/employees` | 권한 등급별 칼럼만 응답 (`JH/api/hr/rules.py`) |
+| `org.access_code`·`dept_roster`·`team_roster` | 사번·권한 숫자·부서/팀 명단 | 쓰기 | 사원 추가·수정·삭제 시 같이 맞춤 | 한 트랜잭션 |
+| `org.department`·`team`·`position` | 이름·대표·직급코드 | 읽기 | `GET /api/hr/summary` | |
+| `org.employee_card`·`attendance` | 사번 | 읽기 | 삭제 전 참조 확인 | 있으면 삭제 거부 (기록 손실 방지) |
+| `org.hr_access_log` (신규) | 조회자·행동·대상·등급·행 수·시각 | 쓰기(추가만) | 모든 인사 API | 개인정보 접속기록. app_hr 은 추가만, 수정·삭제 불가 |
+| `lake.lake_<org 테이블>` 23개 (신규) | org 와 동일 | — | (분석용, 화면 미사용) | `employee_info` 제외. 첫 전체 복제 완료 |
+| `mes.investment_casting_change_log`, `org.change_log`, `lake.etl_watermark` (신규) | 변경 키·op·시각 / 처리 위치 | 트리거가 쓰기 | 00:00 KST Spark 갱신용 (MS 예정) | |
+
+## 접속 설정 (비밀 값 제외)
+
+| 항목 | 내용 |
+|------|------|
+| 계정 | `app_hr` (신규) — org 인사 테이블만, mes·lake·mart 접근 불가 |
+| URL 위치 | 루트 `.env` → `HR_DATABASE_URL` (비밀번호 `APP_HR_PASSWORD`) |
+| API 실행 | `cd JH/api && uv run uvicorn main:app --host 127.0.0.1 --port 8000` — 로그인 전이라 **127.0.0.1 전용** |
+
+## 메모
+
+- 적용 SQL: [`JH/전달사항/sql/2026-11-16_lake_sync_setup.sql`](../JH/전달사항/sql/2026-11-16_lake_sync_setup.sql), [`JH/전달사항/sql/2026-11-16_hr_api_setup.sql`](../JH/전달사항/sql/2026-11-16_hr_api_setup.sql)
+- MS 요청: 위 SQL `MS/db/init/` 반영, `app_hr` 를 `00_roles.sh` 에 추가, 루트 `DB구조.md` 갱신, 실행기·Spark 작업 ([전달 문서](../JH/전달사항/2026-11-16_MS_mes변경시_lake자동갱신_요청.md))
+- 검증 시 시험 사원 `E30019` 를 추가→수정→삭제함 → `org.change_log` 에 I/U/D 기록과 `org.hr_access_log` 에 시험 조회 기록이 남아 있음 (데이터는 원래 53명으로 복구됨, Spark 반영 시 순 변화 없음)
+
+---
+
+## 변경 (2026-11-17~18) — org DB 개편 대응 (JH·MS)
+
+서버 `org`가 새 구조로 바뀌어 이 기록의 일부 테이블·컬럼이 달라졌습니다. 전체 안내는 [`MS/전달사항/2026-11-17_org_새구조/`](../MS/전달사항/2026-11-17_org_새구조/) 참고.
+
+| 이 기록의 내용 | 새 구조 | 인사 API 반영 (JH) |
+|---|---|---|
+| `employee_info.age` | 삭제 → `birth_date`(date) | `age(birth_date)`로 나이 계산, 추가·수정 시 `birth_date` 저장 |
+| 사번 `E10001` 형식 | `e0001` ~ `e0054` (부서와 무관한 일련번호) | 반영 |
+| 코드 체계 | 부서 1000~7000, 직급 10000~70000, 팀 10~60(정수, 이름은 `team_name`) | 반영, 팀 이름 표시 |
+| `access_code`·`dept_roster`·`team_roster` | DB 트리거가 자동으로 맞춤 (employee만 바꾸면 됨) | 직접 맞추던 코드 → 트리거 위임 |
+| `access_code` 규칙 | 직급 + 부서 + 부서장 100 + 팀 + 팀장 1 | — |
+| 인사 관리 열람 (2026-11-18) | read = 사원 이상 전원(인턴 제외), edit = 경영부 과장 이상 + 소장 (`hr_management_page`) | 같은 기준으로 맞춤 필요 |
+| 재직 상태 (2026-11-18) | `employee.employment_status`(active/resigned) + `resigned_at` 추가, 퇴사 시 게이트 자동 차단 | 삭제 버튼 → 퇴사 처리로 변경 필요 |
+| `app_hr` 계정·권한 | `MS/db/init/00_roles.sh`, `09_org_permission.sql`에 반영 | — |
+| `hr_access_log` | 구조 그대로, `09`에 포함 | — |
+
+- 검증 시 로컬 API로 조회 시험 → `org.hr_access_log` 에 시험 조회 기록 약 10건 남음 (데이터 변경 없음, 추가 시도는 모두 검증 단계에서 거부)
+
+## 변경 (2026-11-18) — MS 전달사항 1·5번 반영
+
+- 부서·팀 명단(`dept_roster`·`team_roster`)과 `access_code` 는 DB 트리거 `org.trg_employee_sync` 가 employee INSERT/UPDATE 때 자동으로 맞춤 → API의 직접 쓰기(`_sync_rosters`)와 계산 함수(`access_code_of`) 제거. 삭제는 트리거 대상이 아니라 명단·접근 코드 DELETE 는 API에 유지
+- 팀 이름: `org.team.team_name` 을 조회해 사원 목록·상세·요약·목업 계정·`/me` 에 `team_name` 으로 내려줌 (저장은 `team_code` 정수)
+- 검증: 읽기 시험만 (사원 추가·수정 쓰기 시험은 하지 않음)

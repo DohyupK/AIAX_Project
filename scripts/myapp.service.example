@@ -1,0 +1,22 @@
+# 서버에 복사: /etc/systemd/system/myapp.service
+# 적용: systemctl daemon-reload && systemctl enable --now myapp
+# 원커맨드: systemctl restart myapp
+# 성공본 설명: 개발과정/서버배포_aiax.md
+#
+# Type=oneshot + RemainAfterExit: 스크립트가 tmux를 띄우고 종료해도 서비스는 active 유지
+# PATH에 /root/.local/bin 필수 (uv). 없으면 ExecStart exit 1
+
+[Unit]
+Description=AIAX Next(:3000) + JH API(:8000) via tmux myapp
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/root/AIAX_Project
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/root/AIAX_Project/scripts/dev-up.sh
+ExecStop=/usr/bin/tmux kill-session -t myapp
+
+[Install]
+WantedBy=multi-user.target

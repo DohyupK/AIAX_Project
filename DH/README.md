@@ -20,7 +20,8 @@
 
 | 기능 | 경로 | 상태 |
 |------|------|------|
-| (추가 시 기입) | | |
+| al_price | `frontend/pages/al_price/`, `api/aluminum_price/` | LME Al 크롤·화면. 최초 CSV→MS 적재, 이후 daily DB. `/al-price` |
+| image_pipeline | `api/image_pipeline/` | 1차 뼈대. 2차는 참고목록만(`2차_참고목록.md`). 화면은 JH |
 
 ## 다른 폴더
 

@@ -1,7 +1,8 @@
-// 불량 유형 라벨링 — 유형 정의·저장 규칙 (화면·CSS import 없음) — 자체 점검: labels.check.ts
-// 저장 형태는 이후 DB 테이블과 같은 모양 (라벨 테이블 / 폐기 테이블). DB API 연결 시 loadStore·persistStore 만 API 호출로 교체
+// 불량 유형 라벨링 — 유형 정의·선택 규칙·DB 조회 (화면·CSS import 없음) — 자체 점검: labels.check.ts
+// 데이터: JH API /api/casting/defects (샷 = lake.lake_investment_casting, 라벨 = ai.defect_label·ai.defect_discard)
+// 저장: POST /api/casting/defects/{casting_id}/label (서버가 쓰기 계정 app_ai 사용, 불량 유형 라벨링 edit 권한 필요)
 
-/** 불량 유형 — code 는 화면 표시·저장 값, ko 는 전문가용 보조 설명 */
+/** 불량 유형 — code 는 화면 표시 값(= ai.defect_label 칼럼 대문자), ko 는 전문가용 보조 설명 */
 export const DEFECT_TYPES = [
   { code: 'BLOWHOLE', ko: '기공' },
   { code: 'EDGE_BURR', ko: '버(Burr)·플래시(Flash) — 테두리에 남은 날카로운 살·찌꺼기' },
@@ -10,16 +11,17 @@ export const DEFECT_TYPES = [
 ] as const;
 export type DefectCode = (typeof DEFECT_TYPES)[number]['code'];
 export const UNDECIDABLE: DefectCode = 'UNDECIDABLE';
-const CODES = DEFECT_TYPES.map(d => d.code) as readonly string[];
 
-/** 라벨 테이블 행 (예정: defect_label) */
-export interface LabelRecord { shot_id: number; line: string; defect_types: DefectCode[]; labeled_at: string }
-/** 폐기 테이블 행 (예정: defect_discard) — 판정 불가 샷 */
-export interface DiscardRecord { shot_id: number; line: string; reason: 'UNDECIDABLE'; discarded_at: string }
-export interface LabelStore { labels: LabelRecord[]; discards: DiscardRecord[] }
 export type LabelStatus = 'unlabeled' | 'labeled' | 'discarded';
 
-export const emptyStore = (): LabelStore => ({ labels: [], discards: [] });
+/** 불량 샷 1개 + 라벨 상태 (서버 /api/casting/defects 응답 한 줄) */
+export interface DefectShot {
+  castingId: string;   // DB 키 'L<라인번호>_YYMMDD_HHMMSS_생산번호'
+  shotId: number;      // 생산번호 (화면 표시·목업 이미지용)
+  time: string;        // 'H:mm:ss'
+  status: LabelStatus;
+  types: DefectCode[]; // 라벨 완료일 때 유형 (정의 순서)
+}
 
 /**
  * 유형 선택 토글 — BLOWHOLE·EDGE_BURR·SURFACE_ROUGH 는 여러 개 선택 가능,
@@ -31,83 +33,51 @@ export function toggleType(selected: DefectCode[], code: DefectCode): DefectCode
   return [...selected.filter(c => c !== UNDECIDABLE), code];
 }
 
-const same = (line: string, shotId: number) => (r: { line: string; shot_id: number }) => r.line === line && r.shot_id === shotId;
-
-/**
- * 라벨 저장 (완료 버튼). 같은 샷의 이전 기록은 두 테이블 모두에서 지우고 새로 기록 → 다시 라벨링해도 한 곳에만 존재
- * UNDECIDABLE → 폐기 테이블, 그 외 → 라벨 테이블. 선택이 비면 저장하지 않음
- */
-export function saveLabel(store: LabelStore, line: string, shotId: number, types: DefectCode[], now: string): LabelStore {
-  if (!types.length) throw new Error('불량 유형을 하나 이상 선택해야 합니다.');
-  const keep = <T extends { line: string; shot_id: number }>(rows: T[]) => rows.filter(r => !same(line, shotId)(r));
-  const base = { labels: keep(store.labels), discards: keep(store.discards) };
-  if (types.includes(UNDECIDABLE)) {
-    return { ...base, discards: [...base.discards, { shot_id: shotId, line, reason: 'UNDECIDABLE', discarded_at: now }] };
-  }
-  // 정의 순서로 정렬해 저장 (선택 순서와 무관하게 같은 값)
-  const ordered = CODES.filter(c => types.includes(c as DefectCode)) as DefectCode[];
-  return { ...base, labels: [...base.labels, { shot_id: shotId, line, defect_types: ordered, labeled_at: now }] };
-}
-
-export function statusOf(store: LabelStore, line: string, shotId: number): LabelStatus {
-  if (store.discards.some(same(line, shotId))) return 'discarded';
-  return store.labels.some(same(line, shotId)) ? 'labeled' : 'unlabeled';
-}
+/** 팝업에서 보여 줄 저장된 유형 (폐기면 [UNDECIDABLE]) */
+export const typesOf = (d: DefectShot): DefectCode[] => (d.status === 'discarded' ? [UNDECIDABLE] : d.types);
 
 /** 「전체」 목록 순서: 미라벨 → 라벨 완료 → 폐기. 같은 상태 안에서는 원래 순서(최신순) 유지 */
 const STATUS_ORDER: Record<LabelStatus, number> = { unlabeled: 0, labeled: 1, discarded: 2 };
-export function sortByStatus<T extends { shotId: number }>(items: T[], store: LabelStore, line: string): T[] {
-  return [...items].sort((a, b) => STATUS_ORDER[statusOf(store, line, a.shotId)] - STATUS_ORDER[statusOf(store, line, b.shotId)]);
+export function sortByStatus<T extends { status: LabelStatus }>(items: T[]): T[] {
+  return [...items].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
 }
 
-/** 저장된 유형 (폐기면 [UNDECIDABLE]) — 팝업을 다시 열 때 선택 복원용 */
-export function typesOf(store: LabelStore, line: string, shotId: number): DefectCode[] {
-  if (store.discards.some(same(line, shotId))) return [UNDECIDABLE];
-  return store.labels.find(same(line, shotId))?.defect_types ?? [];
-}
+// ---- 조회·저장 (JH API) ----
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
-/** 저장소에서 읽은 값 검증 — 형식이 맞는 행만 사용 (손상·조작된 값 무시) */
-export function parseStore(raw: unknown): LabelStore {
-  const out = emptyStore();
-  if (!raw || typeof raw !== 'object') return out;
-  const r = raw as Partial<Record<keyof LabelStore, unknown>>;
-  const ok = (x: unknown): x is { shot_id: number; line: string } =>
-    !!x && typeof x === 'object' && Number.isInteger((x as { shot_id: unknown }).shot_id) && typeof (x as { line: unknown }).line === 'string';
-  if (Array.isArray(r.labels)) {
-    for (const x of r.labels) {
-      const t = (x as LabelRecord)?.defect_types;
-      if (ok(x) && Array.isArray(t) && t.length && t.every(c => CODES.includes(c) && c !== UNDECIDABLE) && typeof (x as LabelRecord).labeled_at === 'string')
-        out.labels.push({ shot_id: x.shot_id, line: x.line, defect_types: t, labeled_at: (x as LabelRecord).labeled_at });
-    }
-  }
-  if (Array.isArray(r.discards)) {
-    for (const x of r.discards) {
-      if (ok(x) && typeof (x as DiscardRecord).discarded_at === 'string')
-        out.discards.push({ shot_id: x.shot_id, line: x.line, reason: 'UNDECIDABLE', discarded_at: (x as DiscardRecord).discarded_at });
-    }
-  }
-  return out;
-}
-
-// ---- 저장소 (목업: 브라우저 localStorage) ----
-// ponytail: 같은 PC·브라우저에서만 유지, 다른 사람과 공유 안 됨. DB API 연결 시 아래 두 함수를 API 호출로 교체
-const STORAGE_KEY = 'jh.defect_labeling.v1';
-
-export function loadStore(): LabelStore {
+async function get<T>(path: string): Promise<T> {
+  // 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지
   try {
-    const s = window.localStorage.getItem(STORAGE_KEY);
-    return s ? parseStore(JSON.parse(s)) : emptyStore();
-  } catch {
-    return emptyStore(); // 저장소 차단(사생활 보호 모드 등)·손상된 JSON → 빈 상태로 시작
+    const res = await fetch(`${BASE}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) throw new Error(`${path} 요청 실패 (HTTP ${res.status})`);
+    return res.json() as Promise<T>;
+  } catch (e) {
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      throw new Error(`${path} 요청 시간 초과 (10초) — 서버 DB(.env DATABASE_URL) 확인`);
+    }
+    throw e;
   }
 }
 
-/** 저장 성공 여부 반환 — 실패하면 화면에 알림 (라벨 유실 방지) */
-export function persistStore(store: LabelStore): boolean {
+/** 그 라인의 불량 샷이 있는 날짜 (최근 날짜가 먼저) */
+export const fetchDefectDates = (line: string) => get<string[]>(`/api/casting/defect-dates?line=${encodeURIComponent(line)}`);
+/** 그 라인·그날 불량 샷 + 라벨 상태 (최신순) */
+export const fetchDefects = (line: string, date: string) =>
+  get<DefectShot[]>(`/api/casting/defects?${new URLSearchParams({ line, date })}`);
+
+/** 라벨 저장 — 서버가 기존 라벨·폐기를 지우고 새로 넣음. 실패 시 서버 안내 문구(detail)를 그대로 던짐 */
+export async function saveLabel(castingId: string, types: DefectCode[]): Promise<Pick<DefectShot, 'status' | 'types'>> {
+  let res: Response;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-    return true;
-  } catch {
-    return false;
+    res = await fetch(`${BASE}/api/casting/defects/${encodeURIComponent(castingId)}/label`, {
+      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10_000),
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ types }),
+    });
+  } catch (e) {
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error('저장 요청 시간 초과 (10초)');
+    throw new Error('JH API 서버에 연결할 수 없습니다.');
   }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(typeof body?.detail === 'string' ? body.detail : `저장 실패 (HTTP ${res.status})`);
+  return body as Pick<DefectShot, 'status' | 'types'>;
 }

@@ -326,6 +326,17 @@
 
 .btnPrimary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btnPrimary:hover { background: #2563eb; }
+.btn:disabled { opacity: 0.6; cursor: wait; }
+
+/* 배포 버튼·결과 — 배포 여부 배지 옆 */
+.deployBtn { margin-left: 8px; padding: 3px 14px; font-size: 13px; }
+.deployOk, .deployErr { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; }
+.deployOk { color: var(--ok, #16875b); }
+.deployErr { color: var(--bad, #cf2f2f); word-break: break-word; }
+@media (max-width: 460px) {
+  .deployBtn { min-height: 40px; padding: 6px 18px; }
+}
+
 
 @media (max-width: 900px) {
   .overviewGrid { grid-template-columns: 1fr; gap: 12px; }
@@ -333,3 +344,23 @@
   .formGrid, .formGrid3 { grid-template-columns: 1fr; }
   .table { font-size: 12px; }
 }
+
+/* 강건성 버튼 (품질 2차, 성과지표 위 오른쪽) */
+.metricsHead { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+
+/* 강건성 팝업 — 표가 넓어 등록 팝업보다 넓게, 좁은 화면은 표만 가로 스크롤 */
+.dialogWide { width: min(760px, 100%); }
+.robustScroll { overflow-x: auto; }
+.robustTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.robustTable th,
+.robustTable td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.robustTable th { background: #f2f4f7; font-weight: 600; }
+.robustStrong td { font-weight: 700; }
+.robustNote { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+/* 목업 계정 선택 (로그인 전) — 탭 위 오른쪽 */
+.accountRow { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.denied { padding: 24px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--bad); }
+
+/* 성과지표 옆 괄호 = 강건성 조건 평균 (주 값보다 작고 흐리게) */
+.robustAvg { font-style: normal; font-size: 14px; color: var(--muted); margin-left: -6px; }

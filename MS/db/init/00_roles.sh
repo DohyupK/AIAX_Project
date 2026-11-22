@@ -3,7 +3,7 @@
 # 비밀번호는 .env 값을 사용하며, 이 파일에는 적지 않음
 set -euo pipefail
 
-for v in APP_MES_PASSWORD APP_SPARK_PASSWORD APP_MART_PASSWORD APP_LAKE_PASSWORD; do
+for v in APP_MES_PASSWORD APP_SPARK_PASSWORD APP_MART_PASSWORD APP_LAKE_PASSWORD APP_HR_PASSWORD; do
   if [ -z "${!v:-}" ]; then
     echo "[init] 환경변수 $v 가 비어 있습니다. .env 를 확인하세요." >&2
     exit 1
@@ -14,7 +14,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   -v mes_pw="$APP_MES_PASSWORD" \
   -v spark_pw="$APP_SPARK_PASSWORD" \
   -v mart_pw="$APP_MART_PASSWORD" \
-  -v lake_pw="$APP_LAKE_PASSWORD" <<'EOSQL'
+  -v lake_pw="$APP_LAKE_PASSWORD" \
+  -v hr_pw="$APP_HR_PASSWORD" <<'EOSQL'
 -- 권한 그룹 (로그인 불가). 권한은 그룹에 주고 계정은 그룹에 소속시킨다.
 CREATE ROLE role_mes   NOLOGIN;  -- mes 원본 적재
 CREATE ROLE role_spark NOLOGIN;  -- Spark: 원본 읽기 → lake/mart 쓰기
@@ -26,6 +27,9 @@ CREATE ROLE app_mes   LOGIN PASSWORD :'mes_pw'   IN ROLE role_mes;
 CREATE ROLE app_spark LOGIN PASSWORD :'spark_pw' IN ROLE role_spark;
 CREATE ROLE app_mart  LOGIN PASSWORD :'mart_pw'  IN ROLE role_mart;
 CREATE ROLE app_lake  LOGIN PASSWORD :'lake_pw'  IN ROLE role_lake;
+
+-- 인사 관리 API(JH/api/hr) 전용: org 인사 테이블만 (권한은 09_org_permission.sql)
+CREATE ROLE app_hr    LOGIN PASSWORD :'hr_pw';
 EOSQL
 
 echo "[init] 00_roles 완료"

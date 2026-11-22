@@ -1,30 +1,31 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./ModelManagement.module.css";
-import { PROCESS, type Metrics, type Model, type Process } from "./data";
-import { createdAtNow, validateDraft, type Draft, type Errors } from "./logic";
+import { METRIC_LABEL, PROCESS, PROCESS_METRICS, type Process } from "./data";
+import { validateDraft, type Draft, type Errors } from "./logic";
 
-// 서버 연동 전: 파일은 이름만 기록 (실제 업로드 없음)
+// 파일은 이름만 확인 (실제 업로드 없음 — 서버 저장 폴더는 DH 결정)
 const ALLOWED_EXT = [".pkl", ".pt", ".onnx", ".joblib"];
-const METRIC_FIELDS: { key: keyof Metrics; label: string }[] = [
-  { key: "accuracy", label: "Accuracy" },
-  { key: "recall", label: "Recall" },
-  { key: "precision", label: "Precision" },
-  { key: "f1", label: "F1-Score" },
-];
+// ponytail: ai 쓰기 계정(MS) 전이라 저장 안 함 — 입력 검사만. 계정이 생기면 submit 에서 POST /api/models 호출
+const SAVE_BLOCKED = "DB 쓰기 계정 연결 전이라 아직 저장할 수 없습니다. 입력값 검사만 했습니다.";
 
-const EMPTY: Draft = { name: "", version: "", process: "", description: "", accuracy: "", recall: "", precision: "", f1: "" };
+const EMPTY: Draft = { name: "", version: "", process: "", description: "", accuracy: "", prAuc: "", map50: "", recall: "", precision: "", f1: "" };
 
-/** 모델 등록 팝업 — 등록 시 onSubmit(새 모델, id 제외) */
-export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; onSubmit: (m: Omit<Model, "id">) => void }) {
-  const [draft, setDraft] = useState<Draft>(EMPTY);
+/**
+ * 모델 등록 팝업 — 지금은 입력 검사까지 (DB 저장은 쓰기 계정 연결 후)
+ * process: 공정 탭에서 열면 그 관리공정으로 고정 (전체 탭에서 열면 직접 선택)
+ */
+export default function ModelForm({ process, onClose }: { process?: Process; onClose: () => void }) {
+  const [draft, setDraft] = useState<Draft>({ ...EMPTY, process: process ?? "" });
+  const [blocked, setBlocked] = useState(false);
   const [fileName, setFileName] = useState("");
   const [errors, setErrors] = useState<Errors>({});
   const firstRef = useRef<HTMLSelectElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 열릴 때 한 번만 첫 칸에 포커스
-  useEffect(() => firstRef.current?.focus(), []);
+  // 열릴 때 한 번만 첫 입력 칸에 포커스 (공정이 정해져 있으면 모델명)
+  useEffect(() => (process ? nameRef.current : firstRef.current)?.focus(), [process]);
 
   // Esc로 닫기
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
   const set = (key: keyof Draft, value: string) => {
     setDraft((d) => ({ ...d, [key]: value }));
     setErrors((e) => ({ ...e, [key]: undefined }));
+    setBlocked(false);
   };
 
   function onFile(file: File | undefined) {
@@ -52,20 +54,9 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const found = validateDraft(draft, PROCESS);
+    const found = validateDraft(draft, PROCESS, PROCESS_METRICS);
     if (Object.keys(found).length) return setErrors(found);
-    onSubmit({
-      // 최종 모델명 = 공정 앞부분 + 입력한 모델 종류 (예: casting-defect-xgb)
-      name: `${PROCESS[draft.process as Process].prefix}-${draft.name.trim()}`,
-      version: draft.version.trim(),
-      createdAt: createdAtNow(), // 등록 버튼 누른 시점 자동 기록
-      process: draft.process as Process,
-      description: draft.description.trim(),
-      metrics: { accuracy: Number(draft.accuracy), recall: Number(draft.recall), precision: Number(draft.precision), f1: Number(draft.f1) },
-      applyCount: 0,
-      deployed: false,
-      fileName: fileName || undefined,
-    });
+    setBlocked(true);
   }
 
   const prefix = Object.hasOwn(PROCESS, draft.process) ? PROCESS[draft.process as Process].prefix : "";
@@ -90,7 +81,8 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
         <div className={`${styles.formGrid} ${styles.formGrid3}`}>
           <label className={styles.field}>
             <span>관리공정 *</span>
-            <select ref={firstRef} value={draft.process} onChange={(e) => set("process", e.target.value)}>
+            <select ref={firstRef} value={draft.process} onChange={(e) => set("process", e.target.value)} disabled={!!process}
+              title={process ? "공정 탭에서 열어 관리공정이 정해져 있습니다" : undefined}>
               <option value="">선택</option>
               {(Object.keys(PROCESS) as Process[]).map((p) => (
                 <option key={p} value={p}>{PROCESS[p].label} ({PROCESS[p].code})</option>
@@ -100,15 +92,16 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
           </label>
           <label className={styles.field}>
             <span>모델명 *</span>
-            {/* 앞부분은 공정에서 자동 — 사용자는 모델 종류(xgb, lgbm 등)만 입력 */}
+            {/* 공정별 앞부분(DieCasting_ / PPE_) + 알고리즘 — 날짜·순번은 등록 시 자동 */}
             <span className={styles.prefixInput}>
-              {prefix && <span className={styles.prefix}>{prefix}-</span>}
+              {prefix && <span className={styles.prefix}>{prefix}_</span>}
               <input
+                ref={nameRef}
                 value={draft.name}
                 onChange={(e) => set("name", e.target.value)}
                 disabled={!prefix}
-                placeholder={prefix ? "xgb, lgbm …" : "관리공정을 먼저 선택"}
-                aria-label={prefix ? `모델명 (${prefix}- 뒤 모델 종류)` : undefined}
+                placeholder={prefix ? PROCESS[draft.process as Process].algoHint : "관리공정을 먼저 선택"}
+                aria-label={prefix ? `모델명 (${prefix}_ 뒤 알고리즘)` : undefined}
                 maxLength={30}
               />
             </span>
@@ -127,9 +120,10 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
 
         <fieldset className={styles.metricSet}>
           <legend>성과지표 * (0~1)</legend>
-          {METRIC_FIELDS.map(({ key, label }) => (
+          {/* 지표 종류는 고른 공정에 따라 다름 (공정 선택 전엔 Accuracy 기준 목록으로 표시) */}
+          {PROCESS_METRICS[Object.hasOwn(PROCESS, draft.process) ? (draft.process as Process) : "qc2"].map((key) => (
             <label key={key} className={styles.field}>
-              <span>{label}</span>
+              <span>{METRIC_LABEL[key]}</span>
               <input type="number" inputMode="decimal" min={0} max={1} step={0.001} value={draft[key]} onChange={(e) => set(key, e.target.value)} />
               {err(key)}
             </label>
@@ -146,6 +140,7 @@ export default function ModelForm({ onClose, onSubmit }: { onClose: () => void; 
           {err("file")}
         </div>
 
+        {blocked && <p className={styles.fieldError} role="status">{SAVE_BLOCKED}</p>}
         <div className={styles.dialogActions}>
           <button type="button" className={styles.btn} onClick={onClose}>취소</button>
           <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>등록</button>

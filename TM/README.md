@@ -11,11 +11,13 @@
 - `frontend/pages/<기능>/` — 페이지 (`app` 명칭 사용 금지)
 - `api/<기능>/` — API (`backend` 명칭 사용 금지)
 - `data/` — SQLite 목업
-- `xgb_model/` — XGBoost 모델 아티팩트 (`.joblib` / `.json`)
+- `model_ml/` — 품질 1차 검사 ML 모델 아티팩트 (`DieCasting_{Algo}_{YYYYMMDD}_{NN}/`)
+- `model_dl/` — 품질 2차 검사 DL 모델 (준비 중)
 - `pyproject.toml` · `uv.lock` — Python(uv) 의존성
 - `업무일지/` · `기능표.md` · `전달사항/` · `로그_기록.md`
 
-상세 규칙은 루트 [AGENTS.md](../AGENTS.md) 를 따릅니다.
+상세 규칙은 루트 [AGENTS.md](../AGENTS.md) 를 따릅니다.  
+모델 명명·대응표: [model_ml/README.md](model_ml/README.md)
 
 ### Python 환경 (uv)
 
@@ -29,7 +31,7 @@ uv run python ...
 
 | 기능 | 경로 | 상태 |
 |------|------|------|
-| XGBoost 모델 이식 | `xgb_model/` + `pyproject.toml` | uv 의존성·아티팩트 (페이지/API 미연동) |
+| DieCasting 주조 불량 모델 | `model_ml/` + `pyproject.toml` | 아티팩트 56개 (배포 `…_20261114_09`). JH Model Management 목업 연동. 페이지/API 미연동 |
 
 ## 다른 폴더
 

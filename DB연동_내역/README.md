@@ -19,6 +19,10 @@
 
 | 파일 | 비고 |
 |------|------|
+| [2026-11-21_JH_auth_login.md](2026-11-21_JH_auth_login.md) | 로그인·회원가입 계정 — **임시** SQLite `JH/data/auth.db` (DB 테이블 확정 전) + `org.employee` 사번 확인 |
+| [2026-11-20_DH_shift_quality_kpi.md](2026-11-20_DH_shift_quality_kpi.md) | Shift 봇 ask 품질 KPI (`mes`+`ai.quality_prediction` 읽기) |
+| [2026-11-20_DH_shift_alert_context.md](2026-11-20_DH_shift_alert_context.md) | Shift 봇 ask 관리도 알림 컨텍스트 |
+| [2026-11-20_DH_process_alert_daily_notice.md](2026-11-20_DH_process_alert_daily_notice.md) | 메인 일일 공정알람 AI 공지 캐시 (`org.process_alert_daily_notice`) |
 | [2026-11-16_DH_org_permission_postgres.md](2026-11-16_DH_org_permission_postgres.md) | org 서버 반영 |
 | [2026-11-15_DH_org_permission_sqlite.md](2026-11-15_DH_org_permission_sqlite.md) | **폐기** (Postgres로 대체) |
 | [2026-11-10_DH_ncp_mes_dashboard.md](2026-11-10_DH_ncp_mes_dashboard.md) | mes 대시보드 조회 |

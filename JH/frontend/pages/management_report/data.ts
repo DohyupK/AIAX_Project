@@ -1,33 +1,32 @@
-// 경영 관리자 리포트 목업 — 생산·근태·안전 집계 API 연동 전 자리 (연동 시 이 파일만 API 호출로 교체)
-import type { Gear } from "../worker_safety/rules";
+// 경영 관리자 리포트 데이터 — 전부 서버 실제 값 (JH API /api/report/*, 목업 없음)
+// 생산량·최종 불량(daily, mes 세 라인 합계) · 안전(safety, 보호구 대시보드 기준) · SPC 경고 알람(spc, mes × mes.spc_limit)
+// · 근태(attendance, org.employee_record 근무 예정자 기준) · 고정값(fixed, org.fixed_value: 단가·재활용 회수액·재활용률·MTTR·MTBF·리콜)
+import type { Gear } from "../ppe_violation/rules";
 
 export type Period = "daily" | "weekly" | "monthly";
 
-export const LINE = "line_no1";
+export const LINE = "전체 라인(line_no1~3)";
 export const PRODUCT = "CylinderHead";
 
-/** 불량 유형 — 2차 검사(DL) 결함 분류 출력과 맞출 키 */
-export type DefectType = "porosity" | "short_shot" | "crack" | "burr";
-export const DEFECT_LABEL: Record<DefectType, string> = { porosity: "기공", short_shot: "미성형", crack: "크랙", burr: "버(Burr)" };
-
-export const UNIT_PRICE = 85_000;    // 실린더 헤드 1개 단가(원) — 생산 금액·불량 손실 기준
-export const RECYCLE_VALUE = 12_000; // 1차 불량품 재용해 시 개당 소재 회수액(원)
-
-/** 고정 값 (기간과 무관) */
-export const FIXED = {
-  mttrHours: 1.8,   // 평균 수리 시간
-  mtbfHours: 142,   // 평균 고장 간격
-  recallCount: 1,   // 고객사 리콜 횟수 (최근 12개월)
-};
-
+/** 고정값 1행 (서버 org.fixed_value) — 적용 시작일 이력 그대로 */
+export interface FixedRow { name: string; value: number; unit: string; effectiveDate: string }
+/** 리포트 1건에 적용한 고정값 (DB 에 없으면 null → 화면 「—」) */
+export interface FixedValues {
+  unitPrice: number | null;    // 제품_단가 (원/개) — 생산 금액·불량 손실
+  recycleValue: number | null; // 재활용_회수액 (원/개)
+  recycleRate: number | null;  // 재활용률 (0~1) — 재활용 수량 = 최종 불량 × 재활용률
+  mttr: number | null;         // MTTR (시간)
+  mtbf: number | null;         // MTBF (시간)
+  recall: number | null;       // 리콜_횟수_12개월 (회)
+}
+/** 리포트 1건 (기간 합산) — buildReport */
 export interface PeriodReport {
-  attendance: { total: number; present: number }; // 일일 = 인원, 주간·월간 = 기간 누적 연인원
+  fixed: FixedValues;      // 리포트 기간 마지막 날 기준 고정값
+  noData: boolean;         // 기간에 생산 데이터가 없음 → 생산량·불량 「—」
+  attendance: { total: number; present: number }; // 근무 예정자 · 출근 (주간·월간 = 기간 누적 연인원)
   production: number;      // 생산량(개)
   defects: number;         // 최종 불량(개)
-  defectTypes: Record<DefectType, number>; // 유형별 불량(합계 = defects). DL 연결 전 목업
-  firstDefects: number;    // 1차(ML) 불량 판정(개) — 재활용 대상
-  recycled: number;        // 1차 불량 중 재용해 재활용(개)
-  spcAlarms: { ucl: number; lcl: number };
+  spcAlarms: { ucl: number; lcl: number }; // I 관리선 밖 「샷 × 변수」 수
   safety: {
     scans: number;           // 검색대 태깅 수
     violations: number;      // 필수 장구 미착용 건수
@@ -37,54 +36,51 @@ export interface PeriodReport {
   };
 }
 
-// 일일 안전 수치는 작업자 안전 대시보드 목업(2026-11-07, 7건 중 위반 3건)과 맞춤
-export const REPORTS: Record<Period, PeriodReport> = {
-  daily: {
-    attendance: { total: 128, present: 121 },
-    production: 575, defects: 26, firstDefects: 35, recycled: 31,
-    defectTypes: { porosity: 11, short_shot: 7, crack: 5, burr: 3 },
-    spcAlarms: { ucl: 4, lcl: 2 },
-    safety: {
-      scans: 121, violations: 3, repeatViolators: 0,
-      byCompany: [
-        { company: "(주)한빛정밀", type: "하청업체", count: 1 },
-        { company: "대성기공", type: "하청업체", count: 1 },
-        { company: "본사 품질팀", type: "본사", count: 1 },
-      ],
-      byGear: { helmet: 1, shoes: 0, vest: 1, gloves: 1, goggles: 1 },
-    },
-  },
-  weekly: {
-    attendance: { total: 768, present: 731 },
-    production: 3420, defects: 148, firstDefects: 201, recycled: 176,
-    defectTypes: { porosity: 62, short_shot: 41, crack: 28, burr: 17 },
-    spcAlarms: { ucl: 21, lcl: 9 },
-    safety: {
-      scans: 731, violations: 17, repeatViolators: 3,
-      byCompany: [
-        { company: "(주)한빛정밀", type: "하청업체", count: 7 },
-        { company: "대성기공", type: "하청업체", count: 5 },
-        { company: "본사 품질팀", type: "본사", count: 3 },
-        { company: "본사 주조팀", type: "본사", count: 2 },
-      ],
-      byGear: { helmet: 4, shoes: 1, vest: 5, gloves: 6, goggles: 4 },
-    },
-  },
-  monthly: {
-    attendance: { total: 1536, present: 1462 },
-    production: 6890, defects: 301, firstDefects: 412, recycled: 359,
-    defectTypes: { porosity: 126, short_shot: 83, crack: 57, burr: 35 },
-    spcAlarms: { ucl: 47, lcl: 18 },
-    safety: {
-      scans: 1462, violations: 38, repeatViolators: 6,
-      byCompany: [
-        { company: "(주)한빛정밀", type: "하청업체", count: 14 },
-        { company: "대성기공", type: "하청업체", count: 11 },
-        { company: "세진산업", type: "하청업체", count: 5 },
-        { company: "본사 품질팀", type: "본사", count: 5 },
-        { company: "본사 주조팀", type: "본사", count: 3 },
-      ],
-      byGear: { helmet: 9, shoes: 3, vest: 11, gloves: 13, goggles: 8 },
-    },
-  },
-};
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+
+/** /api/report/* 조회 — 10초 넘게 응답이 없으면 끊어 「불러오는 중」 고착 방지 */
+async function get<T>(path: string, params?: Record<string, string>): Promise<T> {
+  const url = `${BASE}/api/report/${path}${params ? `?${new URLSearchParams(params)}` : ""}`;
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) throw new Error(`/api/report/${path} 요청 실패 (HTTP ${res.status})`);
+    return (await res.json()) as T;
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw new Error(`/api/report/${path} 요청 시간 초과 (10초) — 서버 DB(.env DATABASE_URL) 확인`);
+    }
+    throw e;
+  }
+}
+
+/** 날짜별 생산량·최종 불량 (서버 mes, 세 라인 합계). 생산 없는 날은 빠짐 */
+export interface DailyProduction { date: string; production: number; defects: number }
+/** 안전 원자료 (서버 ai.ppe_check, 보호구 착용 위반 대시보드와 같은 판정·위반 기준) */
+export interface SafetyData {
+  scans: { date: string; count: number }[]; // 날짜별 판정 수 (판정 불가 포함)
+  violations: { date: string; userId: string; company: string; vendor: boolean; missing: Gear[] }[];
+}
+/** 날짜별 SPC 경고 알람 — I 관리선 밖 「샷 × 변수」 수 */
+export interface SpcDaily { date: string; ucl: number; lcl: number }
+/** 날짜별 근태 — scheduled = 근무 예정자, present = 그중 출근 */
+export interface AttendanceDaily { date: string; scheduled: number; present: number }
+
+/** 리포트 원자료 묶음 (목록 전체 기간을 한 번에) */
+export interface ReportSource {
+  daily: DailyProduction[]; safety: SafetyData; spc: SpcDaily[]; attendance: AttendanceDaily[]; fixed: FixedRow[];
+}
+
+/** 리포트 목록 시작일 = 생산 데이터 첫날 'YYYY-MM-DD' (데이터 없으면 null) */
+export async function fetchFirstDate(): Promise<string | null> {
+  return (await get<{ first: string | null }>("first-date")).first;
+}
+
+/** 기간(from~to, 'YYYY-MM-DD', 양 끝 포함, 최대 220일) 리포트 원자료 전부 */
+export async function fetchReportSource(from: string, to: string): Promise<ReportSource> {
+  const range = { from, to };
+  const [daily, safety, spc, attendance, fixed] = await Promise.all([
+    get<DailyProduction[]>("daily", range), get<SafetyData>("safety", range), get<SpcDaily[]>("spc", range),
+    get<AttendanceDaily[]>("attendance", range), get<FixedRow[]>("fixed"),
+  ]);
+  return { daily, safety, spc, attendance, fixed };
+}

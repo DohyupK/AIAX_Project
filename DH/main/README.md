@@ -7,4 +7,6 @@
 
 | 기능 id | frontend 상대경로 | api 상대경로 | 비고 |
 |---------|-------------------|--------------|------|
-| (예) | ../frontend/pages/example | ../api/example | 추가 시 기입 |
+| al_price | ../frontend/pages/al_price | ../api/aluminum_price | LME Al 시세. `/al-price`. 조회 `/al-price/api/prices`→:8766. 백필 CSV→MS, daily DB |
+| hyejin_bot | ../frontend/pages/hyejin_bot | (없음 — JH `/api/documents/ask`) | 표시명 Shift. 문서+관리도 알림. `app/layout` FAB |
+| image_pipeline | (없음 — JH 이후 연결) | ../api/image_pipeline | 1차 뼈대·상태 API. 지침 `DH/지침_image_pipeline_임시.md` |
